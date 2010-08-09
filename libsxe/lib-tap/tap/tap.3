@@ -1,0 +1,331 @@
+.TH TAP 3 2009-12-12 "Portable" "Tap Version 2 Programmer's Manual"
+.SH NAME
+plan_tests, is, is_eq, is_cmp, ok, diag, skip, exit_status \- write tests in C/C++ that implement the Test Anything Protocol
+.SH SYNOPSIS
+.B #include <tap.h>
+.sp
+.BI "void plan_tests(unsigned int " tests ");"
+.br
+.BI "unsigned is(unsigned " got ", unsigned " expected ", const char *" format ", ...);"
+.br
+.BI "unsigned is_eq(const char *" got ", const char *" expected ", const char *" format ", ...);"
+.br
+.BI "unsigned is_cmp(const void *" got ", const void *" expected ", int (*" compare ")(const void *, const void *), const char * (*" to_str ")(const void *), const char *" format ", ...);"
+.br
+.BI "unsigned ok(unsigned " boolean ", const char *" format ", ...);"
+.br
+.BI "void skip(unsigned " tests_to_skip ", const char *" format ", ...);"
+.br
+.BI "int diag(const char *" format ", ...);"
+.br
+.BI "int exit_status(void);"
+.sp
+.SS ADDITIONAL FUNCTIONS
+.BI "void plan_no_plan(void);"
+.br
+.BI "void plan_skip_all(const char *" reason ");"
+.br
+.BI "unsigned ok1(unsigned " boolean ");"
+.br
+.BI "unsigned pass(const char *" format ", ...);"
+.br
+.BI "unsigned fail(const char *" format ", ...);"
+.br
+.BI "skip_if(unsigned " boolean ", unsigned " tests_to_skip ", const char *" format ", ...)"
+.br
+.BI "skip_start(unsigned " boolean ", unsigned " tests_to_skip ", const char *" format ", ...)"
+.br
+.BI "skip_end"
+.br
+.BI "void todo_start(const char *" format ", ...);"
+.br
+.BI "void todo_end(void);"
+.SH DESCRIPTION
+The
+.B tap
+library provides functions for writing unit test programs. The API is similar to that of perl's
+.BR Test::More ,
+a powerful unit test library used extensively to test perl modules.
+Test programs written using
+.B tap
+produce output
+consistent with the Test Anything Protocol. Though not required, a test harness that parses
+this protocol can run these tests and produce useful reports indicating
+their success or failure.
+.PP
+For all function that take
+.BI "const char * " format ", ..."
+as their last two parameters,
+.I format
+is a
+.BR printf -like
+format string, and is followed by one or more arguments whose are values to be formated using that string.
+.SS TEST PLANS
+.B plan_tests()
+should be called with the number of
+.I tests
+that will be run before any tests are run. This allows
+.B tap
+to notice if any tests were missed, or if the test program exited prematurely.
+.B plan_tests()
+will cause your program to exit prematurely if you specify 0 tests
+or if called more than once.
+.SS TEST FUNCTIONS
+Each of the following test functions prints a line that includes the test number, either "ok" or "not ok", the test program
+source file and line, and a comment describing the test, created using the
+.BR printf -like
+.I format
+argument and any arguments that follow it.
+It is good practice to use the comment to describe the purpose
+behind the test rather than what you are testing. For example:
+.sp
+.in +4n
+ok(db != NULL, "db is not NULL");            /* Not bad, but */
+.br
+ok(db != NULL, "Database conn. succeeded");  /* this is better */
+.in -4n
+.sp
+.RB "The " is()
+test function passes if its first two parameters,
+.IR expected " and"
+.I got
+are numerically equal. The parameters can be single characters, integers or pointers. If the test fails, the values of
+.IR expected " and"
+.I got
+will be printed to help you identify the cause of the failure.
+.sp
+.RB "The " is_eq()
+test function passes if its first two parameters point to identical '\\0' terminated strings.
+On failure, the strings are printed.
+.sp
+.RB "The " is_cmp()
+test function allows you to compare arbitrary objects by passing comparison and print functions along with pointers to the actual and expected
+values. This is similar to perl's
+.Fn is_deeply
+function. The test passes if
+.BR is_cmp() "'s"
+first two parameters point to equivalent objects when compared with the function pointed to by its
+.I compare
+argument.
+.BI "(*" compare ")()"
+should return 0 on equality, and non-zero if the objects are different.
+On failure, the strings are printed after formatting them with the function pointed to by the
+.I to_str
+argument.
+.sp
+.RB "The " ok()
+test function passes if its
+.I boolean
+parameter is true, and fails if it is false. This allows you to test an arbitrarily complex expression, but doesn't give you
+any helpful output if the test fails. For example:
+.sp
+.in +4n
+ok(init_subsystem() == 0, "Second initialization should fail");
+.SS SKIPPING TESTS
+The
+.B skip()
+function allows you to skip tests with a diagnostic message. You pass it
+.IR tests_to_skip ,
+the number of tests you're skipping, and
+.I format
+the reason you're skipping the tests.
+.pp
+Sometimes tests cannot be run because the test system lacks some feature.
+You can explicitly document that you're skipping tests using
+.BR skip() .
+Tests should be skipped when they require optional modules that aren't installed, are running under an OS that
+doesn't have some necessary feature (like
+.B fork()
+or symbolic links), or need an Internet connection when one isn't available.
+.sp
+For example, suppose some tests should be run as root.  If the test program is
+not being run as root then the tests should be skipped.  Skipped tests are flagged as being ok, with a special
+message indicating that they were skipped. Your must ensure that the number of tests skipped (the first parameter to
+.BR skip() )
+is correct for the number of tests to skip.
+.PP
+.in +4n
+if (getuid() != 0) {
+.br
+    skip(1, "because test only works as root");
+.br
+}
+.br
+else {
+.br
+    ok(do_something_as_root(), "Did something as root");
+.br
+}
+.SS DIAGNOSTIC OUTPUT
+If your tests need to produce diagnostic output, you can use the
+.B diag
+function. It ensures that the output will not be ignored by the TAP test harness.
+.Fn diag
+adds the trailing newline character for you.
+It returns the number of characters written. For example:
+.sp
+.in +4n
+diag("Expected return code 0, got return code %d", rcode);
+.SS EXIT STATUS
+For maximum compatability with TAP test harnesses, your test program should return the correct exit
+code. This is calculated by
+.Fn exit_status
+so it is sufficient to always return from
+.Fn main
+with
+.Dq return exit_status();
+or to exit from anywhere in the test program with
+.Dq exit(exit_status());
+as appropriate. For example:
+.sp
+.in +4n
+exit(exit_status());
+.SS ADDITIONAL FUNCTIONS
+The following functions are kept for backward compatibility to libtap version 1.
+.sp
+.B plan_no_plan()
+let's you use tap without specifying the number of tests that you will run. This prevents tap from giving an error if the
+test program exits before running all the tests it should have.
+.B plan_no_plan()
+will cause your test program to exit prematurely with a diagnostic
+message if called more than once.
+.sp
+.B plan_skip_all()
+let's you skip all tests. If your test program detects at run time that some functionality that the entire test program requires
+is missing (for example, if it relies on a database connection which is not present, or a particular configuration option that
+has not been included in the running kernel), you can use
+.B plan_skip_all()
+instead of
+.BR plan_tests() .
+For example:
+.sp
+.in +4n
+if (!have_some_feature) {
+    plan_skip_all("Need some_feature support");
+    exit(exit_status());
+.br
+}
+.sp
+plan_tests(13);
+.in -4n
+.sp
+The
+.B ok1()
+function uses the test expression as the test comment. These calls are equivalent:
+.sp
+.in +4n
+ok( i == 5, "i == 5");
+.br
+ok1(i == 5);
+.PP
+Sometimes you just want to say that the tests have passed.
+Usually the case is you've got some complicated condition
+that is difficult to wedge into an
+.BR ok() .
+In this case,
+you can simply use
+.B pass()
+(to declare the test ok) or
+.B fail
+(for not ok). Use these very, very, very sparingly.
+.PP
+.B skip_if()
+is a macro is provided for convenience.  The body of the
+.B skip_if
+will only be executed if the condition is false. Otherwise, it will be skipped. For example:
+.sp
+.in +4n
+skip_if(getuid() != 0, 1, "because test only works as root") {
+    ok(do_something_as_root() == 0, "Did something as root");
+.br
+}
+.in -4n
+.PP
+The macros
+.B skip_start()
+and
+.B skip_end
+can be used to skip whole groups of tests. If the tests are skipped, none of the code between the macros will be executed.
+.PP
+Sets of tests can be flagged as being "todo" by surrounding them with calls to
+.B todo_start()
+and
+.BR todo_end().
+Unlike
+.BR skip_start() " and"
+.BR skip_end ,
+additional code between
+.BR todo_start() " and"
+.B todo_end()
+is executed.
+.SH EXAMPLES
+The
+.B tests
+directory in the source code distribution contains tests of
+.B tap
+functionality, written using
+.BR tap .
+Examine them for examples of how to construct test suites.
+.SH COMPATABILITY
+.B tap
+strives to be compatible with the perl
+.BR Test::More " and"
+.B Test::Harness
+modules.  The test suite verifies that
+.B tap
+is bug-for-bug compatible with their behaviour.  This is why some
+functions which would more naturally return nothing return constant
+values.
+.PP
+If the
+.B libpthread
+library is found at compile time,
+.B tap
+should be thread safe.  Indications to the contrary (and test cases that expose
+incorrect behaviour) are welcome.
+.SH SEE ALSO
+.BR Test::More ,
+.BR Test::Harness ,
+.B prove
+.SH STANDARDS
+.B tap
+requires a
+.B isoC-99
+compiler.
+.B tap
+is implemented using variadic macros, and that functionality
+was not formally codified until C99.  Patches to use
+.B tap
+with earlier compilers that have their own implementation of variadic
+macros will be gratefully received.
+.SH HISTORY
+.B tap
+was written to help improve the quality and coverage of the FreeBSD
+regression test suite, and released in the hope that others find it
+a useful tool to help improve the quality of their code.
+.SH AUTHORS
+.BR "Nik Clayton " (nik@ngo.org.uk, nik@FreeBSD.org)
+.br
+.B "Jim Belton"
+- Reachable via the
+.B libtap2
+project at
+.B www.sourceforge.net
+.PP
+.B tap
+would not exist without the efforts of
+.BR "Michael G Schwern " (schqern@pobox.com),
+.BR "Andy Lester " (andy@petdance.com),
+and the countless others who have worked on the Perl QA programme.
+.SH BUGS
+Ideally, running the tests should have no side effects on the behaviour
+of the application you are testing.  However, it is not always possible
+to avoid them.  The following side effects of using
+.B tap
+are known:
+.sp
+.in +4n
+.B stdout
+is set to unbuffered mode after calling any of the
+.B plan_*
+functions.
