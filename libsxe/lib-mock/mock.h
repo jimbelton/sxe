@@ -70,6 +70,7 @@
 extern MOCK_SOCKET      (MOCK_STDCALL * mock_accept)       (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *);
 extern int              (MOCK_STDCALL * mock_bind)         (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
 extern void *           (             * mock_calloc)       (size_t, size_t);
+extern int              (             * mock_close)        (int);
 extern int              (MOCK_STDCALL * mock_connect)      (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
 extern FILE *           (             * mock_fopen)        (const char * file, const char * mode);
 extern int              (             * mock_fputs)        (const char * string, FILE * file);
@@ -89,6 +90,7 @@ extern MOCK_SSIZE_T     (             * mock_write)        (int, const void *, M
 #define accept(fd, addr, len)                    (*mock_accept)       ((fd), (addr), (len))
 #define bind(fd, addr, len)                      (*mock_bind)         ((fd), (addr), (len))
 #define calloc(num, size)                        (*mock_calloc)       ((num), (size))
+#define close(fd)                                (*mock_close)        ((fd))
 #define connect(fd, addr, len)                   (*mock_connect)      ((fd), (addr), (len))
 #define fopen(file, mode)                        (*mock_fopen)        ((file), (mode))
 #define fputs(string, file)                      (*mock_fputs)        ((string), (file))

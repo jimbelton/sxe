@@ -20,23 +20,29 @@
  */
 
 #include <stddef.h>
+#include <string.h>
+
 #include "tap.h"
 #include "sxe-cstr.h"
+
+#define TEST_BUF_SIZE 16
 
 int
 main(void)
 {
     sxe_cstr     cstr;
-    char         buf[16];
+    char         buf[TEST_BUF_SIZE + 4];
     const char * str;
     time_t       era = 0;
     struct tm    tm;
 
+    memcpy(&buf[TEST_BUF_SIZE], "GARD", 4);
+
     plan_tests(20);
-    sxe_cstr_make(&cstr, buf, sizeof(buf));
+    sxe_cstr_make(&cstr, buf, TEST_BUF_SIZE);
     is(sxe_cstr_length(&cstr), 0,                                                        "sxe_cstr is initially 0 length");
     is((unsigned)(str = sxe_cstr_get_str(&cstr))[0], (unsigned)'\0',                     "sxe_cstr is '\\0' terminated");
-    is(sxe_cstr_printf(&cstr, "This string is too big"), 22,                             "Printf string is 22 characters");
+    ok(sxe_cstr_printf(&cstr, "This string is too big") >= TEST_BUF_SIZE,                "Printf string is >= 16 characters");
     is_eq(sxe_cstr_get_str(&cstr), "This string is ",                                    "Truncated string is 'This string is '");
     gmtime_r(&era, &tm);
     is(sxe_cstr_ftime(&cstr, "%Y", &tm), 0,                                              "No room for year");

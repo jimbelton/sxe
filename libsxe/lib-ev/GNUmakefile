@@ -40,6 +40,7 @@ CFLAGS += -DEV_USE_PORT=0
 CFLAGS += -DEV_USE_INOTIFY=0
 CFLAGS += -DEV_USE_EVENTFD=0
 CFLAGS += -DEV_USE_SIGNALFD=0
+CFLAGS += -Uinline               # Gorp: libev/ev.c wants to define inline to *nothing*, so nuke our definition
 endif
 
 $(info make: TODO: make coverage test should not complain about lack of .c.gcov files, since there are no tests being run)

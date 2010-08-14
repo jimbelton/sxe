@@ -29,6 +29,8 @@ int              (MOCK_STDCALL * mock_bind)         (MOCK_SOCKET, const struct s
                                = bind;
 void *           (            *  mock_calloc)       (size_t, size_t)
                                = calloc;
+int              (             * mock_close)        (int)
+                               = close;
 int              (MOCK_STDCALL * mock_connect)      (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T)
                                = connect;
 FILE *           (             * mock_fopen)        (const char * file, const char * mode)

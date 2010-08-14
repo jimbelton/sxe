@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -39,29 +39,32 @@ typedef void (*SXE_IN_EVENT_CONNECTED)(struct SXE *            );
  */
 typedef struct SXE {
     struct ev_io           io;
-    struct sockaddr_in     local_addr;
-    struct sockaddr_in     peer_addr;
-    unsigned               id_next;              /* to keep free list                                     */
+    struct sockaddr_in     local_addr;           /* if ip:port     socket                                                 */
+    struct sockaddr_in     peer_addr;            /* if ip:port     socket                                                 */
+    const char           * path;                 /* if unix domain socket                                                 */
+    unsigned               id_next;              /* to keep free list                                                     */
     unsigned               id;
     SXE_BOOL               is_tcp;
+    SXE_BOOL               is_unix;
     SXE_BOOL               is_accept_oneshot;
-    SXE_BOOL               is_caller_reads_udp;  /* is caller to read UDP packets? default is no          */
-    int                    socket;               /* is handle on Windows, is fd on Linux                  */
-    int                    socket_as_fd;         /* is fd     on Windows, is fd on Linux                  */
+    SXE_BOOL               is_caller_reads_udp;  /* is caller to read UDP packets? default is no                          */
+    int                    socket;               /* is handle on Windows, is fd on Linux                                  */
+    int                    socket_as_fd;         /* is fd     on Windows, is fd on Linux                                  */
     unsigned               in_total;
     char                   in_buf[SXE_BUF_SIZE];
-    SXE_IN_EVENT_CONNECTED in_event_connected;   /* NULL or function to call when peer accepts connection */
-    SXE_IN_EVENT_READ      in_event_read ;       /*         function to call when peer writes data        */
-    SXE_IN_EVENT_CLOSE     in_event_close;       /* NULL or function to call when peer disconnects        */
+    SXE_IN_EVENT_CONNECTED in_event_connected;   /* NULL or function to call when peer accepts connection                 */
+    SXE_IN_EVENT_READ      in_event_read ;       /*         function to call when peer writes data                        */
+    SXE_IN_EVENT_CLOSE     in_event_close;       /* NULL or function to call when peer disconnects                        */
     union {
        void            *   as_ptr;
        int                 as_int;
-    }                      user_data;      /* not used by sxe */
+    }                      user_data;            /* Not used by sxe                                                       */
+    int                    next_socket;          /* Socket to switch to from pipe when all data has been read and cleared */
 } SXE;
 
 #define SXE_BUF_STRNSTR(this,str)      sxe_strnstr    (SXE_BUF(this), str, SXE_BUF_USED(this))
 #define SXE_BUF_STRNCASESTR(this,str)  sxe_strncasestr(SXE_BUF(this), str, SXE_BUF_USED(this))
-#define SXE_BUF_CLEAR(this)            {      (this)->in_total = 0;}
+#define SXE_BUF_CLEAR(this)            sxe_buf_clear(this)      /* For backward compatibility only - this macro is deprecated */
 #define SXE_BUF(this)                  (     &(this)->in_buf[0])
 #define SXE_BUF_USED(this)             (      (this)->in_total)
 #define SXE_PEER_ADDR(this)            (     &(this)->peer_addr)
@@ -75,5 +78,6 @@ typedef struct SXE {
 #define SXE_ID(this)                   (      (this)->id)
 
 #include "sxe-proto.h"
+#include "sxe-timer-proto.h"
 
 #endif /* __SXE_H__ */

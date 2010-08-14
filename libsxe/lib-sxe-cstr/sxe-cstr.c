@@ -26,12 +26,10 @@
 #include <string.h>
 
 #include "sxe-cstr.h"
+#include "sxe-log.h"
 
 #define SXE_CSTR_OVERFLOW   0x01
 #define SXE_CSTR_STATIC     0x02
-#define SXE_CSTR_DYNAMIC    0x04
-
-/* WARNING: Do not use clog functions here, since clog uses sxe_cstr's in its own code */
 
 sxe_cstr *
 sxe_cstr_cat(sxe_cstr * cstr, const sxe_cstr * ccat)
@@ -73,12 +71,12 @@ sxe_cstr_clear(sxe_cstr * cstr)
 int
 sxe_cstr_cmp(const sxe_cstr * left, const sxe_cstr * right)
 {
+    const char * left_str  = (const char *)left;
+    const char * right_str = (const char *)right;
+
     if (left == right) {
         return 0;
     }
-
-    const char * left_str  = (const char *)left;
-    const char * right_str = (const char *)right;
 
     if (!left->literal && (left->flags != 0)) {
         left_str = left->buf;
@@ -130,9 +128,9 @@ sxe_cstr_length(const sxe_cstr * cstr)
 void
 sxe_cstr_make(sxe_cstr * cstr, char * buf, unsigned size)
 {
-    assert(cstr != NULL); //, "Can't construct sxe_cstr with cstr == NULL");
-    assert(buf  != NULL); //, "Can't construct sxe_cstr with buf == NULL");
-    assert(size != 0); //,    "Can't construct sxe_cstr with size == 0");
+    SXEA10(cstr != NULL, "sxe_cstr_make: Can't construct sxe_cstr with cstr == NULL");
+    SXEA10(buf  != NULL, "sxe_cstr_make: Can't construct sxe_cstr with buf == NULL");
+    SXEA10(size != 0,    "sxe_cstr_make: Can't construct sxe_cstr with size == 0");
 
     cstr->literal   = 0;
     cstr->flags     = SXE_CSTR_STATIC;
@@ -163,7 +161,12 @@ sxe_cstr_vprintf(sxe_cstr * cstr, const char * fmt, va_list ap)
     size = cstr->size - cstr->len;
     ret  = vsnprintf(&cstr->buf[cstr->len], size, fmt, ap);
 
-    assert(ret >= 0);
+    /* Under Windows, -1 is returned on overflow.
+     */
+    if (ret < 0) {
+        ret = size;                                                                      /* Coverage Exclusion - Windows only */
+        cstr->buf[cstr->size - 1] = '\0';    /* Force NUL termination */                 /* Coverage Exclusion - Windows only */
+    }
 
     if ((unsigned)ret < size) {
         cstr->len += ret;
@@ -171,6 +174,6 @@ sxe_cstr_vprintf(sxe_cstr * cstr, const char * fmt, va_list ap)
     }
 
     cstr->flags |= SXE_CSTR_OVERFLOW;
-    cstr->len = cstr->size - 1;
+    cstr->len    = cstr->size - 1;
     return ret;
 }

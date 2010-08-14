@@ -38,46 +38,33 @@ main(int argc, char ** argv)
 {
     char buf[1024];
     char cmd[1024];
-    char expect[1024];
-    int  return_val;
     char cmd_quote;
 
     SXE_UNUSED_PARAMETER(argc);
+    SXE_UNUSED_PARAMETER(argv);
 
-    plan_tests(10);
+    plan_tests(7);
     is(sxe_spawn_init(), SXE_RETURN_OK, "Initialized: sxe-spawn");
 
-    /* Test a basic command */
-    return_val = sxe_spawn_backticks("ls", buf, sizeof(buf));
-    ok(return_val > 0, "Ran a basic backtick command");
-
-#ifdef WIN32
+#ifdef _WIN32
     cmd_quote = '\"';
 #else
     cmd_quote = '\'';
 #endif
 
-    /* Try a complex command */
-    snprintf(cmd, sizeof(cmd), "perl -e %c print qq{foo\nbar\nbaz} %c | grep bar", cmd_quote, cmd_quote);
-    is(sxe_spawn_backticks(cmd, buf, sizeof(buf)), 4, "Ran a perl command");
-    is_eq("bar\n", buf, "The strings match");
+    snprintf(cmd, sizeof(cmd),
+             "perl -e %c print qq#foo# . chr(10) . qq#bar# . chr(10) . qq#baz# %c", cmd_quote, cmd_quote);
+    is(sxe_spawn_backticks(cmd, buf, sizeof(buf)), 11, "Ran a perl command");
+    is(strcmp("foo\nbar\nbaz", buf), 0, "The strings match");
 
-    /* Do an 'ls' of this file */
-    snprintf(cmd,    sizeof(cmd),    "ls %s", argv[0]);
-    snprintf(expect, sizeof(expect), "%s\n", argv[0]);
-    is(sxe_spawn_backticks(cmd, buf, sizeof(buf)), strlen(expect), "Ran an ls of this file");
-    diag("Ran: >%s<\nGot: >%s<\nExpect: >%s<\n", cmd, buf, argv[0]);
-    is_eq(expect, buf, "Strings are the same");
+    /* Note: sxe_spawn_backticks asserts if buffer is less then 2 */
 
     buf[0] = 'X'; buf[1] = 'X'; buf[2] = 'X';
-
-    /* Note: sxe_spawn_backticks asserts if buffer is less than 2 */
-
     /* buffer is 2 */
-    is(sxe_spawn_backticks(cmd, buf, 2), 1, "Ran a basic backtick command");
-    is(buf[0], expect[0], "length of 2 buffer[0]");
-    is(buf[1], '\0',      "length of 2 buffer[1]");
-    is(buf[2], 'X',       "length of 2 buffer[2]");
+    is(sxe_spawn_backticks(cmd, buf, 2), 1, "Ran another perl command");
+    is(buf[0],  'f',  "length of 2 buffer[0]");
+    is(buf[1], '\0',  "length of 2 buffer[1]");
+    is(buf[2],  'X',  "length of 2 buffer[2]");
 
     return exit_status();
 }

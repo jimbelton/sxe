@@ -198,7 +198,12 @@ sxe_spawn_backticks(const char * cmd, char * buf, unsigned int buf_max)
     SXEE83("sxe_spawn_backticks(cmd=%s, buf=%p, buf_max=%u)", cmd, buf, buf_max);
     SXEA80(buf_max > 1, "sxe_spawn_backticks: Parameter buf_max is zero!");
 
+#ifdef _WIN32
+    fp = _popen(cmd, "r");
+#else
     fp = popen(cmd, "r");
+#endif
+
     SXEA81(fp != NULL, "sxe_spawn_backticks: popen failed to exec command '%s'", cmd);
 
     while ((bytes_read = fread(buf + bytes_written, sizeof(char), (buf_max - bytes_written - 1), fp)) != 0) {
@@ -207,7 +212,11 @@ sxe_spawn_backticks(const char * cmd, char * buf, unsigned int buf_max)
     }
 
     buf[bytes_written] = '\0';
+#ifdef _WIN32
+    SXEA80(_pclose(fp) == 0, "sxe_spawn_backticks: failed to close pipe");
+#else
     SXEA80(pclose(fp) == 0, "sxe_spawn_backticks: failed to close pipe");
+#endif
 
     SXER80("return");
     return bytes_written;

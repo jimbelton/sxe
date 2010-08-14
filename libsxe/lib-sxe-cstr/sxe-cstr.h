@@ -41,11 +41,11 @@ typedef struct SXE_CSTR_IMPL
 
 #include "lib-sxe-cstr-proto.h"
 
-inline int sxe_cstr_eq(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) == 0;}
-inline int sxe_cstr_ge(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) >= 0;}
-inline int sxe_cstr_gt(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) >  0;}
-inline int sxe_cstr_le(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) <= 0;}
-inline int sxe_cstr_lt(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) <  0;}
-inline int sxe_cstr_ne(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) != 0;}
+static inline int sxe_cstr_eq(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) == 0;}
+static inline int sxe_cstr_ge(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) >= 0;}
+static inline int sxe_cstr_gt(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) >  0;}
+static inline int sxe_cstr_le(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) <= 0;}
+static inline int sxe_cstr_lt(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) <  0;}
+static inline int sxe_cstr_ne(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) != 0;}
 
 #endif
