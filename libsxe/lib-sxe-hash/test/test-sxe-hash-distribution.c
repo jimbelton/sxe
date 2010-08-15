@@ -27,6 +27,7 @@
 
 #include "sxe.h"
 #include "sxe-hash.h"
+#include "sxe-log.h"
 #include "sxe-pool.h"
 #include "tap.h"
 #include "sha1sum.h"
@@ -41,11 +42,10 @@ int main(void)
     int i;
     int counter[MAX_BUCKET_INDEX];
 
-    memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
-
     plan_tests(2 * HASH_SIZE);
-
-    hash = sxe_hash_new("test-hash", HASH_SIZE);
+    memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
+    hash = sxe_hash_new("test-hash", HASH_SIZE, sizeof(SXE_HASH_KEY_VALUE_PAIR), SXE_HASH_SHA1_AS_CHAR_LENGTH, 0);
+    SXEA10(hash != NULL, "Couldn't create hash 'test-hash'");
 
     for (i = 0; i < HASH_SIZE; i++)
     {

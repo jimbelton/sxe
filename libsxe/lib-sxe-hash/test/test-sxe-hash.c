@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include "sxe-hash.h"
+#include "sxe-log.h"
 #include "tap.h"
 
 #define HASH_SIZE  5
@@ -41,11 +42,12 @@
 int main(void)
 {
     const unsigned length = SXE_HASH_SHA1_AS_CHAR_LENGTH;
-    SXE_HASH * hash;
+    SXE_HASH *     hash;
 
     plan_tests(21);
 
-    hash = sxe_hash_new("test-hash", HASH_SIZE);
+    hash = sxe_hash_new("test-hash", HASH_SIZE, sizeof(SXE_HASH_KEY_VALUE_PAIR), SXE_HASH_SHA1_AS_CHAR_LENGTH, 0);
+    SXEA10(hash != NULL, "Couldn't create hash 'test-hash'");
 
     is(sxe_hash_set   (hash, SHA1_1ST, length, 1), 4                     , "set keys 1: Inserted at index 4"                   );
     is(sxe_hash_get   (hash, SHA1_1ST, length   ), 1                     , "set keys 1: Got correct value for first sha"       );

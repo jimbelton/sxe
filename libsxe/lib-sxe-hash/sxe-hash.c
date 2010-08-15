@@ -1,5 +1,5 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -24,6 +24,7 @@
 
 #include "sxe.h"
 #include "sxe-hash.h"
+#include "sxe-log.h"
 #include "sxe-pool.h"
 #include "sxe-util.h"
 
@@ -33,7 +34,7 @@ static void
 sha1_key_as_char_to_uint(const char * sha1_as_char, uint32_t * sha1_as_uint, unsigned sha1_as_uint_len)
 {
     unsigned i, j;
-    
+
     SXEA90(sha1_as_uint_len == SXE_HASH_SHA1_AS_UINT_LENGTH, "sha1_as_uint must have length of 5");
     for (i = 0; i < sha1_as_uint_len; i++)
     {
@@ -147,15 +148,17 @@ SXE_EARLY_OUT:
 }
 
 SXE_HASH *
-sxe_hash_new(const char * name, unsigned bucket_count)
+sxe_hash_new(const char * name, unsigned bucket_count, unsigned element_size, unsigned key_size, unsigned key_offset)
 {
     SXE_HASH * hash;
 
-    SXEE82("sxe_hash_new(name=%s,bucket_count=%u)", name, bucket_count);
+    SXEE85("sxe_hash_new(name=%s,bucket_count=%u,element_size=%u,key_size=%u,key_offset=%u)", name, bucket_count, element_size,
+           key_size, key_offset);
+    SXE_UNUSED_PARAMETER(key_size);
+    SXE_UNUSED_PARAMETER(key_offset);
 
-    hash = malloc(sizeof(SXE_HASH));
-
-    hash->pool = sxe_pool_new(name, bucket_count, sizeof(SXE_HASH_KEY_VALUE_PAIR), bucket_count + 1);
+    SXEA11((hash = malloc(sizeof(SXE_HASH))) != NULL, "Unable to allocate memory for hash table '%s'", name);
+    hash->pool = sxe_pool_new(name, bucket_count, element_size, bucket_count + 1);
     hash->size = bucket_count;
 
     SXER83("return hash=%p // hash->pool=%p, hash->size=%u", hash, hash->pool, hash->size);
