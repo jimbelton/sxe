@@ -43,8 +43,8 @@
 #define SXE_LOG_BUFFER_SIZE         1024
 #define SXE_LOG_BUFFER_SIZE_ASSERT  1024
 
-#define SXE_LOG_LEVEL_MINIMUM       0
-#define SXE_LOG_LEVEL_MAXIMUM       9
+#define SXE_LOG_LEVEL_MINIMUM       (SXE_LOG_LEVEL_UNDER_MINIMUM + 1)
+#define SXE_LOG_LEVEL_MAXIMUM       (SXE_LOG_LEVEL_OVER_MAXIMUM  - 1)
 
 #ifndef SXE_LOG_LEVEL_DEFAULT
 #define SXE_LOG_LEVEL_DEFAULT       SXE_LOG_LEVEL_MAXIMUM
@@ -75,15 +75,16 @@ static unsigned sxe_log_is_first_call = 1;
 #endif
 
 #define SXE_CHECK_LOG_INITIALIZE()                 {if (sxe_log_is_first_call) { sxe_log_init(); }}
-#define SXE_CHECK_VERBOSITY_BEFORE_ANYTHING_ELSE() {if (verbosity > sxe_log_level) { return; }}
+#define SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE() {if (level > sxe_log_level) { return; }}
 
-unsigned sxe_log_level = SXE_LOG_LEVEL_DEFAULT;
+SXE_LOG_LEVEL sxe_log_level = SXE_LOG_LEVEL_DEFAULT;
 
 #ifdef _WIN32
 static unsigned
 sxe_log_get_indent_windows(void)
 {
     unsigned indent;
+
     DWORD error = GetLastError();
     indent = (unsigned)TlsGetValue(sxe_log_tls_slot);
     SetLastError(error);
@@ -94,6 +95,7 @@ static void
 sxe_log_set_indent_windows(unsigned indent)
 {
     DWORD error = GetLastError();
+
     (void)TlsSetValue(sxe_log_tls_slot, (void *)indent);
     SetLastError(error);
 }
@@ -104,10 +106,6 @@ sxe_log_set_indent_windows(unsigned indent)
 const char *
 sxe_return_to_string(SXE_RETURN ret)
 {
-    if (ret >= SXE_RETURN_INVALID_VALUE) {
-        return "INVALID_VALUE";
-    }
-
     /* Convert to string.  If any enumerand is missing, should get a compiler error (works with gcc).
      */
     switch (ret) {
@@ -125,13 +123,10 @@ sxe_return_to_string(SXE_RETURN ret)
     SXE_RETURN_CASE(WARN_ALREADY_CLOSED);
     SXE_RETURN_CASE(ERROR_INTERRUPTED);
     SXE_RETURN_CASE(ERROR_COMMAND_NOT_RUN);
-    SXE_RETURN_CASE(INVALID_VALUE);    /* COVERAGE EXCLUSION: Cannot hit this */
+    SXE_RETURN_CASE(INVALID_VALUE);            /* Required to make compiler happy */
     }
 
-    /* Can't happen!
-     */
-    SXEA11(1, "Invalid return value %u", ret);
-    return "INVALID_VALUE"; /* COVERAGE EXCLUSION: Cannot hit this */
+    return "INVALID_VALUE";
 }
 
 static int
@@ -166,16 +161,18 @@ sxe_log_safe_append(char * log_buffer, unsigned * index_ptr, int appended)
 #endif
 
 static void
-sxe_log_line_out_default(char * line)    /* Coverage Exclusion - default version for testing */
-{
-    fputs(line, stderr);                 /* Coverage Exclusion - default version for testing */
-    fflush(stderr);                      /* Coverage Exclusion - default version for testing */
+sxe_log_line_out_default(SXE_LOG_LEVEL level, char * line)    /* Coverage Exclusion - default version for testing */
+{                                                             /* Coverage Exclusion - default version for testing */
+    SXE_UNUSED_ARGUMENT(level);
+
+    fputs(line, stderr);                                      /* Coverage Exclusion - default version for testing */
+    fflush(stderr);                                           /* Coverage Exclusion - default version for testing */
 }
 
-static void (*sxe_log_line_out)(char * line) = &sxe_log_line_out_default;
+static void (*sxe_log_line_out)(SXE_LOG_LEVEL level, char * line) = &sxe_log_line_out_default;
 
 void
-sxe_log_hook_line_out(void (*line_out)(char *))
+sxe_log_hook_line_out(void (*line_out)(SXE_LOG_LEVEL level, char *))
 {
     if (line_out == NULL) {
         sxe_log_line_out = sxe_log_line_out_default;
@@ -186,34 +183,56 @@ sxe_log_hook_line_out(void (*line_out)(char *))
 }
 
 static void
-sxe_log_line_out_escaped(char * line)
+sxe_log_line_out_escaped(SXE_LOG_LEVEL level, char * line)
 {
-    unsigned i;
-    unsigned j;
+    unsigned from;
+    unsigned to;
     char     line_escaped[SXE_LOG_BUFFER_SIZE * 4];   /* Worse case, all hex encoded */
 
-    for (i = 0, j = 0; line[i] != '\0'; i++) {
-        if      (line[i] == '\\' ) { line_escaped[j + 0] = '\\'; line_escaped[j + 1] = '\\'; j += 2; }
-        else if (line[i] == '\n' ) { line_escaped[j + 0] = '\\'; line_escaped[j + 1] = 'n' ; j += 2; }
-        else if (line[i] == '\r' ) { line_escaped[j + 0] = '\\'; line_escaped[j + 1] = 'r' ; j += 2; }
-        else if (isprint(line[i])) { line_escaped[j + 0] = line[i]                         ; j += 1; }
-        else                       { j += SNPRINTF(&line_escaped[j], 5, "\\x%02X", (unsigned)(unsigned char)line[i]); }
+    for (from = 0; (line[from] != '\0') && (isprint((unsigned char)line[from]) || (line[from] == ' ')); from++) {
     }
 
-    if (j > SXE_LOG_BUFFER_SIZE)
-    {
-        j = SXE_LOG_BUFFER_SIZE;
-        line_escaped[j - 4] = '.';
-        line_escaped[j - 3] = '.';
+    if (line[from] != '\0') {
+        memcpy(line_escaped, line, from);
+
+        for (to = from; line[from] != '\0'; from++) {
+            if (line[from] == '\\' ) {
+                line_escaped[to++] = '\\';
+                line_escaped[to++] = '\\';
+            }
+            else if (line[from] == '\n' ) {
+                line_escaped[to++] = '\\';
+                line_escaped[to++] = 'n' ;
+            }
+            else if (line[from] == '\r' ) {
+                line_escaped[to++] = '\\';
+                line_escaped[to++] = 'r' ;
+            }
+            else if (isprint((unsigned char)line[from])) {
+                line_escaped[to++] = line[from];
+            }
+            else {
+                to += SNPRINTF(&line_escaped[to], 5, "\\x%02X", (unsigned)(unsigned char)line[from]);
+            }
+        }
+
+        if (to > SXE_LOG_BUFFER_SIZE)
+        {
+            to = SXE_LOG_BUFFER_SIZE;
+            line_escaped[to - 4] = '.';
+            line_escaped[to - 3] = '.';
+        }
+
+        line_escaped[to - 2] = '\n';
+        line_escaped[to - 1] = '\0';
+        line = line_escaped;
     }
 
-    line_escaped[j - 2] = '\n';
-    line_escaped[j - 1] = '\0';
-    (*sxe_log_line_out)(line_escaped);
+    (*sxe_log_line_out)(level, line);
 }
 
 static unsigned
-sxe_log_buffer_set_prefix(char * log_buffer, unsigned id, unsigned verbosity)
+sxe_log_buffer_set_prefix(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
 {
     unsigned         length;
 #if defined(WIN32)
@@ -248,7 +267,7 @@ sxe_log_buffer_set_prefix(char * log_buffer, unsigned id, unsigned verbosity)
     }
 
     length = strlen(log_buffer);
-    log_buffer[length++]    = '0' + verbosity;
+    log_buffer[length++]    = '0' + level;
     log_buffer[length++]    = ' ';
     log_buffer[length]      = '\0';
     return length;
@@ -263,7 +282,7 @@ sxe_log_init(void)
 
 #ifdef _WIN32
     if ((sxe_log_tls_slot = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
-        (*sxe_log_line_out)("sxe_log_init: Unable to allocate thread local storage\n");
+        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, "sxe_log_init: Unable to allocate thread local storage\n");
         abort();
     }
 #endif
@@ -279,16 +298,16 @@ sxe_log_init(void)
 }
 
 void
-sxe_log(unsigned id, unsigned int verbosity, const char *fmt, ...)
+sxe_log(unsigned id, SXE_LOG_LEVEL level, const char *fmt, ...)
 {
     char  log_buffer[SXE_LOG_BUFFER_SIZE];
     va_list  ap;
     unsigned i;
 
     SXE_CHECK_LOG_INITIALIZE();
-    SXE_CHECK_VERBOSITY_BEFORE_ANYTHING_ELSE();
+    SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
 
-    i = sxe_log_buffer_set_prefix(log_buffer, id, verbosity);
+    i = sxe_log_buffer_set_prefix(log_buffer, id, level);
     va_start(ap, fmt);
 
     if (!sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s- ", SXE_LOG_INDENT * 2, "")) ||
@@ -300,11 +319,11 @@ sxe_log(unsigned id, unsigned int verbosity, const char *fmt, ...)
     sxe_log_safe_append( log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
 
 SXE_EARLY_OR_ERROR_OUT:
-    sxe_log_line_out_escaped(log_buffer);
-} /* sxe_log() */
+    sxe_log_line_out_escaped(level, log_buffer);
+}
 
 void
-sxe_log_entry(unsigned id, unsigned int verbosity, const char * file, int line, const char *fmt, ...)
+sxe_log_entry(unsigned id, SXE_LOG_LEVEL level, const char * file, int line, const char *fmt, ...)
 {
     char  log_buffer[SXE_LOG_BUFFER_SIZE];
     va_list  ap;
@@ -312,9 +331,9 @@ sxe_log_entry(unsigned id, unsigned int verbosity, const char * file, int line, 
     unsigned prefix_length;
 
     SXE_CHECK_LOG_INITIALIZE();
-    SXE_CHECK_VERBOSITY_BEFORE_ANYTHING_ELSE();
+    SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
 
-    prefix_length   = sxe_log_buffer_set_prefix(log_buffer, id, verbosity);
+    prefix_length   = sxe_log_buffer_set_prefix(log_buffer, id, level);
     i               = prefix_length;
     va_start(ap, fmt);
 
@@ -323,32 +342,32 @@ sxe_log_entry(unsigned id, unsigned int verbosity, const char * file, int line, 
         sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
     }
 
-    sxe_log_line_out_escaped(log_buffer);
+    sxe_log_line_out_escaped(level, log_buffer);
     i = prefix_length;
     sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s  { // %s:%d\n",
                         SXE_LOG_INDENT * 2, "", file, line));
-    sxe_log_line_out_escaped(log_buffer);
+    sxe_log_line_out_escaped(level, log_buffer);
     SXE_LOG_SET_INDENT(SXE_LOG_INDENT + 1);
-} /* sxe_log_entry() */
+}
 
 void
-sxe_log_return( unsigned id, unsigned int verbosity, const char * file, int line )
+sxe_log_return(unsigned id, SXE_LOG_LEVEL level, const char * file, int line )
 {
     char  log_buffer[SXE_LOG_BUFFER_SIZE];
     unsigned i;
 
     SXE_CHECK_LOG_INITIALIZE();
-    SXE_CHECK_VERBOSITY_BEFORE_ANYTHING_ELSE();
+    SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
     SXEA61(SXE_LOG_INDENT > 0, "Indentation level %d must be greater than zero!\n", SXE_LOG_INDENT);
 
-    i = sxe_log_buffer_set_prefix(log_buffer, id, verbosity);
+    i = sxe_log_buffer_set_prefix(log_buffer, id, level);
     sxe_log_safe_append( log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s} // %s:%d\n",
                                   SXE_LOG_INDENT * 2, "", file, line));
     SXE_LOG_SET_INDENT(SXE_LOG_INDENT - 1);
 
 SXE_EARLY_OR_ERROR_OUT:
-    sxe_log_line_out_escaped(log_buffer);
-} /* sxe_log_return() */
+    sxe_log_line_out_escaped(level, log_buffer);
+}
 
 void
 sxe_log_assert(unsigned id, const char *file, int line, const char *con, const char *fmt, ...)
@@ -368,12 +387,12 @@ sxe_log_assert(unsigned id, const char *file, int line, const char *con, const c
     }
 
 SXE_EARLY_OR_ERROR_OUT:
-    sxe_log_line_out_escaped(log_buffer);
+    sxe_log_line_out_escaped(SXE_LOG_LEVEL_FATAL, log_buffer);
     abort();
-} /* sxe_log_assert() */
+}
 
 void
-sxe_log_dump_memory(unsigned id, unsigned verbosity, const void * pointer, unsigned length)
+sxe_log_dump_memory(unsigned id, SXE_LOG_LEVEL level, const void * pointer, unsigned length)
 {
     char            log_buffer[SXE_LOG_BUFFER_SIZE];
     unsigned        prefix_length;
@@ -384,9 +403,9 @@ sxe_log_dump_memory(unsigned id, unsigned verbosity, const void * pointer, unsig
     SXE_PTR_UNION   memory;
 
     SXE_CHECK_LOG_INITIALIZE();
-    SXE_CHECK_VERBOSITY_BEFORE_ANYTHING_ELSE();
+    SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
 
-    prefix_length               = sxe_log_buffer_set_prefix(log_buffer, id, verbosity);
+    prefix_length               = sxe_log_buffer_set_prefix(log_buffer, id, level);
     memory.as_void_ptr_const    = pointer;
 
     /* TODO: pretty up dumping :-) */
@@ -440,7 +459,7 @@ sxe_log_dump_memory(unsigned id, unsigned verbosity, const void * pointer, unsig
         sxe_log_safe_append( log_buffer, &i, SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
 
 SXE_EARLY_OR_ERROR_OUT:
-        sxe_log_line_out_escaped(log_buffer);
+        sxe_log_line_out_escaped(level, log_buffer);
     } /* for (k = ... */
 } /* sxe_debug_dump_memory() */
 

@@ -46,8 +46,11 @@
 #define SIGKILL       9
 #define SIGHUP        1
 
+/* File locking is stubbed out: caveat emptor!
+ */
 #define flockfile(file)
 #define funlockfile(file)
+
 #define getpid()                 _getpid()
 #define pipe(phandles)           _pipe((phandles), PIPE_BUF, _O_BINARY)
 #define snprintf                 _snprintf

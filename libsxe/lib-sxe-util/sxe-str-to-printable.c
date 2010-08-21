@@ -20,9 +20,12 @@
  */
 
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
+#include "sxe-log.h"
 #include "sxe-util.h"
 
 #define SXE_STR_PRINTABLE_SIMULTANEOUSLY 10
@@ -36,7 +39,7 @@ static char     sxe_str_printable[SXE_STR_PRINTABLE_SIMULTANEOUSLY][SXE_STR_PRIN
  *
  * @param str = String to convert
  *
- * @return str if the string is already printable, or up to the first 1020 characters of the string converted into a
+ * @return str if the string is already printable or is NULL, or up to the first 1020 characters of the string converted into a
  *         printable form, returned in the least recently used of a set of 10 buffers.
  *
  * @note This function is not thread safe. Also, as it is expected to be used in logging, it does not itself log.
@@ -49,7 +52,11 @@ sxe_str_to_printable(const char * str)
     unsigned to;
     unsigned this;
 
-    for (from = 0; (str[from] != '\0') && (isprint(str[from]) || (str[from] == ' ')); from++) {
+    if (str == NULL) {
+        return NULL;
+    }
+
+    for (from = 0; (str[from] != '\0') && (isprint((unsigned char)str[from]) || (str[from] == ' ')); from++) {
     }
 
     if (str[from] == '\0') {
@@ -69,14 +76,14 @@ sxe_str_to_printable(const char * str)
             break;
         }
 
-        if (isprint(str[from]) || (str[from] == ' ')) {
+        if (isprint((unsigned char)str[from]) || (str[from] == ' ')) {
             sxe_str_printable[this][to++] = str[from];
             continue;
         }
 
         sxe_str_printable[this][to++] = '\\';
         sxe_str_printable[this][to++] = 'x';
-        snprintf(&sxe_str_printable[this][to], 3, "%02x", (unsigned)str[from]);
+        snprintf(&sxe_str_printable[this][to], 3, "%02x", (unsigned char)str[from]);
         to += 2;
     }
 

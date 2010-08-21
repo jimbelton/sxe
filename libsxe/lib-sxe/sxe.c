@@ -34,7 +34,6 @@
 #include <winsock2.h>
 
 #else /* UNIX */
-#define __USE_GNU             /* Enable the ucred structure declaration, which is not portable to FreeBSD    */
 #include <linux/sockios.h>    /* For SIOCINQ: This appears to be Linux specific; under FreeBSD, use MSG_PEEK */
 #include <netdb.h>
 #include <netinet/tcp.h>

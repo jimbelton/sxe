@@ -25,6 +25,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if (SXE_DEBUG == 1)
+#define LOCAL_SXE_DEBUG 1
+#endif
+
 #undef   SXE_DEBUG      /* Since we are testing diagnostic functions, the test program forces debug mode */
 #define  SXE_DEBUG 1
 #include "sxe-log.h"
@@ -41,8 +45,8 @@ struct object
 
 static unsigned     test_state = 0;
 static const char   entering[] = "Entering the log test";
-static const char   escape[]   = "Line 1\r\nLine 2: This is a hex character (BS): \b\r\nLine 3: This is a backslash: \\\r\n";
-static const char   escaped[]  = "Line 1\\r\\nLine 2: This is a hex character (BS): \\x08\\r\\nLine 3: This is a backslash: \\\\\\r\\n\n";
+static const char   escape[]   = "Line 1: high bit character \x80\r\nLine 2: This is a hex character (BS): \b\r\nLine 3: This is a backslash: \\\r\n";
+static const char   escaped[]  = "Line 1: high bit character \\x80\\r\\nLine 2: This is a hex character (BS): \\x08\\r\\nLine 3: This is a backslash: \\\\\\r\\n\n";
 static const char   logging[]  = "Logging a normal line";
 static const char   truncate[] = "0123456789112345678921234567893123456789412345678951234567896123456789712345678981234567899123456789"
                                  "0123456789112345678921234567893123456789412345678951234567896123456789712345678981234567899123456789"
@@ -67,12 +71,13 @@ static const char   exiting[]  = "Exiting the log test";
 static const char   dumphex[]  = "74 65 73 74";
 
 static void
-log_line(char * line)
+log_line(SXE_LOG_LEVEL level, char * line)
 {
     char buf[256];
 
     switch (test_state) {
     case 0:
+        is(level, SXE_LOG_LEVEL_TRACE, "Line was logged at TRACE level");
         is_strncmp(&line[strlen(line) - strlen(entering) - 1], entering, strlen(entering), "Test line 0 ends with '%s'", entering);
         break;
 
@@ -128,6 +133,7 @@ log_line(char * line)
         break;
 
     case 12:
+        is(level, SXE_LOG_LEVEL_FATAL, "Assertions are logged at level FATAL");
         ok((strstr(line, "ERROR: debug assertion 'this != &self' failed at test/test-sxe-log.c") != NULL) ||
            (strstr(line, "ERROR: debug assertion 'this != &self' failed at sxe/lib-sxe-log/test/test-sxe-log.c") != NULL),
            "Assertion includes expected stringized test");
@@ -164,7 +170,7 @@ main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
-    plan_tests(32);
+    plan_tests(35);
 
     /* sxe_return_to_string() */
     is_eq(sxe_return_to_string(SXE_RETURN_OK),             "OK"            , "sxe_return_to_string(SXE_RETURN_OK) eq \"OK\"");
@@ -183,6 +189,7 @@ main(int argc, char *argv[]) {
     TEST_CASE_RETURN_TO_STRING(ERROR_INTERRUPTED);
     TEST_CASE_RETURN_TO_STRING(ERROR_COMMAND_NOT_RUN);
     TEST_CASE_RETURN_TO_STRING(UNCATEGORIZED);
+    TEST_CASE_RETURN_TO_STRING(INVALID_VALUE);    /* Just for coverage */
 
     ok(signal(SIGABRT, test_abort_handler) != SIG_ERR, "Caught abort signal");
     sxe_log_hook_line_out(NULL); /* for coverage */
@@ -202,7 +209,12 @@ main(int argc, char *argv[]) {
     SXED60(dumpdata, 0);    /* Edge case */
     SXEA80(1, "We should not get this, because level 8 is too low!");
     sxe_log_init();         /* For Coverage */
+
+#if defined(_WIN32) && defined(LOCAL_SXE_DEBUG)
+    skip(3, "Can't test aborts in a Windows debug build, due to pop up Window stopping the build");
+#else
     SXEA60(this != &self, "This is not self");  /* Abort - must be the last thing we do*/
     fail("Did not catch an abort signal");
+#endif
     return exit_status();
 }

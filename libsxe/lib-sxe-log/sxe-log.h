@@ -28,10 +28,21 @@
 
 #define SXE_TIMESTAMP_SIZE 20   /* YYYYmmDDHHMMSS.hhh + '\0' + pad */
 
-/* TODO: Design and document a consistent strategy for using the various log levels
+/* The following log levels are based on discussions with Mario
  */
-
-extern unsigned sxe_log_level;
+typedef enum SXE_LOG_LEVEL {
+    SXE_LOG_LEVEL_UNDER_MINIMUM,  /* Guard value: do not use this                            */
+    SXE_LOG_LEVEL_FATAL,          /* Release mode assertions                                 */
+    SXE_LOG_LEVEL_ERROR,
+    SXE_LOG_LEVEL_WARNING,
+    SXE_LOG_LEVEL_INFORMATION,    /* e.g. SXLd transactions                                  */
+    SXE_LOG_LEVEL_DEBUG,          /* e.g. External function entry/return                     */
+    SXE_LOG_LEVEL_TRACE,          /* e.g. Internal function entry/return and further logging */
+    SXE_LOG_LEVEL_DUMP,           /* Packet dumps                                            */
+    SXE_LOG_LEVEL_LIBRARY_TRACE,  /* Trace for generic library functions                     */
+    SXE_LOG_LEVEL_LIBRARY_DUMP,   /* Packet dumps for generic library functions              */
+    SXE_LOG_LEVEL_OVER_MAXIMUM    /* Guard value: do not use this                            */
+} SXE_LOG_LEVEL;
 
 /* The following macros and types are here because sxe-log.h is the lowest level package
  */
@@ -59,6 +70,8 @@ typedef enum SXE_RETURN {
     SXE_RETURN_ERROR_COMMAND_NOT_RUN,
     SXE_RETURN_INVALID_VALUE    /* This must be the last value. */
 } SXE_RETURN;
+
+extern SXE_LOG_LEVEL sxe_log_level;
 
 /**
  * - Logging macros

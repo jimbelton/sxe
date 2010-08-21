@@ -42,10 +42,14 @@ main(void)
 {
     const char * str;
 
-    plan_tests(5);
+    plan_tests(6);
+
+    is(sxe_str_to_printable(NULL), NULL,                         "NULL in, NULL out");
     is(sxe_str_to_printable(hello_world), hello_world,           "'hello, world' is already printable");
-    is_eq(sxe_str_to_printable("\n\t \x7F"), "\\x0a\\x09 \\x7f", "Printable version of '\\n\\t \\x7F' is '\\x0a\\x09 \\x7f");
+    is_eq(sxe_str_to_printable("\n\t \x7F\x80"), "\\x0a\\x09 \\x7f\\x80", "Printable version of '\\n\\t \\x7F\\x80' is '\\x0a\\x09 \\x7f\\x80");
     ok((str = sxe_str_to_printable(very_long_string)) != very_long_string, "Very long string is not already printable");
     is(strlen(str), 1023,                                        "Very long printable string truncated at expected length");
     is_eq(&str[1020], "...",                                     "Truncated printable string ends with ...");
+
+    return exit_status();
 }

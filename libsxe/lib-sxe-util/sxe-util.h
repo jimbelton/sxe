@@ -22,7 +22,10 @@
 #ifndef __SXE_UTIL_H__
 #define __SXE_UTIL_H__
 
+#include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
+
 #include "sxe-log.h"
 
 #define SXE_UNSIGNED_MAXIMUM        (~0U)
