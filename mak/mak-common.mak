@@ -197,7 +197,7 @@ DEP.dirs    = $(call reverse, $(foreach PACKAGE, $(DEP.exe_pkgs) $(DEP.dll_pkgs)
 
 # Only do coverage analysis if doing a coverage build and not in the opt-out list
 #
-ifneq ($(filter-out $(abspath $(addprefix $(COM.dir)/, $(COVERAGE_OPTOUT_LIST))), $(shell pwd)),)
+ifneq ($(filter-out $(abspath $(addprefix $(COM.dir)/, $(COVERAGE_OPTOUT_LIST))), $(shell $(PWD))),)
 DO_COVERAGE = $(COVERAGE)
 endif
 
@@ -222,6 +222,7 @@ endif
 endif
 
 ifdef MAKE_DEBUG
+$(info make: debug: RELEASE_TYPE      : $(RELEASE_TYPE))
 $(info make: debug: TOP.dir           : $(TOP.dir))
 $(info make: debug: COM.dir           : $(COM.dir))
 $(info make: debug: SRC.c             : $(SRC.c))
@@ -353,13 +354,13 @@ $(DST.dir)/%.ok:		$(DST.dir)/%.t
 	@echo ===== $(DST.dir)/$*.ok
 	@$(MAKE_PERL_ECHO) "make: running: $^"
 	cd $(call OSPATH,$(dir $<)) && $(call OSPATH,./$(notdir $<))
-	@touch $@
+	@$(TOUCH) $@
 
 $(DST.dir)/%.ok:		./test/%.pl $(DST.exe)  $(DST.lib)
 	@echo ===== $(DST.dir)/$*.ok
 	@$(MAKE_PERL_ECHO) "make: running: $^"
 	cd $(DST.dir) && $(PERL) ../test/$(call OSPATH,$(notdir $<))
-	@touch $@
+	@$(TOUCH) $@
 
 $(DST.dir)/%-proto.h:   %.c
 	@$(MAKE_PERL_ECHO) "make: building: $@"

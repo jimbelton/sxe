@@ -46,6 +46,8 @@ endif
 
 PERL               = perl
 MKDIR              = mkdir -p
+PWD                = pwd
+TOUCH              = touch
 DEL                = rm -f
 DIR_SEP            = /
 RMDIR              = rm -rf
@@ -107,8 +109,13 @@ COPYDIR            = cp --update --recursive --no-target-directory --verbose --p
 CFLAGS_DEBUG       = -g
 CFLAGS_FOR_CPP     = -lstdc++
 
-# - Function to fix a path name for the OS
+##
+# Function to fix a path name for the OS
 #   - e.g. $(COPY) $(call OSPATH,$^) $@
 #   - On UNIX, this is a no-op
 OSPATH             = $(1)
 
+##
+# Function to copy one or more files to a directory
+#   - e.g. $(call COPY_TO_DIR,$source_files,$dest_dir)
+COPY_TO_DIR        = cp -f $(1) $(2)

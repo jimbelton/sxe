@@ -27,6 +27,8 @@ PERL       = perl
 #
 
 MKDIR      = mkdir
+PWD        = $(PERL) -MCwd=cwd -e "print cwd"
+TOUCH      = $(PERL) -e "open FH, '>>', $$_ foreach @ARGV"
 DEL        = del /f
 DIR_SEP    = \\
 RMDIR      = $(PERL) -MFile::Path -e "foreach(@ARGV){rmtree($$_)};"
@@ -72,7 +74,7 @@ CXX         = cl.exe
 LINK       	= cl.exe
 LINK_OUT   	= /Fe
 LINK_FLAGS += /nologo /link /DEFAULTLIB:Ws2_32.lib /NODEFAULTLIB:libc.lib /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:msvcrtd.lib
-ifeq ($(RELEASE_TYPE),debug)
+ifneq ($(filter debug,$(MAKECMDGOALS)),)
 LINK_FLAGS += /NODEFAULTLIB:libcmt.lib  /DEFAULTLIB:LIBCMTD.lib
 else
 LINK_FLAGS += /NODEFAULTLIB:libcmtd.lib /DEFAULTLIB:LIBCMT.lib
@@ -94,9 +96,15 @@ CAT        	= more
 TRUE       	= dir > NUL:
 PROVE      	= prove
 
-# - Function to fix a path name for the OS
+##
+# Function to fix a path name for the OS
 #   - e.g. $(COPY) $(call OSPATH,$^) $@
 OSPATH      = $(subst /,\,$(1))
+
+##
+# Function to copy one or more files to a directory
+#   - e.g. $(call COPY_TO_DIR,$source_files,$dest_dir)
+COPY_TO_DIR = $(TOP.dir)/mak/bin/cp.pl -f $(1) $(2)
 
 ifndef VCINSTALLDIR
 ifndef MSVCDir
