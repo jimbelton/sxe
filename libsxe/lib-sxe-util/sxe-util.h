@@ -22,6 +22,7 @@
 #ifndef __SXE_UTIL_H__
 #define __SXE_UTIL_H__
 
+#include <stdint.h>
 #include "sxe-log.h"
 
 #define SXE_UNSIGNED_MAXIMUM        (~0U)
@@ -39,11 +40,12 @@
 
 #define SXE_ROT13_CHAR(character) (sxe_rot13_char[(unsigned char)(character)])
 
+typedef struct SXE_SHA1 {
+    uint32_t word[5];
+} SXE_SHA1;
+
 extern unsigned char sxe_rot13_char[];
 
-#include "sxe-hex-proto.h"
-#include "sxe-mkpath-proto.h"
-#include "sxe-rot13-proto.h"
-#include "sxe-str-proto.h"
+#include "lib-sxe-util-proto.h"
 
 #endif

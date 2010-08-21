@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -118,7 +118,7 @@ main(void)
     double     oldtime;
 
     time(&secs);
-    plan_tests(106);
+    plan_tests(110);
 
     /* Initialization causes expected state
      */
@@ -137,8 +137,8 @@ main(void)
             memset(base[0], 0xF0, size);
         }
 
-        SXEA10(pool == sxe_pool_from_base(base[i]), "Pool array is not the expected one");
-
+        is(pool,                              sxe_pool_from_base(base[i]),   "Pool array is the expected one");
+        is(base[i],                           sxe_pool_to_base(pool),        "Pool array to base works as expected");
         is(TEST_POOL_GET_NUMBER_FREE(pool),   4,                             "4 free objects in newly created pool");
         is(TEST_POOL_GET_NUMBER_USED(pool),   0,                             "0 used objects in newly created pool");
         is(TEST_POOL_GET_NUMBER_ABUSED(pool), 0,                             "0 abused objects in newly created pool");

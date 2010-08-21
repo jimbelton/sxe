@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -19,17 +19,44 @@
  * THE SOFTWARE.
  */
 
+#include <string.h>
+
 #include "sxe-util.h"
+#include "sxe-log.h"
 #include "tap.h"
+
+#define SHA1_HEX "2ce679528627da7780f8a4fec07cb34f902468a0"
+
+static unsigned char sxe_sha1_expected_bytes[] = {0x2c, 0xe6, 0x79, 0x52, 0x86, 0x27, 0xda, 0x77, 0x80, 0xf8,
+                                                  0xa4, 0xfe, 0xc0, 0x7c, 0xb3, 0x4f, 0x90, 0x24, 0x68, 0xa0};
 
 int
 main(void)
 {
-    plan_tests(4);
-    is(sxe_hex_to_unsigned("0",     2), 0,                    "'0':2    -> 0");
-    is(sxe_hex_to_unsigned("face",  4), 0xface,               "'face':4 -> 0xface");
-    is(sxe_hex_to_unsigned("B00B",  2), 0xb0,                 "'B00B':2 -> 0xb0");
-    is(sxe_hex_to_unsigned("XXXX",  4), SXE_UNSIGNED_MAXIMUM, "'XXXX':4 -> 0x%x (SXE_UNSIGNED_MAXIMUM)",
+    SXE_SHA1 sha1_expected;
+    SXE_SHA1 sha1_got;
+
+    plan_tests(7);
+    is(sxe_hex_to_unsigned("0",     2), 0,                            "'0':2    -> 0");
+    is(sxe_hex_to_unsigned("face",  4), 0xface,                       "'face':4 -> 0xface");
+    is(sxe_hex_to_unsigned("B00B",  2), 0xb0,                         "'B00B':2 -> 0xb0");
+    is(sxe_hex_to_unsigned("XXXX",  4), SXE_UNSIGNED_MAXIMUM,         "'XXXX':4 -> 0x%x (SXE_UNSIGNED_MAXIMUM)",
        sxe_hex_to_unsigned("XXXX",  4));
+    ok(sxe_sha1_from_hex(&sha1_got, "goofy goober") != SXE_RETURN_OK, "Conversion from hex 'goofy goober' to SHA1 failed");
+    is(sxe_sha1_from_hex(&sha1_got, SHA1_HEX),         SXE_RETURN_OK, "Conversion from hex '%s' to SHA1 succeeded", SHA1_HEX);
+
+    memcpy(&sha1_expected, sxe_sha1_expected_bytes, sizeof(sha1_expected));
+
+    if (memcmp(&sha1_got, &sha1_expected, sizeof(SXE_SHA1)) == 0) {
+        pass(                                                         "SHA1 is as expected");
+    }
+    else {
+        SXEL10("Expected:");
+        SXED10(&sha1_expected, sizeof(sha1_expected));
+        SXEL10("Got:");
+        SXED10(&sha1_got,      sizeof(sha1_got));
+        fail(                                                         "SHA1 is not as expected");
+    }
+
     return exit_status();
 }

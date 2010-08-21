@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -197,6 +197,21 @@ sxe_pool_from_base(void * base)
     return array;
 }
 
+/**
+ * Get the base pointer from a pool array pointer; this is used (for example) by sxe-hash to get at a hash array's base pointer
+ *
+ * @return A pointer to the base of the pool
+ */
+void *
+sxe_pool_to_base(void * array)
+{
+    void * base;
+
+    SXEE81("sxe_pool_to_base(array=%p)", array);
+    base = SXE_POOL_ARRAY_TO_IMPL(array);
+    SXER81("return base=%p", base);
+    return base;
+}
 /**
  * Allocate and construct a new pool of <number> objects of size <size> with <states> states
  *
