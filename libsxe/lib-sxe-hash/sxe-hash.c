@@ -22,182 +22,211 @@
 #include <errno.h>
 #include <string.h>
 
+#include "sha1.h"
 #include "sxe.h"
 #include "sxe-hash.h"
-#include "sxe-log.h"
 #include "sxe-pool.h"
 #include "sxe-util.h"
 
-#define SXE_HASH_UNUSED_BUCKET 0U
+#define SXE_HASH_UNUSED_BUCKET    0
+#define SXE_HASH_NEW_BUCKET       1
+#define SXE_HASH_BUCKETS_RESERVED 2
 
-static void
-sha1_key_as_char_to_uint(const char * sha1_as_char, uint32_t * sha1_as_uint, unsigned sha1_as_uint_len)
-{
-    unsigned i, j;
+#define SXE_HASH_ARRAY_TO_IMPL(array) ((SXE_HASH *)sxe_pool_to_base(array) - 1)
 
-    SXEA90(sha1_as_uint_len == SXE_HASH_SHA1_AS_UINT_LENGTH, "sha1_as_uint must have length of 5");
-    for (i = 0; i < sha1_as_uint_len; i++)
-    {
-        sha1_as_uint[i] = 0;
-        for (j = 0; j < 8; j++)
-        {
-            char c = sha1_as_char[8 * i + j];
-            if (c >= '0' && c <= '9')
-            {
-                sha1_as_uint[i] += c - '0';
-            }
-            else if (c >= 'A' && c <= 'F')
-            {
-                sha1_as_uint[i] += c - 'A' + 10;
-            }
-            else if (c >= 'a' && c <= 'f')
-            {
-                sha1_as_uint[i] += c - 'a' + 10;
-            }
-            else
-            {
-                SXEA91(0, "Invalid character in sha1_as_char: '%c'", c);
-            }
-
-            if (j < 7)
-            {
-                sha1_as_uint[i] <<= 4;
-            }
-        }
-
-        SXEL93("sha1_as_char=%.*s, sha1_as_uint=%u", 8, &sha1_as_char[8 * i], sha1_as_uint[i]);
-    }
-}
-
-static unsigned
-sha1_key_as_bucket_index(uint32_t * sha1_as_uint, unsigned bucket_count)
-{
-    unsigned bucket_index;
-
-    SXEE96("sha1_key_as_bucket_index(sha1_as_uint=%8x%8x%8x%8x%8x,bucket_count=%u)",
-           sha1_as_uint[0],
-           sha1_as_uint[1],
-           sha1_as_uint[2],
-           sha1_as_uint[3],
-           sha1_as_uint[4],
-           bucket_count);
-
-    bucket_index = sha1_as_uint[SXE_HASH_SHA1_AS_UINT_LENGTH - 1];
-    SXEL91("converted sha1_key to '%u'", bucket_index);
-    bucket_index = (bucket_index % bucket_count) + 1;
-
-    SXER91("return bucket_index=%u", bucket_index);
-    return bucket_index;
-}
-
-static unsigned
-get_index_of_key(SXE_HASH_KEY_VALUE_PAIR * pool, uint32_t * sha1_as_uint, unsigned bucket_index)
-{
-    unsigned i;
-    unsigned count;
-    unsigned result_index = SXE_HASH_KEY_NOT_FOUND;
-
-    SXEE87("get_index_of_key(pool=%p,sha1_as_uint=%8x%8x%8x%8x%8x,bucket_index=%u)",
-           pool,
-           sha1_as_uint[0],
-           sha1_as_uint[1],
-           sha1_as_uint[2],
-           sha1_as_uint[3],
-           sha1_as_uint[4],
-           bucket_index);
-
-    count = sxe_pool_get_number_in_state(pool, bucket_index);
-
-    if (count == 0)
-    {
-        SXEL90("key not found");
-        goto SXE_EARLY_OUT;
-    }
-
-    for (i = 0; i < count; i++)
-    {
-        unsigned id = sxe_pool_get_oldest_element_index(pool, bucket_index);
-
-        SXEL96("trying index=%u: key=%8x%8x%8x%8x%8x",
-               id,
-               pool[id].sha1_as_uint[0],
-               pool[id].sha1_as_uint[1],
-               pool[id].sha1_as_uint[2],
-               pool[id].sha1_as_uint[3],
-               pool[id].sha1_as_uint[4]);
-
-        SXEA90(SXE_HASH_SHA1_AS_UINT_LENGTH == 5, "The length of as_uint should be 5 or the code below must change");
-
-        if ((pool[id].sha1_as_uint[0] == sha1_as_uint[0])
-        &&  (pool[id].sha1_as_uint[1] == sha1_as_uint[1])
-        &&  (pool[id].sha1_as_uint[2] == sha1_as_uint[2])
-        &&  (pool[id].sha1_as_uint[3] == sha1_as_uint[3])
-        &&  (pool[id].sha1_as_uint[4] == sha1_as_uint[4]))
-        {
-            SXEL91("found matching key at index=%u", id);
-            result_index = id;
-            goto SXE_EARLY_OUT;
-        }
-
-        sxe_pool_touch_indexed_element(pool, id);
-    }
-
-SXE_EARLY_OUT:
-    SXER81("return result_index=%u", result_index);
-    return result_index;
-}
-
-SXE_HASH *
-sxe_hash_new(const char * name, unsigned bucket_count, unsigned element_size, unsigned key_size, unsigned key_offset)
+/**
+ * Allocate and contruct a hash
+ *
+ * @param name          = Name of the hash, used in diagnostics
+ * @param element_count = Maximum number of elements in the hash
+ * @param element_size  = Size of each element in the hash
+ * @param flags         = SXE_HASH_FLAG_LOCKS_ENABLED | SXE_HASH_FLAG_LOCKS_DISABLED
+ *
+ * @return A pointer to an array of hash elements
+ */
+void *
+sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_size, unsigned flags)
 {
     SXE_HASH * hash;
+    unsigned   size;
 
-    SXEE85("sxe_hash_new(name=%s,bucket_count=%u,element_size=%u,key_size=%u,key_offset=%u)", name, bucket_count, element_size,
-           key_size, key_offset);
-    SXE_UNUSED_PARAMETER(key_size);
-    SXE_UNUSED_PARAMETER(key_offset);
+    SXEE82("sxe_hash_new(name=%s,element_count=%u)", name, element_count);
+    size         = sizeof(SXE_HASH) + sxe_pool_size(element_count, element_size,
+                                                    element_count + SXE_HASH_BUCKETS_RESERVED);
+    SXEA12((hash = malloc(size)) != NULL, "Unable to allocate %u bytes of memory for hash %s", size, name);
+    SXEL82("Base address of hash %s = %p", name, hash);
 
-    SXEA11((hash = malloc(sizeof(SXE_HASH))) != NULL, "Unable to allocate memory for hash table '%s'", name);
-    hash->pool = sxe_pool_new(name, bucket_count, element_size, bucket_count + 1);
-    hash->size = bucket_count;
+    /* Note: hash + 1 == pool base */
+    hash->pool   = sxe_pool_construct(hash + 1, name, element_count, element_size,
+                                      element_count + SXE_HASH_BUCKETS_RESERVED, flags);
+    hash->count  = element_count;
+    hash->size   = element_size;
 
-    SXER83("return hash=%p // hash->pool=%p, hash->size=%u", hash, hash->pool, hash->size);
-    return hash;
+    SXER81("return array=%p", hash->pool);
+    return hash->pool;
 }
 
-unsigned
-sxe_hash_set(SXE_HASH * hash, const char * sha1_as_char, unsigned sha1_key_len, unsigned value)
+/**
+ * Allocate and contruct a hash with fixed size elements (SHA1 + unsigned)
+ *
+ * @param name          = Name of the hash, used in diagnostics
+ * @param element_count = Maximum number of elements in the hash
+ *
+ * @return A pointer to an array of hash elements
+ *
+ * @note This hash table is not thread safe
+ */
+void *
+sxe_hash_new(const char * name, unsigned element_count)
 {
-    unsigned bucket_index;
-    unsigned id;
-    uint32_t sha1_as_uint[SXE_HASH_SHA1_AS_UINT_LENGTH];
+    void * array;
 
-    SXE_UNUSED_PARAMETER(sha1_key_len);
+    SXEE82("sxe_hash_new(name=%s,element_count=%u)", name, element_count);
 
-    SXEE85("sxe_hash_set(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u,value=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len, value);
-    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_CHAR_LENGTH, "sha1 length is incorrect");
+    array = sxe_hash_new_plus(name, element_count, sizeof(SXE_HASH_KEY_VALUE_PAIR), SXE_HASH_FLAG_LOCKS_DISABLED);
+    SXER81("return array=%p", array);
+    return array;
+}
 
-    sha1_key_as_char_to_uint(sha1_as_char, sha1_as_uint, SXE_HASH_SHA1_AS_UINT_LENGTH);
+/**
+ * Take an element from the free queue of the hash
+ *
+ * @param array = Pointer to the hash array
+ *
+ * @return The index of the element or SXE_HASH_FULL if the hash is full
+ *
+ * @note The element is moved to the new queue until the caller adds it to the hash
+ */
+unsigned
+sxe_hash_take(void * array)
+{
+    SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    unsigned   id;
 
-    bucket_index = sha1_key_as_bucket_index(sha1_as_uint, hash->size);
-    id = sxe_pool_set_oldest_element_state(hash->pool, SXE_HASH_UNUSED_BUCKET, bucket_index);
+    SXEE81("sxe_hash_take(hash=%s)", sxe_pool_get_name(array));
+    id = sxe_pool_set_oldest_element_state(hash->pool, SXE_HASH_UNUSED_BUCKET, SXE_HASH_NEW_BUCKET);
 
     if (id == SXE_POOL_NO_INDEX)
     {
         id = SXE_HASH_FULL;
+    }
+
+    SXER81("return %d // -1 == SXE_HASH_FULL", id);
+    return id;
+}
+
+/**
+ * Default hash key function
+ *
+ * @param key = Key to hash
+ *
+ * @return Checksum (i.e. hash value) of key
+ */
+static unsigned
+sxe_hash_key_default(const void * key)
+{
+    SXEE81("sxe_hash_key_default(key=%s)", key);
+    SXER81("return sum=%u", *(const unsigned *)key);
+    return *(const unsigned *)key;
+}
+
+/**
+ * Function to visit an object when looking for a key
+ *
+ * @param object = Pointer to the object to visit
+ * @param key    = Key to look for
+ *
+ * @return object if the key matches, NULL if not
+ *
+ * @note Currently assumes that the key is a SHA1
+ */
+static void *
+sxe_hash_look_visit(void * object, void * key)
+{
+    SXEE82("sxe_hash_look_visit(object=%p,key=%s)", object, key);
+
+    if (memcmp(object, key, sizeof(SOPHOS_SHA1)) != 0) {
+        object = NULL;
+    }
+
+    SXER81("return object=%p", object);
+    return object;
+}
+
+/**
+ * Look for a key in the hash
+ *
+ * @param array = Pointer to the hash array
+ * @param key   = Pointer to the key value
+ *
+ * @return Index of the element found or SXE_HASH_KEY_NOT_FOUND
+ */
+unsigned
+sxe_hash_look(void * array, const void * key)
+{
+    SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    unsigned   id   = SXE_HASH_KEY_NOT_FOUND;
+    unsigned   bucket;
+    void     * object;
+
+    SXEE82("sxe_hash_look(hash=%s,key=%p)", sxe_pool_get_name(array), key);
+    bucket = sxe_hash_key_default(key) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    SXEL82("Looking in bucket %u (visit function = %p)", bucket, sxe_hash_look_visit);
+
+    if ((object = sxe_pool_walk_state(array, bucket, sxe_hash_look_visit, (void *)(long)key)) != NULL) {
+        id = ((char *)object - (char *)array) / hash->size;
+    }
+
+    SXER81("return id=%u", id);
+    return id;
+}
+
+/**
+ * Add an element to the hash
+ *
+ * @param array = Pointer to the hash array
+ * @param id    = Index of the element to hash
+ */
+void
+sxe_hash_add(void * array, unsigned id)
+{
+    SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    void     * key;
+    unsigned   bucket;
+
+    SXEE82("sxe_hash_add(hash=%s,id=%u)", sxe_pool_get_name(array), id);
+
+    key = &((char *)array)[id * hash->size];
+    bucket = sxe_hash_key_default(key) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    SXEL82("Adding element %u to bucket %u", id, bucket);
+    sxe_pool_set_indexed_element_state(array, id, SXE_HASH_NEW_BUCKET, bucket);
+    SXER80("return");
+}
+
+unsigned
+sxe_hash_set(void * array, const char * sha1_as_char, unsigned sha1_key_len, unsigned value)
+{
+    SXE_HASH *  hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    unsigned    bucket_index;
+    unsigned    id;
+    SOPHOS_SHA1 sha1;
+
+    SXE_UNUSED_PARAMETER(sha1_key_len);
+
+    SXEE85("sxe_hash_set(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u,value=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len, value);
+    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
+
+    if ((id = sxe_hash_take(array)) == SXE_HASH_FULL)
+    {
         goto SXE_EARLY_OUT;
     }
 
+    sha1_from_hex(&sha1, sha1_as_char);
+    bucket_index = sxe_hash_key_default(&sha1) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    sxe_pool_set_indexed_element_state(hash->pool, id, SXE_HASH_NEW_BUCKET, bucket_index);
+
     SXEL91("setting key and value at index=%u", id);
-
-    SXEA90(SXE_HASH_SHA1_AS_UINT_LENGTH == 5, "The length of as_uint should be 5 or the code below must change");
-
-    hash->pool[id].sha1_as_uint[0] = sha1_as_uint[0];
-    hash->pool[id].sha1_as_uint[1] = sha1_as_uint[1];
-    hash->pool[id].sha1_as_uint[2] = sha1_as_uint[2];
-    hash->pool[id].sha1_as_uint[3] = sha1_as_uint[3];
-    hash->pool[id].sha1_as_uint[4] = sha1_as_uint[4];
-
+    memcpy(&hash->pool[id].sha1, &sha1, sizeof(sha1));
     hash->pool[id].value = value;
 
 SXE_EARLY_OUT:
@@ -205,25 +234,25 @@ SXE_EARLY_OUT:
     return id;
 }
 
+/**
+ * Get the value of an element in a hash with fixed size elements (SHA1 + unsigned) by SHA1 key in hex
+ */
 int
-sxe_hash_get(SXE_HASH * hash, const char * sha1_as_char, unsigned sha1_key_len)
+sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 {
-    int      value = SXE_HASH_KEY_NOT_FOUND;
-    unsigned bucket_index;
-    unsigned id;
-    uint32_t sha1_as_uint[SXE_HASH_SHA1_AS_UINT_LENGTH];
+    SXE_HASH *  hash  = SXE_HASH_ARRAY_TO_IMPL(array);
+    int         value = SXE_HASH_KEY_NOT_FOUND;
+    unsigned    id;
+    SOPHOS_SHA1 sha1;
 
     SXE_UNUSED_PARAMETER(sha1_key_len);
-
     SXEE84("sxe_hash_get(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
-    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_CHAR_LENGTH, "sha1 length is incorrect");
+    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
 
-    sha1_key_as_char_to_uint(sha1_as_char, sha1_as_uint, SXE_HASH_SHA1_AS_UINT_LENGTH);
+    sha1_from_hex(&sha1, sha1_as_char);
+    id = sxe_hash_look(array, &sha1);
 
-    bucket_index = sha1_key_as_bucket_index(sha1_as_uint, hash->size);
-    id = get_index_of_key(hash->pool, sha1_as_uint, bucket_index);
-    if (id != SXE_HASH_KEY_NOT_FOUND)
-    {
+    if (id != SXE_HASH_KEY_NOT_FOUND) {
         value = hash->pool[id].value;
     }
 
@@ -232,26 +261,23 @@ sxe_hash_get(SXE_HASH * hash, const char * sha1_as_char, unsigned sha1_key_len)
 }
 
 int
-sxe_hash_delete(SXE_HASH * hash, const char * sha1_as_char, unsigned sha1_key_len)
+sxe_hash_delete(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 {
-    int      value = SXE_HASH_KEY_NOT_FOUND;
-    unsigned id;
-    unsigned bucket_index;
-    uint32_t sha1_as_uint[SXE_HASH_SHA1_AS_UINT_LENGTH];
+    SXE_HASH *  hash  = SXE_HASH_ARRAY_TO_IMPL(array);
+    int         value = SXE_HASH_KEY_NOT_FOUND;
+    unsigned    id;
+    SOPHOS_SHA1 sha1;
 
     SXE_UNUSED_PARAMETER(sha1_key_len);
-
     SXEE84("sxe_hash_delete(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
-    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_CHAR_LENGTH, "sha1 length is incorrect");
+    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
 
-    sha1_key_as_char_to_uint(sha1_as_char, sha1_as_uint, SXE_HASH_SHA1_AS_UINT_LENGTH);
+    sha1_from_hex(&sha1, sha1_as_char);
+    id = sxe_hash_look(array, &sha1);
 
-    bucket_index = sha1_key_as_bucket_index(sha1_as_uint, hash->size);
-    id = get_index_of_key(hash->pool, sha1_as_uint, bucket_index);
-    if (id != SXE_HASH_KEY_NOT_FOUND)
-    {
+    if (id != SXE_HASH_KEY_NOT_FOUND) {
         value = hash->pool[id].value;
-        sxe_pool_set_indexed_element_state(hash->pool, id, bucket_index, SXE_HASH_UNUSED_BUCKET);
+        sxe_pool_set_indexed_element_state(hash->pool, id, sxe_pool_index_to_state(array, id), SXE_HASH_UNUSED_BUCKET);
     }
 
     SXER81("return value=%u", value);

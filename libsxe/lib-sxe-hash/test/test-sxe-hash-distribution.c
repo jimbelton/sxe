@@ -27,7 +27,6 @@
 
 #include "sxe.h"
 #include "sxe-hash.h"
-#include "sxe-log.h"
 #include "sxe-pool.h"
 #include "tap.h"
 #include "sha1sum.h"
@@ -36,34 +35,36 @@
 #define MAX_BUCKET_INDEX                (HASH_SIZE + 1)
 #define MAX_ALLOWED_PER_BUCKET_INDEX    7
 
-int main(void)
+int
+main(void)
 {
     SXE_HASH * hash;
-    int i;
-    int counter[MAX_BUCKET_INDEX];
+    int        i;
+    int        counter[MAX_BUCKET_INDEX];
 
-    plan_tests(2 * HASH_SIZE);
+    plan_tests(1);
     memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
-    hash = sxe_hash_new("test-hash", HASH_SIZE, sizeof(SXE_HASH_KEY_VALUE_PAIR), SXE_HASH_SHA1_AS_CHAR_LENGTH, 0);
-    SXEA10(hash != NULL, "Couldn't create hash 'test-hash'");
+    hash = sxe_hash_new("test-hash", HASH_SIZE);
 
     for (i = 0; i < HASH_SIZE; i++)
     {
         unsigned id;
-        char in_buf[5];
-        char out_buf[41];
+        char     in_buf[5];
+        char     out_buf[41];
 
         snprintf(in_buf, 5, "%d", i);
-        sha1sum(in_buf, 4, out_buf);
-
-        id = sxe_hash_set(hash, out_buf, SXE_HASH_SHA1_AS_CHAR_LENGTH, 1U);
-        id = sxe_pool_index_to_state(hash->pool, id);
-
-        ok(id > 0 && id < MAX_BUCKET_INDEX, "bucket index: %u is within range", id);
-
+        sha1sum( in_buf, 4, out_buf);
+        id = sxe_hash_set(hash, out_buf, SXE_HASH_SHA1_AS_HEX_LENGTH, 1U);
+        id = sxe_pool_index_to_state(hash, id);
+        SXEA11(id < MAX_BUCKET_INDEX, "Bucket index %u is out of range", id);
         counter[id]++;
-        ok(counter[id] < MAX_ALLOWED_PER_BUCKET_INDEX, "count at bucket index: %u is less than %d", counter[id], MAX_ALLOWED_PER_BUCKET_INDEX);
+
+        if (counter[id] > MAX_ALLOWED_PER_BUCKET_INDEX) {
+            diag("Count at bucket index %u is greater than %u", counter[id], MAX_ALLOWED_PER_BUCKET_INDEX);
+            break;
+        }
     }
 
+    is(i, HASH_SIZE, "%u items hashed and no bucket has more that %u entries", i, MAX_ALLOWED_PER_BUCKET_INDEX);
     return exit_status();
 }

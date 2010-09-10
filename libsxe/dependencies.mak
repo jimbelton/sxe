@@ -28,15 +28,15 @@ TOP.dir = $(COM.dir)/..
 # This is used by both the package GNUmakefiles and the top level GNUmakefile
 #
 remove_to = $(if $(filter $(1),$(2)),$(call remove_to,$(1),$(wordlist 2,$(words $(2)),$(2))),$(2))
-ALL_LIBRARIES    = sxe-sync-ev sxe-pool-tcp sxe-hash sxe-pool sxe-mmap sxe-spawn sxe sxe-list sxe-socket sxe-test ev sxe-cstr \
-                   sxe-util sxe-log mock port tap
+ALL_LIBRARIES    = sxe-sync-ev sxe-pool-tcp sxe-hash sha1 sxe-pool sxe-mmap sxe-spawn sxe sxe-list sxe-socket sxe-test ev \
+                   sxe-cstr sxe-util sxe-log mock port tap
 LIB_DEPENDENCIES = $(call remove_to,$(LIBRARIES),$(ALL_LIBRARIES))
 
 # Convention opt-out list
 CONVENTION_OPTOUT_LIST = lib-mock lib-port
 
 # Coverage opt-out list
-COVERAGE_OPTOUT_LIST   = lib-mock lib-port
+COVERAGE_OPTOUT_LIST   = lib-mock lib-port lib-sha1
 
 include $(TOP.dir)/mak/mak-common.mak
 

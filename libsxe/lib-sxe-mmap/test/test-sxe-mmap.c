@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -35,12 +35,12 @@
 
 #define TEST_FILE_SIZE      (1024 * 1024 * 64)
 #define TEST_MMAP_INSTANCES 32
-#define TEST_WAIT           4.0
+#define TEST_WAIT           5.0
 #if SXE_COVERAGE
 #define TEST_ITERATIONS     5000
 #else
 #define TEST_ITERATIONS     25000
-//#define TEST_PING_PONGS     500000 /* uncomment this to play ping pong */
+#define TEST_PING_PONGS     50000 // + 450000 /* uncomment this to play even more ping pong */
 #endif
 
 int
@@ -54,18 +54,14 @@ main(int argc, char ** argv)
     SXE_RETURN              result;
     SXE_MMAP                memmap;
     volatile unsigned     * shared;
-    volatile SXE_SPINLOCK * shared_spinlock;
+    SXE_SPINLOCK          * shared_spinlock;
     SXE_SPAWN               hell_spawn[TEST_MMAP_INSTANCES];
     unsigned                i;
     unsigned                total;
-    unsigned                count;
     unsigned                count_hi = 0;
     double                  start_time;
-#if defined TEST_PING_PONGS
     double                  time_before;
     double                  time_after;
-    unsigned                yield_count = 0;
-#endif
 
     if (argc > 1) {
         instance = atoi(argv[1]);
@@ -81,25 +77,26 @@ main(int argc, char ** argv)
 
         InterlockedAdd((long* )(unsigned)&shared[0], 1);
         start_time = sxe_get_time_in_seconds();
+
         while (shared[0] != TEST_MMAP_INSTANCES) {
             SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
             usleep(10000);
         }
-        SXEL11("Instance %u ready to rumble", instance);
 
+        SXEL11("Instance %u ready to rumble", instance);
         start_time = sxe_get_time_in_seconds();
+
         for (i = 0; i < TEST_ITERATIONS; i++) {
             SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
-            SXE_SPINLOCK_TAKE(shared_spinlock[0], 1, 0, count);
-            SXEA12(SXE_SPINLOCK_IS_TAKEN(count), "Instance %u failed to take lock // lock-count=%u",
-                                                 instance, count);
-            count_hi = count_hi < count ? count : count_hi;
+            SXEA11(sxe_spinlock_take(&shared_spinlock[0]) == SXE_SPINLOCK_STATUS_TAKEN,
+                                     "Instance %u failed to take lock", instance);
             shared_spinlock[1           ].lock++;
             shared_spinlock[1 + instance].lock++;
-            SXE_SPINLOCK_GIVE(shared_spinlock[0], 0, 1);
+            sxe_spinlock_give(&shared_spinlock[0]);
         }
 
         start_time = sxe_get_time_in_seconds();
+
         while (shared[0] != 0xDEADBABE) {
             SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
             usleep(10000);
@@ -109,11 +106,18 @@ main(int argc, char ** argv)
         /* Instance 1 will stick around to play some ping pong.
          */
         if (instance == 1) {
-            for (i = 0; i < TEST_PING_PONGS; i++) {
-                SXE_SPINLOCK_TAKE(shared_spinlock[0], 1, 0, count);
-                SXEA12(SXE_SPINLOCK_IS_TAKEN(count), "Instance %u failed to take lock // lock-count=%u",
-                                                      instance, count);
-                count_hi = count_hi < count ? count : count_hi;
+            for (i = 0; i < TEST_PING_PONGS; ) {
+                unsigned flag;
+
+                SXEA10(sxe_spinlock_take(&shared_spinlock[0]) != SXE_SPINLOCK_STATUS_NOT_TAKEN, "Child failed to take lock");
+                flag = shared[1];
+
+                if (flag == 0) {
+                    shared[1] = 1;
+                    i++;
+                }
+
+                sxe_spinlock_give(&shared_spinlock[0]);
                 sxe_get_time_in_seconds(); /* causes child to delay very slightly */
             }
         }
@@ -139,8 +143,8 @@ main(int argc, char ** argv)
     shared = SXE_MMAP_ADDR(&memmap);
 
     shared_spinlock = (SXE_SPINLOCK *)(unsigned)(shared + 1024);
-    SXE_SPINLOCK_INIT(shared_spinlock[0], 0);
-    SXE_SPINLOCK_INIT(shared_spinlock[1], 0);
+    sxe_spinlock_construct(&shared_spinlock[0]);
+    sxe_spinlock_construct(&shared_spinlock[1]);
     shared[0] = 0;
 
     for (instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
@@ -153,6 +157,7 @@ main(int argc, char ** argv)
 
     i = 0;
     start_time = sxe_get_time_in_seconds();
+
     while (i < TEST_MMAP_INSTANCES) {
         SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         usleep(10000);
@@ -160,17 +165,18 @@ main(int argc, char ** argv)
         for (i = 0, instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
             i += shared[instance] == instance ? 1 : 0;
         }
-    };
+    }
 
     is(i, TEST_MMAP_INSTANCES, "All %u children have set their instance numbers", TEST_MMAP_INSTANCES);
-
     start_time = sxe_get_time_in_seconds();
+
     while (shared_spinlock[1].lock < (TEST_MMAP_INSTANCES * TEST_ITERATIONS)) {
         SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         usleep(10000);
     }
 
     total = 0;
+
     for (instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
         total += shared_spinlock[1 + instance].lock;
         SXEL12("Instance %u incremented %d times", instance, shared_spinlock[1 + instance].lock);
@@ -184,17 +190,28 @@ main(int argc, char ** argv)
     /* Play some ping pong; Instance 1 will go first.
      */
     time_before = sxe_get_time_in_seconds();
-    for (i = 0; i < TEST_PING_PONGS; i++) {
-            SXE_SPINLOCK_TAKE(shared_spinlock[0], 0, 1, count);
-            SXEA11(SXE_SPINLOCK_IS_TAKEN(count), "Parent failed to take lock // lock-count=%u",
-                                                       count);
-            yield_count += count;
+
+    for (i = 0; i < TEST_PING_PONGS; ) {
+        unsigned flag;
+
+        SXEA10(sxe_spinlock_take(&shared_spinlock[0]) != SXE_SPINLOCK_STATUS_NOT_TAKEN, "Parent failed to take lock");
+        flag = shared[1];
+
+        if (flag == 1) {
+            shared[1] = 0;
+            i++;
+        }
+
+        sxe_spinlock_give(&shared_spinlock[0]);
     }
+
     time_after = sxe_get_time_in_seconds();
-    SXEL14("Just switched back and forth %u times in %f seconds, or %f times/second; yield_count=%u", TEST_PING_PONGS, (time_after - time_before), TEST_PING_PONGS / (time_after - time_before), yield_count);
+    SXEL13("Just switched back and forth %u times in %f seconds, or %f times/second", TEST_PING_PONGS,
+           (time_after - time_before), TEST_PING_PONGS / (time_after - time_before));
 #endif
 
     start_time = sxe_get_time_in_seconds();
+
     for (instance = 0; (instance < TEST_MMAP_INSTANCES); instance++) {
         SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         waitpid(hell_spawn[instance].pid, NULL, 0);

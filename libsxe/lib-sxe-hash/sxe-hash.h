@@ -24,18 +24,23 @@
 
 #include <stdint.h>
 
+#include "sha1.h"
+#include "sxe-pool.h"
+
 #define SXE_HASH_KEY_NOT_FOUND         ~0U
 #define SXE_HASH_FULL                  ~0U
-#define SXE_HASH_SHA1_AS_CHAR_LENGTH    40
-#define SXE_HASH_SHA1_AS_UINT_LENGTH    5
+#define SXE_HASH_SHA1_AS_HEX_LENGTH     (2 * sizeof(SOPHOS_SHA1))
+#define SXE_HASH_FLAG_LOCKS_ENABLED     SXE_POOL_LOCKS_ENABLED
+#define SXE_HASH_FLAG_LOCKS_DISABLED    SXE_POOL_LOCKS_DISABLED
 
 typedef struct SXE_HASH_KEY_VALUE_PAIR {
-    uint32_t      sha1_as_uint[SXE_HASH_SHA1_AS_UINT_LENGTH];
-    int           value;
+    SOPHOS_SHA1 sha1;
+    int         value;
 } SXE_HASH_KEY_VALUE_PAIR;
 
 typedef struct SXE_HASH {
     SXE_HASH_KEY_VALUE_PAIR * pool;
+    unsigned                  count;
     unsigned                  size;
 } SXE_HASH;
 

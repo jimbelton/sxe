@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -80,7 +80,7 @@ sxe_sync_ev_init(unsigned concurrency, void (*send_event)(void * sync, void * us
     unsigned short port;
 
     SXEE82("sxe_sync_ev_init(concurrency=%u,send_event=%p)", concurrency, send_event);
-    sxe_sync_ev_pool                 = sxe_pool_new("http_sync_ev", concurrency, sizeof(SXE_SYNC_EV), 2);
+    sxe_sync_ev_pool                 = sxe_pool_new("http_sync_ev", concurrency, sizeof(SXE_SYNC_EV), 2, SXE_POOL_LOCKS_DISABLED);
     sxe_sync_ev_sock                 = sxe_sync_ev_socket();
     sxe_sync_generic_event           = send_event;
     sxe_sync_ev_addr.sin_family      = AF_INET;

@@ -34,11 +34,10 @@
 #define SXE_POOL_NODES(impl)          SXE_PTR_FIX(impl, SXE_POOL_NODE *, impl->nodes)
 #define SXE_POOL_QUEUE(impl)          SXE_PTR_FIX(impl, SXE_LIST *,      impl->queue)
 
-
-#define SXE_POOL_ACQUIRE_LOCK(pool, count)  SXE_SPINLOCK_TAKE(pool->spinlock, 1, 0, count)
-#define SXE_POOL_FREE_LOCK(pool)            SXE_SPINLOCK_GIVE(pool->spinlock, 0, 1)
-#define SXE_POOL_ASSERT_LOCK(pool)          SXEA11(pool->lock_mode == SXE_POOL_LOCKS_DISABLED, \
-                                                   "This function is not available when locks are enabled (lock_mode=%d)", pool->lock_mode)
+#define SXE_POOL_ACQUIRE_LOCK(pool)          sxe_spinlock_take(&pool->spinlock)
+#define SXE_POOL_FREE_LOCK(pool)             sxe_spinlock_give(&pool->spinlock)
+#define SXE_POOL_ASSERT_LOCKS_DISABLED(pool) SXEA11(pool->flags == SXE_POOL_LOCKS_DISABLED,                            \
+                                                    "Function called on pool %s which has locks disabled", pool->name)
 
 typedef struct SXE_POOL_NODE {
     SXE_LIST_NODE list_node;
@@ -48,9 +47,9 @@ typedef struct SXE_POOL_NODE {
 typedef void (*SXE_POOL_CONSTRUCT_ELEMENT)(void * array, unsigned array_index);
 
 typedef struct SXE_POOL_IMPL {
-    char                   name[SXE_POOL_NAME_MAXIMUM_LENGTH + 1];
-    char                   lock_mode;
     SXE_SPINLOCK           spinlock;
+    char                   name[SXE_POOL_NAME_MAXIMUM_LENGTH + 1];
+    unsigned               flags;
     unsigned               number;
     size_t                 size;
     unsigned               states;
@@ -65,13 +64,47 @@ typedef struct SXE_POOL_IMPL {
 static SXE_LIST sxe_pool_timeout_list;
 static unsigned sxe_pool_timeout_count = 0;
 
-static double
-local_get_time_in_seconds(void)
+static inline double
+sxe_pool_local_get_time_in_seconds(void)
 {
     struct timeval tv;
 
     SXEA11(gettimeofday(&tv, NULL) >= 0, "gettimeofday failed: (%d)", errno);
     return (double)tv.tv_sec + 1.e-6 * (double)tv.tv_usec;
+}
+
+static inline unsigned
+sxe_pool_lock(SXE_POOL_IMPL * pool)
+{
+    unsigned result = SXE_POOL_LOCK_TAKEN;
+
+    if (!(pool->flags & SXE_POOL_LOCKS_ENABLED)) {    /* Not locked - take it and go! */
+        return SXE_POOL_LOCK_TAKEN;
+    }
+
+    SXEE81("sxe_pool_lock(pool->name=%s)", pool->name);
+
+    if (SXE_POOL_ACQUIRE_LOCK(pool) != SXE_SPINLOCK_STATUS_TAKEN) {
+        result = SXE_POOL_LOCK_NOT_TAKEN;
+    }
+
+SXE_EARLY_OR_ERROR_OUT:
+    SXER82("return %u // %s", result,
+        result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" :
+        result == SXE_POOL_LOCK_TAKEN       ? "SXE_POOL_LOCK_TAKEN"       : "unexpected return value!" );
+    return result;
+}
+
+static inline void
+sxe_pool_unlock(SXE_POOL_IMPL * pool)
+{
+    if (!(pool->flags & SXE_POOL_LOCKS_ENABLED)) {    /* Not locked - GTFO! */
+        return;
+    }
+
+    SXEE81("sxe_pool_unlock(pool->name=%s)", pool->name);
+    SXE_POOL_FREE_LOCK(pool);
+    SXER80("return");
 }
 
 const char *
@@ -89,7 +122,6 @@ sxe_pool_get_number_in_state(void * array, unsigned state)
     unsigned        count;
 
     SXEE82("sxe_pool_get_number_in_state(array=%p,state=%u)", array, state);
-    SXE_POOL_ASSERT_LOCK(pool);
     count = SXE_LIST_GET_LENGTH(&SXE_POOL_QUEUE(pool)[state]);
     SXER81("return %u", count);
     return count;
@@ -135,23 +167,26 @@ sxe_pool_size(unsigned number, unsigned size, unsigned states)
  * @note   The base pointer must point at a region of memory big enough to hold the pool size (see sxe_pool_size())
  */
 void *
-sxe_pool_construct(void * base, const char * name, unsigned number, unsigned size, unsigned states, char lock_mode)
+sxe_pool_construct(void * base, const char * name, unsigned number, unsigned size, unsigned states, unsigned flags)
 {
     SXE_POOL_IMPL * pool;
     unsigned        i;
     unsigned        sxe_log_level_saved;
     double          current_time;
 
-    SXEE86("sxe_pool_construct(base=%p,name=%s,number=%u,size=%u,states=%u,lock_mode=%u)", base, name, number, size, states, lock_mode);
+    SXEE86("sxe_pool_construct(base=%p,name=%s,number=%u,size=%u,states=%u,flags=%u)", base, name, number, size, states, flags);
 
-    pool            = (SXE_POOL_IMPL *)base;
-    pool->queue     = (SXE_LIST      *)(sizeof(SXE_POOL_IMPL) + number * size);
-    pool->nodes     = (SXE_POOL_NODE *)(sizeof(SXE_POOL_IMPL) + number * size + states * sizeof(SXE_LIST));
-    pool->number        = number;
-    pool->size          = size;
-    pool->states        = states;
-    pool->lock_mode = lock_mode;
-    SXE_SPINLOCK_INIT(pool->spinlock, 0);
+    pool         = (SXE_POOL_IMPL *)base;
+    pool->queue  = (SXE_LIST      *)(sizeof(SXE_POOL_IMPL) + number * size);
+    pool->nodes  = (SXE_POOL_NODE *)(sizeof(SXE_POOL_IMPL) + number * size + states * sizeof(SXE_LIST));
+    pool->number = number;
+    pool->size   = size;
+    pool->states = states;
+    pool->flags  = flags;
+
+    if (flags & SXE_POOL_LOCKS_ENABLED) {
+        sxe_spinlock_construct(&pool->spinlock);
+    }
 
     strncpy(pool->name, name, sizeof(pool->name));
     pool->name[sizeof(pool->name) - 1] = '\0';
@@ -169,7 +204,7 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
 
     sxe_log_level_saved = sxe_log_level; /* Shut up logging on every node here - gross */
     sxe_log_level = 5;
-    current_time  = local_get_time_in_seconds();
+    current_time  = sxe_pool_local_get_time_in_seconds();
 
     for (i = number; i-- > 0; ) {
         SXE_POOL_NODES(pool)[i].last_time = current_time;
@@ -212,20 +247,24 @@ sxe_pool_to_base(void * array)
     SXER81("return base=%p", base);
     return base;
 }
+
 /**
  * Allocate and construct a new pool of <number> objects of size <size> with <states> states
+ *
+ * @param flags = SXE_POOL_LOCKS_ENABLED or SXE_POOL_LOCKS_DISABLED
  *
  * @return A pointer to the array of objects
  */
 void *
-sxe_pool_new(const char * name, unsigned number, unsigned size, unsigned states)
+sxe_pool_new(const char * name, unsigned number, unsigned size, unsigned states, unsigned flags)
 {
     void          * base;
     void          * array;
     SXE_POOL_IMPL * pool;
 
-    SXEE84("sxe_pool_new(name=%s,number=%u,size=%u,states=%u)", name, number, size, states);
-        SXEL82("Allocating pool: %16s: %10u byte pool structure", name, sizeof(SXE_POOL_IMPL));
+    SXEE85("sxe_pool_new(name=%s,number=%u,size=%u,states=%u,flags=%s)", name, number, size, states,
+           flags & SXE_POOL_LOCKS_ENABLED ? "SXE_POOL_LOCKS_ENABLED" : "SXE_POOL_LOCKS_DISABLED");
+    SXEL82("Allocating pool: %16s: %10u byte pool structure", name, sizeof(SXE_POOL_IMPL));
     SXEL84("Allocating pool: %16s: %10u bytes = %10u * %10u byte objects", name, size * number, number, size);
     SXEL84("Allocating pool: %16s: %10u bytes = %10u * %10u byte state queue heads",
             name, states * sizeof(SXE_LIST), states, sizeof(SXE_LIST));
@@ -233,14 +272,14 @@ sxe_pool_new(const char * name, unsigned number, unsigned size, unsigned states)
            name, sizeof(SXE_POOL_NODE)* number, number, sizeof(SXE_POOL_NODE));
     SXEA11((base = malloc(sxe_pool_size(number, size, states))) != NULL, "Error allocating SXE pool %s", name);
 
-    array = sxe_pool_construct(base, name, number, size, states, SXE_POOL_LOCKS_DISABLED);
+    array = sxe_pool_construct(base, name, number, size, states, flags);
     pool  = SXE_POOL_ARRAY_TO_IMPL(array);
     SXER84("return array=%p // pool=%p, pool->nodes=%p, pool->name=%s", array, pool, SXE_POOL_NODES(pool), pool->name);
     return array;
 }
 
 /**
- *  @note   Pools with timeouts are not currently relocatable.
+ *  @note   Pools with timeouts are not currently relocatable or thread safe.
  */
 void *
 sxe_pool_new_with_timeouts(
@@ -266,7 +305,7 @@ sxe_pool_new_with_timeouts(
         SXE_LIST_CONSTRUCT(&sxe_pool_timeout_list, 0, SXE_POOL_IMPL, timeout_node);
     }
 
-    array                = sxe_pool_new(name, number, size, states);
+    array                = sxe_pool_new(name, number, size, states, SXE_POOL_LOCKS_DISABLED);
     pool                 = SXE_POOL_ARRAY_TO_IMPL(array);
     pool->event_timeout  = callback;
     pool->caller_info    = caller_info;
@@ -349,19 +388,44 @@ sxe_pool_check_timeouts(void)
     double time_now;
 
     SXEE80("sxe_pool_check_timeouts()");
-    time_now = local_get_time_in_seconds();
+    time_now = sxe_pool_local_get_time_in_seconds();
     SXEA10(sxe_list_walk(&sxe_pool_timeout_list, sxe_pool_visit_timeouts, &time_now) == NULL, "Did not visit all timeout pools");
+    SXER80("return");
+}
+
+/**
+ * Internal lockless function to move a specific object from one state queue to the tail of another
+ */
+static void
+sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned old_state, unsigned new_state)
+{
+    SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
+    SXE_POOL_NODE * node;
+
+    SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
+    SXEE84("sxe_pool_set_indexed_element_state_unlocked(pool->name=%s,id=%u,old_state=%u,new_state=%u)",
+           pool->name, id, old_state, new_state);
+
+    node = &SXE_POOL_NODES(pool)[id];
+    SXEA85(SXE_LIST_NODE_GET_ID(&node->list_node) == old_state,
+           "sxe_pool_set_indexed_element_state_unlocked(pool->name=%s,id=%u,old_state=%u,new_state=%u): Object is in state %u",
+           pool->name, node - SXE_POOL_NODES(pool),
+           old_state, new_state, SXE_LIST_NODE_GET_ID(&node->list_node));
+    sxe_list_remove(&SXE_POOL_QUEUE(pool)[old_state], node);
+    node->last_time = sxe_pool_local_get_time_in_seconds();
+    sxe_list_push(&SXE_POOL_QUEUE(pool)[new_state], &node->list_node);
+
     SXER80("return");
 }
 
 /**
  * Move a specific object from one state queue to the tail of another
  */
-void
+unsigned
 sxe_pool_set_indexed_element_state(void * array, unsigned id, unsigned old_state, unsigned new_state)
 {
-    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
-    SXE_POOL_NODE * node;
+    SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
+    unsigned        result = SXE_POOL_LOCK_TAKEN;
 
     SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
     SXEE84("sxe_pool_set_indexed_element_state(pool->name=%s,id=%u,old_state=%u,new_state=%u)",
@@ -370,36 +434,19 @@ sxe_pool_set_indexed_element_state(void * array, unsigned id, unsigned old_state
            pool->name, id, pool->number);
     SXEA83(old_state <= pool->states, "state %u is greater than maximum state %u for pool %s", old_state, pool->states, pool->name);
     SXEA83(new_state <= pool->states, "state %u is greater than maximum state %u for pool %s", new_state, pool->states, pool->name);
-    node = &SXE_POOL_NODES(pool)[id];
 
-    SXEA85(SXE_LIST_NODE_GET_ID(&node->list_node) == old_state,
-           "sxe_pool_set_indexed_element_state(pool->name=%s,id=%u,old_state=%u,new_state=%u): Object is in state %u",
-           pool->name, node - SXE_POOL_NODES(pool),
-           old_state, new_state, SXE_LIST_NODE_GET_ID(&node->list_node));
-    sxe_list_remove(&SXE_POOL_QUEUE(pool)[old_state], node);
-    node->last_time = local_get_time_in_seconds();
-    sxe_list_push(&SXE_POOL_QUEUE(pool)[new_state], &node->list_node);
-    SXER80("return");
-}
-
-unsigned
-sxe_pool_set_indexed_element_state_locked(void * array, unsigned id, unsigned old_state, unsigned new_state)
-{
-    unsigned result = SXE_POOL_LOCK_TAKEN;
-    SXEE84("sxe_pool_set_indexed_element_state#locked#(pool->name=%s,id=%u,old_state=%u,new_state=%u)",
-           (SXE_POOL_ARRAY_TO_IMPL(array))->name, id, old_state, new_state);
-    result = sxe_pool_lock(array);
-    if(SXE_POOL_LOCK_NEVER_TAKEN == result) {
+    if ((result = sxe_pool_lock(pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
         goto SXE_ERROR_OUT;
     }
-    sxe_pool_set_indexed_element_state(array, id, old_state, new_state);
-    sxe_pool_unlock(array);
+
+    sxe_pool_set_indexed_element_state_unlocked(array, id, old_state, new_state);
+    sxe_pool_unlock(pool);
 
 SXE_ERROR_OUT:
     SXER82("return %u // %s", result,
-        result == SXE_POOL_NO_INDEX         ? "SXE_POOL_NO_INDEX"         :
-        result == SXE_POOL_LOCK_NEVER_TAKEN ? "SXE_POOL_LOCK_NEVER_TAKEN" :
-        result == SXE_POOL_LOCK_TAKEN       ? "SXE_POOL_LOCK_TAKEN"       : "unexpected return value!" );
+        result == SXE_POOL_NO_INDEX       ? "SXE_POOL_NO_INDEX"       :
+        result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" :
+        result == SXE_POOL_LOCK_TAKEN     ? "SXE_POOL_LOCK_TAKEN"     : "unexpected return value!" );
     return result;
 }
 
@@ -413,61 +460,66 @@ sxe_pool_set_oldest_element_state(void * array, unsigned old_state, unsigned new
 {
     SXE_POOL_IMPL * pool  = SXE_POOL_ARRAY_TO_IMPL(array);
     SXE_POOL_NODE * node;
-    unsigned        id    = SXE_POOL_NO_INDEX;
+    unsigned        result = SXE_POOL_LOCK_TAKEN;
 
-    SXEE84("sxe_pool_set_oldest_element_state(array=%p, old_state=%u, new_state=%u) // pool=%s", array, old_state, new_state, pool->name);
-    SXEA83(old_state <= pool->states, "state %u is greater than maximum state %u for pool %s", old_state, pool->states, pool->name);
+    SXEE84("sxe_pool_set_oldest_element_state(array=%p, old_state=%u, new_state=%u) // pool=%s", array, old_state, new_state,
+           pool->name);
+    SXEA83(old_state <= pool->states, "state %u is greater than maximum state %u for pool %s", old_state, pool->states,
+           pool->name);
+
+    if ((result = sxe_pool_lock(pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
+        goto SXE_ERROR_OUT;
+    }
 
     if ((node = sxe_list_peek_head(&SXE_POOL_QUEUE(pool)[old_state])) == NULL) {
         SXEL82("sxe_pool_set_oldest_element_state(pool->name=%s): No objects in state %u; returning SXE_POOL_NO_INDEX",
                pool->name, old_state);
+        result = SXE_POOL_NO_INDEX;
         goto SXE_EARLY_OUT;
     }
 
-    id = node - SXE_POOL_NODES(pool);
-    sxe_pool_set_indexed_element_state(array, id, old_state, new_state);
+    result = node - SXE_POOL_NODES(pool);
+    sxe_pool_set_indexed_element_state_unlocked(array, result, old_state, new_state);
 
 SXE_EARLY_OUT:
-    SXER81("return id=%u", id);
-    return id;
-}
-
-unsigned
-sxe_pool_set_oldest_element_state_locked(void * array, unsigned old_state, unsigned new_state)
-{
-    unsigned result;
-    SXEE84("sxe_pool_set_oldest_element_state#locked#(array=%p, old_state=%u, new_state=%u) // pool=%s", array, old_state, new_state, (SXE_POOL_ARRAY_TO_IMPL(array))->name);
-    result = sxe_pool_lock(array);
-    if(SXE_POOL_LOCK_NEVER_TAKEN == result) {
-        goto SXE_ERROR_OUT;
-    }
-    result = sxe_pool_set_oldest_element_state(array, old_state, new_state);
-    sxe_pool_unlock(array);
+    sxe_pool_unlock(pool);
 
 SXE_ERROR_OUT:
     SXER82("return %u // %s", result,
-        result == SXE_POOL_NO_INDEX         ? "SXE_POOL_NO_INDEX"         :
-        result == SXE_POOL_LOCK_NEVER_TAKEN ? "SXE_POOL_LOCK_NEVER_TAKEN" :
-        result == SXE_POOL_LOCK_TAKEN       ? "SXE_POOL_LOCK_TAKEN"       : "id" );
+        result == SXE_POOL_NO_INDEX       ? "SXE_POOL_NO_INDEX"       :
+        result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" :
+        result == SXE_POOL_LOCK_TAKEN     ? "SXE_POOL_LOCK_TAKEN"     : "id" );
     return result;
 }
 
 /**
  * Update an object's time of use and move it to the back its current state queue
  */
-void
+unsigned
 sxe_pool_touch_indexed_element(void * array, unsigned id)
 {
-    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
+    SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
+    unsigned        result = SXE_POOL_LOCK_TAKEN;
     SXE_POOL_NODE * node;
     unsigned        state;
 
     SXEE82("sxe_pool_touch_indexed_element(pool->name=%s,id=%u)", pool->name, id);
-    SXE_POOL_ASSERT_LOCK(pool);
+
+    if ((result = sxe_pool_lock(pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
+        goto SXE_ERROR_OUT;
+    }
+
     node  = &SXE_POOL_NODES(pool)[id];
     state = SXE_LIST_NODE_GET_ID(&node->list_node);
-    sxe_pool_set_indexed_element_state(array, id, state, state);
-    SXER80("return");
+    sxe_pool_set_indexed_element_state_unlocked(array, id, state, state);
+    sxe_pool_unlock(pool);
+
+SXE_ERROR_OUT:
+    SXER82("return %u // %s", result,
+        result == SXE_POOL_NO_INDEX       ? "SXE_POOL_NO_INDEX"       :
+        result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" :
+        result == SXE_POOL_LOCK_TAKEN     ? "SXE_POOL_LOCK_TAKEN"     : "unexpected return value!" );
+    return result;
 }
 
 /**
@@ -520,13 +572,66 @@ SXE_EARLY_OR_ERROR_OUT:
     return last_time;
 }
 
+typedef struct SXE_POOL_VISITOR {
+    SXE_POOL_IMPL * pool;
+    void          * (*visit)(void * object, void * user_data);
+    void          * user_data;
+} SXE_POOL_VISITOR;
+
+static void *
+sxe_pool_visit_node(void * object, void * user_data)
+{
+    SXE_POOL_NODE    * node    = object;
+    SXE_POOL_VISITOR * visitor = user_data;
+    unsigned           id      = node - SXE_POOL_NODES(visitor->pool);
+    void             * result;
+
+    SXEE82("sxe_pool_visit_node(object=%p,user_data=%p)", object, user_data);
+    SXEL83("Pool '%s', visit function=%p, visitor user data=%p", visitor->pool->name, visitor->visit, visitor->user_data);
+    object = (char *)SXE_POOL_IMPL_TO_ARRAY(visitor->pool) + visitor->pool->size * id;
+    result = (*visitor->visit)(object, visitor->user_data);
+    SXER81("return %p", result);
+    return result;
+}
+
+/**
+ * Visit the objects in pool state until a visit returns a non-zero value or every object has been visited
+ *
+ * @param array        Pointer to the pool array
+ * @param state        State to walk
+ * @param visit        Function to call on each object
+ * @param user_data    Arbitrary value to pass to visit function (e.g value to search for)
+ *
+ * @return NULL or non-NULL value returned from visit (indicates that the walk was stopped early - e.g. pointer to object found)
+ *
+ * @note This function is currently NOT THREAD SAFE
+ */
+
+void *
+sxe_pool_walk_state(void * array, unsigned state, void * (*visit)(void * object, void * user_data), void * user_data)
+{
+    SXE_POOL_IMPL  * pool = SXE_POOL_ARRAY_TO_IMPL(array);
+    SXE_POOL_VISITOR visitor;
+    void           * result;
+
+    SXEE84("sxe_pool_walk_state(pool->name=%s,state=%u,visit=%p,user_data=%p)", pool->name, state, visit, user_data);
+    SXE_POOL_ASSERT_LOCKS_DISABLED(pool);
+    visitor.pool      = pool;
+    visitor.visit     = visit;
+    visitor.user_data = user_data;
+    result = sxe_list_walk(&SXE_POOL_QUEUE(pool)[state], sxe_pool_visit_node, &visitor);
+    SXER81("return result=%p", result);
+    return result;
+}
+
 void
-sxe_pool_delete(void* array)
+sxe_pool_delete(void * array)
 {
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
 
     SXEE82("sxe_pool_delete(array=%p) pool->name='%s'", array, pool->name);
-    SXE_POOL_ASSERT_LOCK(pool);
+    SXE_POOL_ASSERT_LOCKS_DISABLED(pool);
+
     if (pool->event_timeout != NULL) {
         SXEA10(sxe_list_remove(&sxe_pool_timeout_list, pool) == pool, "Remove always returns the object removed");
     }
@@ -535,44 +640,21 @@ sxe_pool_delete(void* array)
     SXER80("return");
 }
 
-/*
- * Don't call these functions unless you really know what you're doing!
+/**
+ * Reset the lock on a pool
+ *
+ * @note Don't call this functions unless you really know what you're doing!
  */
-
 void
 sxe_pool_override_locked(void * array)
 {
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
-    SXEE81("sxe_pool_override_locked(pool->name=%s)", pool->name);
-    SXE_SPINLOCK_RESET(pool->spinlock, 0);
-    SXER80("return");
-}
 
-unsigned
-sxe_pool_lock(void * array)
-{
-    unsigned result = SXE_POOL_LOCK_TAKEN;
-    unsigned count;
-    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
-    SXEE81("sxe_pool_lock(pool->name=%s)", pool->name);
-    SXE_POOL_ACQUIRE_LOCK(pool, count);
-    if (!SXE_SPINLOCK_IS_TAKEN(count)) {
-        result = SXE_POOL_LOCK_NEVER_TAKEN;
-        goto SXE_ERROR_OUT;
+    SXEE81("sxe_pool_override_locked(pool->name=%s)", pool->name);
+
+    if (pool->flags & SXE_POOL_LOCKS_ENABLED) {
+        sxe_spinlock_force(&pool->spinlock, 0);
     }
 
-SXE_ERROR_OUT:
-    SXER82("return %u // %s", result,
-        result == SXE_POOL_LOCK_NEVER_TAKEN ? "SXE_POOL_LOCK_NEVER_TAKEN" :
-        result == SXE_POOL_LOCK_TAKEN       ? "SXE_POOL_LOCK_TAKEN"       : "unexpected return value!" );
-    return result;
-}
-
-void
-sxe_pool_unlock(void * array)
-{
-    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
-    SXEE81("sxe_pool_unlock(pool->name=%s)", pool->name);
-    SXE_POOL_FREE_LOCK(pool);
     SXER80("return");
 }

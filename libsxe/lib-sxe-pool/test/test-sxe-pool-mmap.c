@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -64,15 +64,16 @@ main(int argc, char ** argv)
         shared  = (unsigned *)(unsigned long)SXE_MMAP_ADDR(&memmap);
         pool    = sxe_pool_from_base(shared);
         SXEL63("Instance %u mapped to shared pool // base=%p, pool=%p", count, shared, pool);
+
         do {
             usleep(10000 * count);
-            id = sxe_pool_set_oldest_element_state_locked(pool, TEST_STATE_FREE, TEST_STATE_CLIENT_TAKE);
-            SXEA10(id != SXE_POOL_LOCK_NEVER_TAKEN, "Got SXE_POOL_LOCK_NEVER_TAKEN");;
+            id = sxe_pool_set_oldest_element_state(pool, TEST_STATE_FREE, TEST_STATE_CLIENT_TAKE);
+            SXEA10(id != SXE_POOL_LOCK_NOT_TAKEN, "Got SXE_POOL_LOCK_NOT_TAKEN");;
         } while (id == SXE_POOL_NO_INDEX);
 
         SXEL62("Instance %u got pool element %u", count, id);
         pool[id] = count;
-        sxe_pool_set_indexed_element_state_locked(pool, id, TEST_STATE_CLIENT_TAKE, TEST_STATE_CLIENT_DONE);
+        sxe_pool_set_indexed_element_state(pool, id, TEST_STATE_CLIENT_TAKE, TEST_STATE_CLIENT_DONE);
         sxe_mmap_close(&memmap);
         SXEL61("Instance %u exiting", count);
         return 0;
@@ -102,35 +103,37 @@ main(int argc, char ** argv)
     }
 
     start_time = sxe_get_time_in_seconds();
+
     for (count = 0; (count < TEST_CLIENT_INSTANCES); ) {
         SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         usleep(10000);
-        id = sxe_pool_set_oldest_element_state_locked(pool, TEST_STATE_CLIENT_DONE, TEST_STATE_FREE);
+        id = sxe_pool_set_oldest_element_state(pool, TEST_STATE_CLIENT_DONE, TEST_STATE_FREE);
 
         /* Assert here in  the test. The actual service would take specific action here */
-        SXEA12(id != SXE_POOL_LOCK_NEVER_TAKEN, "Parent: Failed to acqure lock .. yield limit reached. id %u vs %u", id, SXE_POOL_LOCK_NEVER_TAKEN);
+        SXEA12(id != SXE_POOL_LOCK_NOT_TAKEN, "Parent: Failed to acqure lock .. yield limit reached. id %u vs %u", id,
+               SXE_POOL_LOCK_NOT_TAKEN);
 
         if (id != SXE_POOL_NO_INDEX) {
             SXEL62("Looks like instance %u got element %u", pool[id], id);
             count++;
         }
     }
-    ok(count == TEST_CLIENT_INSTANCES, "All clients got an element in the pool");
 
+    ok(count == TEST_CLIENT_INSTANCES, "All clients got an element in the pool");
     start_time = sxe_get_time_in_seconds();
+
     for (count = 0; (count < TEST_CLIENT_INSTANCES); count++) {
         SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         waitpid(spawn[count].pid, NULL, 0);
     }
 
-    ok(SXE_POOL_LOCK_NEVER_TAKEN != sxe_pool_lock(pool), "Forced lock to be always locked!");
-    id = sxe_pool_set_oldest_element_state_locked(pool, TEST_STATE_FREE, TEST_STATE_FREE);
-    ok(id == SXE_POOL_LOCK_NEVER_TAKEN,   "sxe_pool_set_oldest_element_state_locked() Failed to acquire lock");
-    id = sxe_pool_set_indexed_element_state_locked(pool, 0, TEST_STATE_FREE, TEST_STATE_FREE);
-    ok(id == SXE_POOL_LOCK_NEVER_TAKEN,   "sxe_pool_set_indexed_element_state_locked() Failed to acquire lock");
-    sxe_pool_unlock(pool);
-    sxe_pool_override_locked(pool); /* for coverage */
+    sxe_spinlock_take((SXE_SPINLOCK *)sxe_pool_to_base(pool));
+    is(sxe_pool_set_indexed_element_state(pool, 0, 0, 1), SXE_POOL_LOCK_NOT_TAKEN, "Can't set state of an element if the pool is locked");
+    is(sxe_pool_set_oldest_element_state( pool,    0, 1), SXE_POOL_LOCK_NOT_TAKEN, "Can't set state of oldest element if the pool is locked");
+    is(sxe_pool_touch_indexed_element(    pool, 0),       SXE_POOL_LOCK_NOT_TAKEN, "Can't touch an element if the pool is locked");
+    sxe_spinlock_give((SXE_SPINLOCK *)sxe_pool_to_base(pool));
 
+    sxe_pool_override_locked(pool); /* for coverage */
     sxe_mmap_close(&memmap);
     return exit_status();
 #endif

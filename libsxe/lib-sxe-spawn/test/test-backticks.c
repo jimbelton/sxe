@@ -63,8 +63,8 @@ main(int argc, char ** argv)
     /* buffer is 2 */
     is(sxe_spawn_backticks(cmd, buf, 2), 1, "Ran another perl command");
     is(buf[0],  'f',  "length of 2 buffer[0]");
-    is(buf[1], '\0',  "length of 2 buffer[1]");
-    is(buf[2],  'X',  "length of 2 buffer[2]");
+    is(buf[1], '\0',      "length of 2 buffer[1]");
+    is(buf[2], 'X',       "length of 2 buffer[2]");
 
     return exit_status();
 }

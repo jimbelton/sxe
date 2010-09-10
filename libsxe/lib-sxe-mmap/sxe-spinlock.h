@@ -22,7 +22,8 @@
 #ifndef __SXE_SPINLOCK__
 #define __SXE_SPINLOCK__
 
-#include <sxe-log.h>
+#include <unistd.h>
+#include "sxe-log.h"
 
 /* If using Windows
  */
@@ -38,11 +39,14 @@
  *      __in    LONG Comparand);
  */
 
-#define SXE_YIELD() SwitchToThread()
+#define SXE_GETTID() GetCurrentThreadId()
+#define SXE_YIELD()  SwitchToThread()
 
 #else
 
 #include <sched.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
 
 /* The following inline function is based on ReactOS; the license in the source file is MIT
  * See: http://www.google.com/codesearch/p?hl=en#S3vzerue4i0/trunk/reactos/include/crt/mingw32/intrin_x86.h
@@ -65,7 +69,8 @@ __INTRIN_INLINE long InterlockedAdd(long volatile * Addend, long Value) {
     return __sync_add_and_fetch(Addend, Value);
 }
 
-#define SXE_YIELD() sched_yield()
+#define SXE_GETTID() syscall(SYS_gettid)
+#define SXE_YIELD()  sched_yield()
 
 #else
 
@@ -76,31 +81,65 @@ __INTRIN_INLINE long InterlockedAdd(long volatile * Addend, long Value) {
 
 extern unsigned sxe_spinlock_count_max; /* number of yields before spinlock fails */
 
+typedef enum SXE_SPINLOCK_STATUS {
+    SXE_SPINLOCK_STATUS_NOT_TAKEN,       /* Unable to take lock (maximum spin count reached)        */
+    SXE_SPINLOCK_STATUS_TAKEN,           /* Took the lock                                           */
+    SXE_SPINLOCK_STATUS_ALREADY_TAKEN    /* This thread already has the lock - don't double unlock! */
+}  SXE_SPINLOCK_STATUS;
+
 typedef struct SXE_SPINLOCK {
     volatile long lock;
 } SXE_SPINLOCK;
 
-#define SXE_SPINLOCK_INIT(spinlock, new) \
-            spinlock.lock = new
+static inline void
+sxe_spinlock_construct(SXE_SPINLOCK * spinlock)
+{
+    spinlock->lock = 0;
+}
 
-#define SXE_SPINLOCK_RESET(spinlock, new) \
-            InterlockedCompareExchange(&spinlock.lock, new, InterlockedCompareExchange(&spinlock.lock, new, new))
+static inline void
+sxe_spinlock_force(SXE_SPINLOCK * spinlock, long tid)
+{
+    InterlockedCompareExchange(&spinlock->lock, tid, InterlockedCompareExchange(&spinlock->lock, tid, tid));
+}
 
-#define SXE_SPINLOCK_TAKE(spinlock, new, old, count) \
-            count = 0; \
-            /* SXEL73("SXE_SPINLOCK_TAKE(spinlock.lock=%u, new=%u, old=%u)", spinlock.lock, new, old); */ \
-            while ((count < sxe_spinlock_count_max                                      )   \
-            &&     (InterlockedCompareExchange(&spinlock.lock, new, old) != (long)(old))) { \
-                count++; SXE_YIELD(); \
-            } \
-            /* SXEL71("SXE_SPINLOCK_TAKE // done; count=%u", count); */ \
-            if(count >= sxe_spinlock_count_max) SXEL51("SXE_SPINLOCK_TAKE FAILED; reached sxe_spinlock_count_max (%u)", sxe_spinlock_count_max)
+static inline SXE_SPINLOCK_STATUS
+sxe_spinlock_take(SXE_SPINLOCK * spinlock)
+{
+    unsigned count   = 0;
+    long     our_tid = SXE_GETTID();
+    long     old_tid;
 
-#define SXE_SPINLOCK_IS_TAKEN(count) \
-            (count < sxe_spinlock_count_max)
+    /* SXEL73("SXE_SPINLOCK_TAKE(spinlock.lock=%u, new=%u, old=%u)", spinlock.lock, new, old); */
 
-#define SXE_SPINLOCK_GIVE(spinlock, new, old) \
-            SXEA12(InterlockedCompareExchange(&spinlock.lock, new, old) == (long)(old), \
-                "SXE_SPINLOCK_GIVE: Lock 0x%p got clobbered (expected %ld)", &spinlock.lock, new)
+    while ((count < sxe_spinlock_count_max) && ((old_tid = InterlockedCompareExchange(&spinlock->lock, our_tid, 0)) != 0)) {
+        if (old_tid == our_tid) {
+            SXEL52("sxe_spinlock_take: Spinlock %p already held by our tid %ld", &spinlock->lock, our_tid);
+            return SXE_SPINLOCK_STATUS_ALREADY_TAKEN;
+        }
+
+        count++;
+        SXE_YIELD();
+    }
+
+    /* SXEL71("SXE_SPINLOCK_TAKE // done; count=%u", count); */
+
+    if (count >= sxe_spinlock_count_max) {
+        SXEL21("sxe_spinlock_take failed: reached sxe_spinlock_count_max (%u)", sxe_spinlock_count_max);
+        return SXE_SPINLOCK_STATUS_NOT_TAKEN;
+    }
+
+    return SXE_SPINLOCK_STATUS_TAKEN;
+}
+
+static inline void
+sxe_spinlock_give(SXE_SPINLOCK * spinlock)
+{
+    long our_tid = SXE_GETTID();
+    long old_tid;
+
+    SXEA13((old_tid = InterlockedCompareExchange(&spinlock->lock, 0, our_tid)) == our_tid,
+           "sxe_spinlock_give: Lock %p is held by thread %ld, not our tid %ld", &spinlock->lock, old_tid, our_tid);
+}
 
 #endif

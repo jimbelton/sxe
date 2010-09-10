@@ -19,6 +19,9 @@
  * THE SOFTWARE.
  */
 
+#define _GNU_SOURCE
+#include <features.h>
+
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>

@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -59,7 +59,7 @@ sxe_list_push(SXE_LIST * list, void * object)
 {
     SXE_LIST_NODE * node;
 
-    SXEE82("sxe_list_push(base=%u,list=%p,object=%p)", list, object);
+    SXEE82("sxe_list_push(list=%p,object=%p)", list, object);
     node             = (SXE_LIST_NODE *)((char *)object + list->offset);
     node->next                     = SENTINEL_PTR_REL(list);
     node->prev       = list->TAIL;
@@ -78,7 +78,7 @@ sxe_list_unshift(SXE_LIST * list, void * object)
 {
     SXE_LIST_NODE * node;
 
-    SXEE82("sxe_list_unshift(base=%u,list=%p,object=%p)", list, object);
+    SXEE82("sxe_list_unshift(list=%p,object=%p)", list, object);
     node = (SXE_LIST_NODE *)((char *)object + list->offset);
     node->prev                     = SENTINEL_PTR_REL(list);
     node->next       = list->HEAD;
@@ -97,7 +97,7 @@ sxe_list_remove(SXE_LIST * list, void * object)
 {
     SXE_LIST_NODE * node;
 
-    SXEE82("sxe_list_remove(base=%u,list=%p,object=%p)", list, object);
+    SXEE82("sxe_list_remove(list=%p,object=%p)", list, object);
     SXEA13((list->HEAD != SENTINEL_PTR_REL(list)) && (list->TAIL != SENTINEL_PTR_REL(list)),
            "Can't remove an object from an empty list; list->HEAD %u, list->TAIL %u, SENTINEL_PTR_REL(list) %u",
            list->HEAD, list->TAIL, SENTINEL_PTR_REL(list));
@@ -127,7 +127,7 @@ sxe_list_pop(SXE_LIST * list)
     SXE_LIST_NODE * node = NODE_PTR_FIX(list->TAIL);
     void          * result;
 
-    SXEE81("sxe_list_pop(base=%u,list=%p)", list);
+    SXEE81("sxe_list_pop(list=%p)", list);
 
     if (node == &list->sentinel) {
         SXEA11(list->HEAD == SENTINEL_PTR_REL(list), "List has no element at its tail, but has %p at its head",
@@ -152,7 +152,7 @@ sxe_list_shift(SXE_LIST * list)
     SXE_LIST_NODE * node = NODE_PTR_FIX(list->HEAD);
     void          * result;
 
-    SXEE81("sxe_list_shift(base=%u,list=%p)", list);
+    SXEE81("sxe_list_shift(list=%p)", list);
 
     if (node == &list->sentinel) {
         SXEA11(list->TAIL == SENTINEL_PTR_REL(list), "List has no element at its head, but has %p at its tail",
@@ -177,7 +177,7 @@ sxe_list_peek_head(SXE_LIST * list)
     SXE_LIST_NODE * node;
     void          * result;
 
-    SXEE81("sxe_list_peek_head(base=%u,list=%p)", list);
+    SXEE81("sxe_list_peek_head(list=%p)", list);
 
     if (list->HEAD == SENTINEL_PTR_REL(list)) {
         SXEA10(list->TAIL == SENTINEL_PTR_REL(list), "List head is the sentinel but tail is not the sentinel");
@@ -216,7 +216,7 @@ sxe_list_walk(SXE_LIST * list, void * (*visit)(void * object, void * user_data),
     SXE_LIST_NODE * node;
     void *          result = NULL;
 
-    SXEE83("sxe_list_walk(base=%u,list=%p,visit=%p,user_data=%p)", list, visit, user_data);
+    SXEE83("sxe_list_walk(list=%p,visit=%p,user_data=%p)", list, visit, user_data);
     SXEL92("sentinel = %p, head = %p", &list->sentinel, NODE_PTR_FIX(list->HEAD));
 
     for (node = NODE_PTR_FIX(list->HEAD); node != &list->sentinel; node = NODE_PTR_FIX(node->next)) {
