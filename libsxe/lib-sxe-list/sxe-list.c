@@ -200,31 +200,3 @@ SXE_ERROR_OUT:
     SXER82("return object=%x%s", result, (result == 0) ? " // NULL" : "");
     return result;
 }
-
-/**
- * Visit the objects in a list until a visit returns a non-zero value or every object has been visited
- *
- * @param list         The list to walk
- * @param visit        Function to call on each object
- * @param user_data    Arbitrary value to pass to visit function (e.g value to search for)
- *
- * @return NULL or non-NULL value returned from visit (indicates that the walk was stopped early - e.g. pointer to object found)
- */
-void *
-sxe_list_walk(SXE_LIST * list, void * (*visit)(void * object, void * user_data), void * user_data)
-{
-    SXE_LIST_NODE * node;
-    void *          result = NULL;
-
-    SXEE83("sxe_list_walk(list=%p,visit=%p,user_data=%p)", list, visit, user_data);
-    SXEL92("sentinel = %p, head = %p", &list->sentinel, NODE_PTR_FIX(list->HEAD));
-
-    for (node = NODE_PTR_FIX(list->HEAD); node != &list->sentinel; node = NODE_PTR_FIX(node->next)) {
-        if ((result = (*visit)((char *)node - list->offset, user_data)) != 0) {
-            break;
-        }
-    }
-
-    SXER81("return result=%p", result);
-    return result;
-}
