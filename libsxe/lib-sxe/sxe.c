@@ -19,8 +19,12 @@
  * THE SOFTWARE.
  */
 
+/* Under Linux, request _GNU_SOURCE extensions to support ucred structure
+ */
+#ifndef _WIN32
 #define _GNU_SOURCE
 #include <features.h>
+#endif
 
 #include <errno.h>
 #include <signal.h>
