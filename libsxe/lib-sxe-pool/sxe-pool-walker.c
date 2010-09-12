@@ -93,7 +93,8 @@ SXE_ERROR_OUT:
  *
  * @return NULL or non-NULL value returned from visit (indicates that the walk was stopped early - e.g. pointer to object found)
  *
- * @note This function is currently NOT THREAD SAFE
+ * @note If a lock failure occurs, NULL will be returned and the walk will be stopped early. If you need to be able to detected
+ *       this, use a walker object and step it yourself.
  */
 
 void *
@@ -107,7 +108,7 @@ sxe_pool_walk_state(void * array, unsigned state, void * (*visit)(void * object,
     SXEE84("sxe_pool_walk_state(pool->name=%s,state=%u,visit=%p,user_data=%p)", pool->name, state, visit, user_data);
     sxe_pool_walker_construct(&walker, array, state);
 
-    for (id = sxe_pool_walker_step(&walker); id != SXE_POOL_NO_INDEX; id = sxe_pool_walker_step(&walker)) {
+    for (id = sxe_pool_walker_step(&walker); id != SXE_POOL_NO_INDEX && id != SXE_POOL_LOCK_NOT_TAKEN; id = sxe_pool_walker_step(&walker)) {
         if ((result = (*visit)((char *)SXE_POOL_IMPL_TO_ARRAY(pool) + pool->size * id, user_data)) != NULL) {
             break;
         }
