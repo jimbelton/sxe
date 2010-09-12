@@ -25,41 +25,15 @@
 #include "sxe-list.h"
 #include "sxe-log.h"
 #include "sxe-spinlock.h"
-#include "sxe-pool.h"
 #include "sxe-util.h"
 #include "mock.h"
 
-#define SXE_POOL_ARRAY_TO_IMPL(array) ((SXE_POOL_IMPL *)(array) - 1)
-#define SXE_POOL_IMPL_TO_ARRAY(impl)  ((void *)((SXE_POOL_IMPL *)(impl) + 1))
-#define SXE_POOL_NODES(impl)          SXE_PTR_FIX(impl, SXE_POOL_NODE *, impl->nodes)
-#define SXE_POOL_QUEUE(impl)          SXE_PTR_FIX(impl, SXE_LIST *,      impl->queue)
+#include "sxe-pool-private.h"
 
 #define SXE_POOL_ACQUIRE_LOCK(pool)          sxe_spinlock_take(&pool->spinlock)
 #define SXE_POOL_FREE_LOCK(pool)             sxe_spinlock_give(&pool->spinlock)
 #define SXE_POOL_ASSERT_LOCKS_DISABLED(pool) SXEA11(pool->flags == SXE_POOL_LOCKS_DISABLED,                            \
                                                     "Function called on pool %s which has locks disabled", pool->name)
-
-typedef struct SXE_POOL_NODE {
-    SXE_LIST_NODE list_node;
-    double        last_time;
-} SXE_POOL_NODE;
-
-typedef void (*SXE_POOL_CONSTRUCT_ELEMENT)(void * array, unsigned array_index);
-
-typedef struct SXE_POOL_IMPL {
-    SXE_SPINLOCK           spinlock;
-    char                   name[SXE_POOL_NAME_MAXIMUM_LENGTH + 1];
-    unsigned               flags;
-    unsigned               number;
-    size_t                 size;
-    unsigned               states;
-    SXE_POOL_NODE        * nodes;
-    SXE_LIST             * queue;
-    SXE_POOL_EVENT_TIMEOUT event_timeout;
-    void                 * caller_info;
-    double               * state_timeouts;
-    SXE_LIST_NODE          timeout_node;
-} SXE_POOL_IMPL;
 
 static SXE_LIST sxe_pool_timeout_list;
 static unsigned sxe_pool_timeout_count = 0;
@@ -570,58 +544,6 @@ sxe_pool_get_oldest_element_time(void * array, unsigned state)
 SXE_EARLY_OR_ERROR_OUT:
     SXER81("return %f", last_time);
     return last_time;
-}
-
-typedef struct SXE_POOL_VISITOR {
-    SXE_POOL_IMPL * pool;
-    void          * (*visit)(void * object, void * user_data);
-    void          * user_data;
-} SXE_POOL_VISITOR;
-
-static void *
-sxe_pool_visit_node(void * object, void * user_data)
-{
-    SXE_POOL_NODE    * node    = object;
-    SXE_POOL_VISITOR * visitor = user_data;
-    unsigned           id      = node - SXE_POOL_NODES(visitor->pool);
-    void             * result;
-
-    SXEE82("sxe_pool_visit_node(object=%p,user_data=%p)", object, user_data);
-    SXEL83("Pool '%s', visit function=%p, visitor user data=%p", visitor->pool->name, visitor->visit, visitor->user_data);
-    object = (char *)SXE_POOL_IMPL_TO_ARRAY(visitor->pool) + visitor->pool->size * id;
-    result = (*visitor->visit)(object, visitor->user_data);
-    SXER81("return %p", result);
-    return result;
-}
-
-/**
- * Visit the objects in pool state until a visit returns a non-zero value or every object has been visited
- *
- * @param array        Pointer to the pool array
- * @param state        State to walk
- * @param visit        Function to call on each object
- * @param user_data    Arbitrary value to pass to visit function (e.g value to search for)
- *
- * @return NULL or non-NULL value returned from visit (indicates that the walk was stopped early - e.g. pointer to object found)
- *
- * @note This function is currently NOT THREAD SAFE
- */
-
-void *
-sxe_pool_walk_state(void * array, unsigned state, void * (*visit)(void * object, void * user_data), void * user_data)
-{
-    SXE_POOL_IMPL  * pool = SXE_POOL_ARRAY_TO_IMPL(array);
-    SXE_POOL_VISITOR visitor;
-    void           * result;
-
-    SXEE84("sxe_pool_walk_state(pool->name=%s,state=%u,visit=%p,user_data=%p)", pool->name, state, visit, user_data);
-    SXE_POOL_ASSERT_LOCKS_DISABLED(pool);
-    visitor.pool      = pool;
-    visitor.visit     = visit;
-    visitor.user_data = user_data;
-    result = sxe_list_walk(&SXE_POOL_QUEUE(pool)[state], sxe_pool_visit_node, &visitor);
-    SXER81("return result=%p", result);
-    return result;
 }
 
 void

@@ -22,6 +22,8 @@
 #ifndef __SXE_POOL_H__
 #define __SXE_POOL_H__
 
+#include "sxe-list.h"
+
 #define SXE_POOL_NO_INDEX             -1U
 #define SXE_POOL_LOCK_TAKEN           -2U /* Only used in sxe_pool_set_indexed_element_state_locked() */
 #define SXE_POOL_LOCK_NOT_TAKEN       -3U /* Used in sxe_pool_*_locked() to indicate we gave up trying to acquire lock */
@@ -31,5 +33,10 @@
 
 typedef void (*SXE_POOL_EVENT_TIMEOUT)(    void * array, unsigned array_index, void * caller_info);
 
-#include "sxe-pool-proto.h"
+typedef struct SXE_POOL_WALKER {
+    SXE_LIST_WALKER list_walker;
+    void          * pool;
+} SXE_POOL_WALKER;
+
+#include "lib-sxe-pool-proto.h"
 #endif

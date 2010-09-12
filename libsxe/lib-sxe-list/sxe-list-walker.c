@@ -32,8 +32,10 @@
 void
 sxe_list_walker_construct(SXE_LIST_WALKER * walker, SXE_LIST * list)
 {
+    SXEE82("sxe_list_walker_construct(walker=%p,list=%p)", walker, list);
     walker->list = list;
     walker->node = &list->sentinel;
+    SXER80("return");
 }
 
 /**
@@ -46,13 +48,18 @@ sxe_list_walker_construct(SXE_LIST_WALKER * walker, SXE_LIST * list)
 SXE_LIST_NODE *
 sxe_list_walker_step(SXE_LIST_WALKER * walker)
 {
+    SXE_LIST_NODE * result = NULL;
+
+    SXEE81("sxe_list_walker_step(walker=%p)", walker);
+
     walker->node = SXE_PTR_FIX(walker->list, SXE_LIST_NODE *, walker->node->next);
 
-    if (walker->node == &walker->list->sentinel) {
-        return NULL;
+    if (walker->node != &walker->list->sentinel) {
+        result = walker->node;
     }
 
-    return walker->node;
+    SXER81("return %p", result);
+    return result;
 }
 
 /**
@@ -76,7 +83,7 @@ sxe_list_walk(SXE_LIST * list, void * (*visit)(void * object, void * user_data),
     sxe_list_walker_construct(&walker, list);
 
     for (node = sxe_list_walker_step(&walker); node != NULL; node = sxe_list_walker_step(&walker)) {
-        if ((result = (*visit)((char *)node - list->offset, user_data)) != 0) {
+        if ((result = (*visit)((char *)node - list->offset, user_data)) != NULL) {
             break;
         }
     }
