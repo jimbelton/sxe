@@ -53,22 +53,34 @@ sxe_pool_walker_construct(SXE_POOL_WALKER * walker, void * array, unsigned state
  *
  * @param walker Pointer to the pool state walker
  *
- * @return Index of the next object or SXE_POOL_NO_INDEX if the end of the state queue has been reached.
+ * @return Index of the next object, SXE_POOL_NO_INDEX if the end of the state queue has been reached,
+ *         or SXE_POOL_LOCK_NOT_TAKEN if this is a locked pool and the lock could not be taken
  */
 unsigned
 sxe_pool_walker_step(SXE_POOL_WALKER * walker)
 {
     SXE_LIST_NODE * node;
-    unsigned        id = SXE_POOL_NO_INDEX;
+    unsigned        result;
 
     SXEE81("sxe_pool_walker_step(walker=%p)", walker);
 
-    if ((node = sxe_list_walker_step(&walker->list_walker)) != NULL) {
-        id = sxe_pool_node_from_list_node(node) - SXE_POOL_NODES((SXE_POOL_IMPL *)walker->pool);
+    if ((result = sxe_pool_lock(walker->pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
+        goto SXE_ERROR_OUT;
     }
 
-    SXER81("return id=%u", id);
-    return id;
+    if ((node = sxe_list_walker_step(&walker->list_walker)) == NULL) {
+        result = SXE_POOL_NO_INDEX;
+        goto SXE_EARLY_OUT;
+    }
+
+    result = sxe_pool_index_from_list_node(node) - SXE_POOL_NODES((SXE_POOL_IMPL *)walker->pool);
+
+SXE_EARLY_OUT:
+    sxe_pool_unlock(walker->pool);
+
+SXE_ERROR_OUT:
+    SXER81("return result=%u", result);
+    return result;
 }
 
 /**

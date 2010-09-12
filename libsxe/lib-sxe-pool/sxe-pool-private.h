@@ -31,6 +31,8 @@
 #define SXE_POOL_IMPL_TO_ARRAY(impl)  ((void *)((SXE_POOL_IMPL *)(impl) + 1))
 #define SXE_POOL_NODES(impl)          SXE_PTR_FIX(impl, SXE_POOL_NODE *, (impl)->nodes)
 #define SXE_POOL_QUEUE(impl)          SXE_PTR_FIX(impl, SXE_LIST *,      (impl)->queue)
+#define SXE_POOL_ACQUIRE_LOCK(pool)   sxe_spinlock_take(&pool->spinlock)
+#define SXE_POOL_FREE_LOCK(pool)      sxe_spinlock_give(&pool->spinlock)
 
 typedef struct SXE_POOL_NODE {
     SXE_LIST_NODE list_node;
@@ -53,7 +55,41 @@ typedef struct SXE_POOL_IMPL {
 } SXE_POOL_IMPL;
 
 static inline SXE_POOL_NODE *
-sxe_pool_node_from_list_node(SXE_LIST_NODE * list_node)
+sxe_pool_index_from_list_node(SXE_LIST_NODE * list_node)
 {
     return (SXE_POOL_NODE *)((char *)list_node - offsetof(SXE_POOL_NODE, list_node));
+}
+
+static inline unsigned
+sxe_pool_lock(SXE_POOL_IMPL * pool)
+{
+    unsigned result = SXE_POOL_LOCK_TAKEN;
+
+    if (!(pool->flags & SXE_POOL_LOCKS_ENABLED)) {    /* Not locked - take it and go! */
+        return SXE_POOL_LOCK_TAKEN;
+    }
+
+    SXEE81("sxe_pool_lock(pool->name=%s)", pool->name);
+
+    if (SXE_POOL_ACQUIRE_LOCK(pool) != SXE_SPINLOCK_STATUS_TAKEN) {
+        result = SXE_POOL_LOCK_NOT_TAKEN;
+    }
+
+SXE_EARLY_OR_ERROR_OUT:
+    SXER82("return %u // %s", result,
+        result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" :
+        result == SXE_POOL_LOCK_TAKEN       ? "SXE_POOL_LOCK_TAKEN"       : "unexpected return value!" );
+    return result;
+}
+
+static inline void
+sxe_pool_unlock(SXE_POOL_IMPL * pool)
+{
+    if (!(pool->flags & SXE_POOL_LOCKS_ENABLED)) {    /* Not locked - GTFO! */
+        return;
+    }
+
+    SXEE81("sxe_pool_unlock(pool->name=%s)", pool->name);
+    SXE_POOL_FREE_LOCK(pool);
+    SXER80("return");
 }

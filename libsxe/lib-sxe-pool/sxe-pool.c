@@ -30,8 +30,6 @@
 
 #include "sxe-pool-private.h"
 
-#define SXE_POOL_ACQUIRE_LOCK(pool)          sxe_spinlock_take(&pool->spinlock)
-#define SXE_POOL_FREE_LOCK(pool)             sxe_spinlock_give(&pool->spinlock)
 #define SXE_POOL_ASSERT_LOCKS_DISABLED(pool) SXEA11(pool->flags == SXE_POOL_LOCKS_DISABLED,                            \
                                                     "Function called on pool %s which has locks disabled", pool->name)
 
@@ -45,40 +43,6 @@ sxe_pool_local_get_time_in_seconds(void)
 
     SXEA11(gettimeofday(&tv, NULL) >= 0, "gettimeofday failed: (%d)", errno);
     return (double)tv.tv_sec + 1.e-6 * (double)tv.tv_usec;
-}
-
-static inline unsigned
-sxe_pool_lock(SXE_POOL_IMPL * pool)
-{
-    unsigned result = SXE_POOL_LOCK_TAKEN;
-
-    if (!(pool->flags & SXE_POOL_LOCKS_ENABLED)) {    /* Not locked - take it and go! */
-        return SXE_POOL_LOCK_TAKEN;
-    }
-
-    SXEE81("sxe_pool_lock(pool->name=%s)", pool->name);
-
-    if (SXE_POOL_ACQUIRE_LOCK(pool) != SXE_SPINLOCK_STATUS_TAKEN) {
-        result = SXE_POOL_LOCK_NOT_TAKEN;
-    }
-
-SXE_EARLY_OR_ERROR_OUT:
-    SXER82("return %u // %s", result,
-        result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" :
-        result == SXE_POOL_LOCK_TAKEN       ? "SXE_POOL_LOCK_TAKEN"       : "unexpected return value!" );
-    return result;
-}
-
-static inline void
-sxe_pool_unlock(SXE_POOL_IMPL * pool)
-{
-    if (!(pool->flags & SXE_POOL_LOCKS_ENABLED)) {    /* Not locked - GTFO! */
-        return;
-    }
-
-    SXEE81("sxe_pool_unlock(pool->name=%s)", pool->name);
-    SXE_POOL_FREE_LOCK(pool);
-    SXER80("return");
 }
 
 const char *
