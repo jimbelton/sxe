@@ -23,19 +23,27 @@
 #define __SXE_POOL_H__
 
 #include "sxe-list.h"
+#include "sxe-util.h"
 
 #define SXE_POOL_NO_INDEX             -1U
-#define SXE_POOL_LOCK_TAKEN           -2U /* Only used in sxe_pool_set_indexed_element_state_locked() */
-#define SXE_POOL_LOCK_NOT_TAKEN       -3U /* Used in sxe_pool_*_locked() to indicate we gave up trying to acquire lock */
+#define SXE_POOL_LOCK_TAKEN           -2U        /* Only used in sxe_pool_set_indexed_element_state_locked() */
+#define SXE_POOL_LOCK_NOT_TAKEN       -3U        /* Used in sxe_pool_*_locked() to indicate we gave up trying to acquire lock */
 #define SXE_POOL_NAME_MAXIMUM_LENGTH   31
-#define SXE_POOL_LOCKS_ENABLED         1
-#define SXE_POOL_LOCKS_DISABLED        0
+
+#define SXE_POOL_OPTION_UNLOCKED       0
+#define SXE_POOL_OPTION_LOCKED         SXE_BIT_OPTION(0)
+#define SXE_POOL_OPTION_TIMED          SXE_BIT_OPTION(1)
 
 typedef void (*SXE_POOL_EVENT_TIMEOUT)(    void * array, unsigned array_index, void * caller_info);
 
 typedef struct SXE_POOL_WALKER {
     SXE_LIST_WALKER list_walker;
-    void          * pool;
+    void       * pool;
+    unsigned     state;
+    union {
+        double   time;
+        uint64_t count;
+    } last;
 } SXE_POOL_WALKER;
 
 #include "lib-sxe-pool-proto.h"

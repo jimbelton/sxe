@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -351,11 +351,19 @@ main(void)
 
     /* ubuntu events: connect, read/close, accept  */
     /* redhat events: accept , read/close, connect */
+    /* win32  events: read/close, connect, accept   *sometimes* */
+    /* Re-order events to match ubuntu by looking for the connect on the first_connector*/
     if ((strcmp(tap_ev_identifier(event3), "test_event_connected") == 0)
     &&  (       tap_ev_arg       (event3, "this") == first_connector   )) {
         tap_ev swap = event1;
         event1      = event3;
         event3      = swap;
+    }
+    else if ((strcmp(tap_ev_identifier(event2), "test_event_connected") == 0)
+         &&  (       tap_ev_arg       (event2, "this") == first_connector   )) {
+        tap_ev swap = event1;
+        event1      = event2;
+        event2      = swap;
     }
 
     is_eq(tap_ev_identifier(event1), "test_event_connected",  "Send failure: 1st connected event");

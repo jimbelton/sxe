@@ -81,7 +81,7 @@ sxe_list_unshift(SXE_LIST * list, void * object)
     SXEE82("sxe_list_unshift(list=%p,object=%p)", list, object);
     node = (SXE_LIST_NODE *)((char *)object + list->offset);
     node->prev                     = SENTINEL_PTR_REL(list);
-    node->next       = list->HEAD;
+    node->next                     = list->HEAD;
     list->HEAD                     = SXE_PTR_REL(list, SXE_LIST_NODE *, node);
     NODE_PTR_FIX(node->next)->prev = SXE_PTR_REL(list, SXE_LIST_NODE *, node);
     node->id                       = list->sentinel.id;
@@ -112,7 +112,6 @@ sxe_list_remove(SXE_LIST * list, void * object)
     NODE_PTR_FIX(node->prev)->next = node->next;
     node->prev                     = NULL_REL;
     node->next                     = NULL_REL;
-    node->id                       = ~0U;
     list->length--;
     SXER81("return object=%x", object);
     return object;

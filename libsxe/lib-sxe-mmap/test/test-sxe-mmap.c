@@ -39,8 +39,8 @@
 #if SXE_COVERAGE
 #define TEST_ITERATIONS     5000
 #else
-#define TEST_ITERATIONS     25000
-#define TEST_PING_PONGS     50000 // + 450000 /* uncomment this to play even more ping pong */
+#define TEST_ITERATIONS     8000
+//#define TEST_PING_PONGS     50000 // + 450000 /* uncomment this to play even more ping pong */
 #endif
 
 int
@@ -60,8 +60,10 @@ main(int argc, char ** argv)
     unsigned                total;
     unsigned                count_hi = 0;
     double                  start_time;
+#ifdef TEST_PING_PONGS
     double                  time_before;
     double                  time_after;
+#endif
 
     if (argc > 1) {
         instance = atoi(argv[1]);
@@ -87,7 +89,7 @@ main(int argc, char ** argv)
         start_time = sxe_get_time_in_seconds();
 
         for (i = 0; i < TEST_ITERATIONS; i++) {
-            SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
+            SXEA11((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout i=%u... is the hardware too slow?", i);
             SXEA11(sxe_spinlock_take(&shared_spinlock[0]) == SXE_SPINLOCK_STATUS_TAKEN,
                                      "Instance %u failed to take lock", instance);
             shared_spinlock[1           ].lock++;

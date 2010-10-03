@@ -40,12 +40,12 @@
  * @param name          = Name of the hash, used in diagnostics
  * @param element_count = Maximum number of elements in the hash
  * @param element_size  = Size of each element in the hash
- * @param flags         = SXE_HASH_FLAG_LOCKS_ENABLED | SXE_HASH_FLAG_LOCKS_DISABLED
+ * @param options       = SXE_HASH_OPTION_LOCKED | SXE_HASH_OPTION_UNLOCKED
  *
  * @return A pointer to an array of hash elements
  */
 void *
-sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_size, unsigned flags)
+sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_size, unsigned options)
 {
     SXE_HASH * hash;
     unsigned   size;
@@ -58,7 +58,7 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
 
     /* Note: hash + 1 == pool base */
     hash->pool   = sxe_pool_construct(hash + 1, name, element_count, element_size,
-                                      element_count + SXE_HASH_BUCKETS_RESERVED, flags);
+                                      element_count + SXE_HASH_BUCKETS_RESERVED, options);
     hash->count  = element_count;
     hash->size   = element_size;
 
@@ -83,9 +83,23 @@ sxe_hash_new(const char * name, unsigned element_count)
 
     SXEE82("sxe_hash_new(name=%s,element_count=%u)", name, element_count);
 
-    array = sxe_hash_new_plus(name, element_count, sizeof(SXE_HASH_KEY_VALUE_PAIR), SXE_HASH_FLAG_LOCKS_DISABLED);
+    array = sxe_hash_new_plus(name, element_count, sizeof(SXE_HASH_KEY_VALUE_PAIR), SXE_HASH_OPTION_UNLOCKED);
     SXER81("return array=%p", array);
     return array;
+}
+
+/**
+ * Delete a hash created with sxe_hash_new()
+ *
+ * @param array = Pointer to the hash array
+ */
+void
+sxe_hash_delete(void * array)
+{
+    SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    SXEE81("sxe_hash_delete(hash=%s)", sxe_pool_get_name(array));
+    free(hash);
+    SXER80("return");
 }
 
 /**
@@ -131,29 +145,6 @@ sxe_hash_key_default(const void * key)
 }
 
 /**
- * Function to visit an object when looking for a key
- *
- * @param object = Pointer to the object to visit
- * @param key    = Key to look for
- *
- * @return object if the key matches, NULL if not
- *
- * @note Currently assumes that the key is a SHA1
- */
-static void *
-sxe_hash_look_visit(void * object, void * key)
-{
-    SXEE82("sxe_hash_look_visit(object=%p,key=%s)", object, key);
-
-    if (memcmp(object, key, sizeof(SOPHOS_SHA1)) != 0) {
-        object = NULL;
-    }
-
-    SXER81("return object=%p", object);
-    return object;
-}
-
-/**
  * Look for a key in the hash
  *
  * @param array = Pointer to the hash array
@@ -164,20 +155,23 @@ sxe_hash_look_visit(void * object, void * key)
 unsigned
 sxe_hash_look(void * array, const void * key)
 {
-    SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
-    unsigned   id   = SXE_HASH_KEY_NOT_FOUND;
-    unsigned   bucket;
-    void     * object;
+    SXE_HASH      * hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    unsigned        id   = SXE_HASH_KEY_NOT_FOUND;
+    unsigned        bucket;
+    SXE_POOL_WALKER walker;
 
     SXEE82("sxe_hash_look(hash=%s,key=%p)", sxe_pool_get_name(array), key);
     bucket = sxe_hash_key_default(key) % hash->count + SXE_HASH_BUCKETS_RESERVED;
-    SXEL82("Looking in bucket %u (visit function = %p)", bucket, sxe_hash_look_visit);
+    SXEL81("Looking in bucket %u", bucket);
+    sxe_pool_walker_construct(&walker, array, bucket);
 
-    if ((object = sxe_pool_walk_state(array, bucket, sxe_hash_look_visit, (void *)(long)key)) != NULL) {
-        id = ((char *)object - (char *)array) / hash->size;
+    while ((id = sxe_pool_walker_step(&walker)) != SXE_HASH_KEY_NOT_FOUND) {
+        if (memcmp((char *)array + id * hash->size, key, sizeof(SOPHOS_SHA1)) == 0) {
+            break;
+        }
     }
 
-    SXER81("return id=%u", id);
+    SXER82(id == SXE_HASH_KEY_NOT_FOUND ? "%sSXE_HASH_KEY_NOT_FOUND" : "%s%u", "return id=", id);
     return id;
 }
 
@@ -261,7 +255,7 @@ sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 }
 
 int
-sxe_hash_delete(void * array, const char * sha1_as_char, unsigned sha1_key_len)
+sxe_hash_remove(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 {
     SXE_HASH *  hash  = SXE_HASH_ARRAY_TO_IMPL(array);
     int         value = SXE_HASH_KEY_NOT_FOUND;
@@ -269,7 +263,7 @@ sxe_hash_delete(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     SOPHOS_SHA1 sha1;
 
     SXE_UNUSED_PARAMETER(sha1_key_len);
-    SXEE84("sxe_hash_delete(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
+    SXEE84("sxe_hash_remove(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
     SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
 
     sha1_from_hex(&sha1, sha1_as_char);

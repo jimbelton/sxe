@@ -68,13 +68,15 @@ test_hash_sha1(void)
     is(sxe_hash_set   (hash, SHA1_5TH, length, 5), 0                     , "insert too many keys: Inserted at index 0"         );
     is(sxe_hash_set   (hash, SHA1_6TH, length, 6), SXE_HASH_FULL         , "insert too many keys: Failed to insert key"        );
 
-    is(sxe_hash_delete(hash, SHA1_1ST, length   ), 1                     , "delete keys: Delete returns the correct value"     );
-    is(sxe_hash_delete(hash, SHA1_2ND, length   ), 2                     , "delete keys: Delete returns the correct value"     );
-    is(sxe_hash_get   (hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "delete keys: First sha has been deleted"           );
-    is(sxe_hash_get   (hash, SHA1_2ND, length   ), SXE_HASH_KEY_NOT_FOUND, "delete keys: Second sha has been deleted"          );
-    is(sxe_hash_get   (hash, SHA1_3RD, length   ), 3                     , "delete keys: Still got correct value for third sha");
+    is(sxe_hash_remove(hash, SHA1_1ST, length   ), 1                     , "remove keys: Remove returns the correct value"     );
+    is(sxe_hash_remove(hash, SHA1_2ND, length   ), 2                     , "remove keys: Remove returns the correct value"     );
+    is(sxe_hash_get   (hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "remove keys: First sha has been deleted"           );
+    is(sxe_hash_get   (hash, SHA1_2ND, length   ), SXE_HASH_KEY_NOT_FOUND, "remove keys: Second sha has been deleted"          );
+    is(sxe_hash_get   (hash, SHA1_3RD, length   ), 3                     , "remove keys: Still got correct value for third sha");
 
-    is(sxe_hash_delete(hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "delete non-existent key: returns expected value"   );
+    is(sxe_hash_remove(hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "remove non-existent key: returns expected value"   );
+
+    sxe_hash_delete(hash); /* for coverage */
 }
 
 
@@ -92,7 +94,7 @@ test_hash_sha1_variable_data(void)
     unsigned                   id;
     SOPHOS_SHA1                sha1;
 
-    hash = sxe_hash_new_plus("test_hash_sha1_variable_data", 10, sizeof(TEST_HASH_STRING_PAYLOAD), SXE_HASH_FLAG_LOCKS_DISABLED);
+    hash = sxe_hash_new_plus("test_hash_sha1_variable_data", 10, sizeof(TEST_HASH_STRING_PAYLOAD), SXE_HASH_OPTION_UNLOCKED);
 
     for (i = 0; i < strings_number; i++) {
         ok((id = sxe_hash_take(hash))           != SXE_HASH_FULL,          "Allocated index %u for element %u of %u",
@@ -112,6 +114,8 @@ test_hash_sha1_variable_data(void)
     is(sxe_hash_look(hash, &sha1),                 SXE_HASH_KEY_NOT_FOUND, "'eleven' correctly not found in table");
     SXEA10(sophos_sha1("twelve\0", sizeof("twelve\0"), (char *)&sha1) != NULL, "SHA1 failed");
     is(sxe_hash_look(hash, &sha1),                 SXE_HASH_KEY_NOT_FOUND, "'twelve' correctly not found in table");
+
+    sxe_hash_delete(hash); /* for coverage */
 }
 
 typedef struct TEST_HASH_STRING_ELEMENT
@@ -128,7 +132,7 @@ test_hash_string(void)
     unsigned                   i;
     unsigned                   id;
 
-    hash = sxe_hash_new_plus("test-hash-string", 10, sizeof(TEST_HASH_STRING_ELEMENT), SXE_HASH_FLAG_LOCKS_DISABLED);
+    hash = sxe_hash_new_plus("test-hash-string", 10, sizeof(TEST_HASH_STRING_ELEMENT), SXE_HASH_OPTION_UNLOCKED);
 
     for (i = 0; i < strings_number; i++) {
         ok((id = sxe_hash_take(hash))           != SXE_HASH_FULL,          "Allocated index %u for element %u of %u",
@@ -163,13 +167,15 @@ test_hash_string(void)
     is(sxe_hash_set   (hash, SHA1_5TH, length, 5), 0                     , "insert too many keys: Inserted at index 0"         );
     is(sxe_hash_set   (hash, SHA1_6TH, length, 6), SXE_HASH_FULL         , "insert too many keys: Failed to insert key"        );
 
-    is(sxe_hash_delete(hash, SHA1_1ST, length   ), 1                     , "delete keys: Delete returns the correct value"     );
-    is(sxe_hash_delete(hash, SHA1_2ND, length   ), 2                     , "delete keys: Delete returns the correct value"     );
-    is(sxe_hash_get   (hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "delete keys: First sha has been deleted"           );
-    is(sxe_hash_get   (hash, SHA1_2ND, length   ), SXE_HASH_KEY_NOT_FOUND, "delete keys: Second sha has been deleted"          );
-    is(sxe_hash_get   (hash, SHA1_3RD, length   ), 3                     , "delete keys: Still got correct value for third sha");
+    is(sxe_hash_remove(hash, SHA1_1ST, length   ), 1                     , "remove keys: Remove returns the correct value"     );
+    is(sxe_hash_remove(hash, SHA1_2ND, length   ), 2                     , "remove keys: Remove returns the correct value"     );
+    is(sxe_hash_get   (hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "remove keys: First sha has been deleted"           );
+    is(sxe_hash_get   (hash, SHA1_2ND, length   ), SXE_HASH_KEY_NOT_FOUND, "remove keys: Second sha has been deleted"          );
+    is(sxe_hash_get   (hash, SHA1_3RD, length   ), 3                     , "remove keys: Still got correct value for third sha");
 
-    is(sxe_hash_delete(hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "delete non-existent key: returns expected value"   );
+    is(sxe_hash_remove(hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "remove non-existent key: returns expected value"   );
+
+    sxe_hash_delete(hash);
 */
 }
 

@@ -47,16 +47,17 @@ main(int argc, char ** argv)
 #ifdef WINDOWS_NT
     SXEL10("WARNING: Need to implement sxe_spawn() on Windows to run this test file!");
 #else
-    int           fd;
-    double        start_time;
-    unsigned      count;
-    unsigned      id;
-    unsigned    * pool;
-    unsigned    * shared;
-    size_t        size;
-    SXE_MMAP      memmap;
-    SXE_RETURN    result;
-    SXE_SPAWN     spawn[TEST_CLIENT_INSTANCES];
+    int             fd;
+    double          start_time;
+    unsigned        count;
+    unsigned        id;
+    unsigned      * pool;
+    unsigned      * shared;
+    size_t          size;
+    SXE_MMAP        memmap;
+    SXE_RETURN      result;
+    SXE_SPAWN       spawn[TEST_CLIENT_INSTANCES];
+    SXE_POOL_WALKER walker;
 
     if (argc > 1) {
         count = atoi(argv[1]);
@@ -79,7 +80,7 @@ main(int argc, char ** argv)
         return 0;
     }
 
-    plan_tests(5);
+    plan_tests(6);
     ok((size = sxe_pool_size(TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= TEST_CLIENT_INSTANCES * sizeof(*pool),
        "Expect pool size %u to be at least the size of the array %u", size, TEST_CLIENT_INSTANCES * sizeof(*pool));
 
@@ -89,7 +90,8 @@ main(int argc, char ** argv)
     sxe_mmap_open(&memmap, "memmap");
     shared = (unsigned *)(unsigned long)SXE_MMAP_ADDR(&memmap);
 
-    pool = sxe_pool_construct(shared, "shared-pool", TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_LOCKS_ENABLED);
+    pool = sxe_pool_construct(shared, "shared-pool", TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES,
+                              SXE_POOL_OPTION_LOCKED);
 
     sxe_register(TEST_CLIENT_INSTANCES + 1, 0);
     SXEA11((result = sxe_init()) == SXE_RETURN_OK,  "Failed to initialize the SXE package: %s",  sxe_return_to_string(result));
@@ -131,6 +133,8 @@ main(int argc, char ** argv)
     is(sxe_pool_set_indexed_element_state(pool, 0, 0, 1), SXE_POOL_LOCK_NOT_TAKEN, "Can't set state of an element if the pool is locked");
     is(sxe_pool_set_oldest_element_state( pool,    0, 1), SXE_POOL_LOCK_NOT_TAKEN, "Can't set state of oldest element if the pool is locked");
     is(sxe_pool_touch_indexed_element(    pool, 0),       SXE_POOL_LOCK_NOT_TAKEN, "Can't touch an element if the pool is locked");
+    sxe_pool_walker_construct(&walker, pool, TEST_STATE_FREE);
+    is(sxe_pool_walker_step(&walker),                     SXE_POOL_LOCK_NOT_TAKEN, "Can't step a walker if the pool is locked");
     sxe_spinlock_give((SXE_SPINLOCK *)sxe_pool_to_base(pool));
 
     sxe_pool_override_locked(pool); /* for coverage */

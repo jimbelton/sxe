@@ -37,8 +37,8 @@
 #define STDERR_FILENO fileno(stderr)
 #define STDOUT_FILENO fileno(stdout)
 
-#define usleep(t)               Sleep(t/1000)
-#define ftruncate(fd, size)     _chsize(fd, size)
+#define usleep(t)               Sleep((t)/1000)
+#define ftruncate(fd, size)     _chsize((fd), (size))
 
 /* Signal emulation - Windows seems to be consistent for the signal numbers it defines
  */

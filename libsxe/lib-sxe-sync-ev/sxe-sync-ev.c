@@ -28,11 +28,6 @@
 
 /* Todo: Should use SXE instead of sockets. Need pools of SXEs. */
 
-typedef struct SXE_SYNC_EV_STRUCT {
-    int    sock;
-    void * user_data;
-} SXE_SYNC_EV;
-
 static SXE_SYNC_EV *      sxe_sync_ev_pool;
 static int                sxe_sync_ev_sock = SXE_SOCKET_INVALID;
 static struct sockaddr_in sxe_sync_ev_addr;
@@ -80,7 +75,7 @@ sxe_sync_ev_init(unsigned concurrency, void (*send_event)(void * sync, void * us
     unsigned short port;
 
     SXEE82("sxe_sync_ev_init(concurrency=%u,send_event=%p)", concurrency, send_event);
-    sxe_sync_ev_pool                 = sxe_pool_new("http_sync_ev", concurrency, sizeof(SXE_SYNC_EV), 2, SXE_POOL_LOCKS_DISABLED);
+    sxe_sync_ev_pool                 = sxe_pool_new("http_sync_ev", concurrency, sizeof(SXE_SYNC_EV), 2, SXE_POOL_OPTION_UNLOCKED);
     sxe_sync_ev_sock                 = sxe_sync_ev_socket();
     sxe_sync_generic_event           = send_event;
     sxe_sync_ev_addr.sin_family      = AF_INET;

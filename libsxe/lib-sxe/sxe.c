@@ -76,6 +76,7 @@ static unsigned         sxe_free_head         = SXE_ID_NEXT_NONE;
 static unsigned         sxe_free_tail         = SXE_ID_NEXT_NONE;
 static unsigned         sxe_stat_total_accept = 0;
 static unsigned         sxe_stat_total_read   = 0;
+static unsigned         sxe_has_been_inited   = 0;
 
 /**
  * Called by each protocol plugin before initialization.
@@ -85,6 +86,8 @@ sxe_register(unsigned number_of_connections, unsigned extra_size)
 {
     SXEE82("sxe_register(number_of_connections=%u,extra_size=%u)", number_of_connections, extra_size);
     sxe_array_total += number_of_connections;
+
+    SXEA10(sxe_has_been_inited == 0, "SXE has already been init()'d");
 
     /* TODO: sxe_register() should assert if sxe_init() has already been called (because it signifies registration is too late) */
 
@@ -123,6 +126,8 @@ sxe_init(void)
     struct sigaction sigaction_saved;
 
     SXEE80("sxe_init()");
+    SXEA10(sxe_array_total > 0, "Error: sxe_register() needs to be called before sxe_init()");
+
     sxe_socket_init();
 
     /* TODO: Check that sxe_array_total is smaller than system ulimit -n */
@@ -161,6 +166,7 @@ sxe_init(void)
             ev_backend(sxe_private_main_loop) == EVBACKEND_PORT    ? "EVBACKEND_PORT"    : "Unknown backend!" );
     }
 
+    sxe_has_been_inited = 1;
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
@@ -190,6 +196,7 @@ sxe_fini(void)
     sxe_free_tail         = SXE_ID_NEXT_NONE;
     sxe_stat_total_accept = 0;
     sxe_stat_total_read   = 0;
+    sxe_has_been_inited   = 0;
 
     result = SXE_RETURN_OK;
 
@@ -688,6 +695,7 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
 
         that->socket       = that_socket;
         that->socket_as_fd = _open_osfhandle(that_socket, 0);
+        SXE_USER_DATA_AS_INT(that) = SXE_USER_DATA_AS_INT(this);
         memcpy(&that->peer_addr, &peer_addr, sizeof(that->peer_addr));
 
         SXEL82I("add accepted connection to watch list, socket==%d, socket_as_fd=%d", that_socket, that->socket_as_fd);

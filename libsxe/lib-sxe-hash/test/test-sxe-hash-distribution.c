@@ -27,6 +27,7 @@
 
 #include "sxe.h"
 #include "sxe-hash.h"
+#include "sxe-log.h"
 #include "sxe-pool.h"
 #include "tap.h"
 #include "sha1sum.h"
@@ -41,8 +42,12 @@ main(void)
     SXE_HASH * hash;
     int        i;
     int        counter[MAX_BUCKET_INDEX];
+    SXE_LOG_LEVEL old_log_level;
 
     plan_tests(1);
+    old_log_level = sxe_log_level;
+    sxe_log_level = SXE_LOG_LEVEL_DEBUG;
+
     memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
     hash = sxe_hash_new("test-hash", HASH_SIZE);
 
@@ -64,6 +69,8 @@ main(void)
             break;
         }
     }
+
+    sxe_log_level = old_log_level;
 
     is(i, HASH_SIZE, "%u items hashed and no bucket has more that %u entries", i, MAX_ALLOWED_PER_BUCKET_INDEX);
     return exit_status();

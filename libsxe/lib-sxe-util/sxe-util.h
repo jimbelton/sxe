@@ -30,6 +30,7 @@
 
 #define SXE_UNSIGNED_MAXIMUM        (~0U)
 #define SXE_UNUSED_PARAMETER(param) (void)(param)
+#define SXE_BIT_OPTION(number)      (1 << number)
 
 /* TODO: Figure out a way to do a safe cast, something like this:
 #define SXE_SAFE_CAST_UNSIGNED_CHAR(value) \

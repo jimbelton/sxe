@@ -62,7 +62,9 @@
 #define SXE_SOCKET_ERROR(error)       WSA##error
 #define SXE_SOCKET_FAR                FAR
 #define SXE_SOCKET_INVALID            INVALID_SOCKET
-#define CLOSESOCKET(sock)             closesocket(sock)
+#define CLOSESOCKET(sock)             closesocket(sock)    /* Deprecated: use sxe_socket_close()            */
+
+static inline void sxe_socket_close(int sock) {closesocket(sock);}
 
 #else  /* UNIX */
 #define SXE_SOCKET_ERROR_OCCURRED     (-1)
@@ -70,8 +72,10 @@
 #define SXE_SOCKET_FAR
 #define SXE_SOCKET_INVALID            (-1)
 #define WSADATA                       int
-#define CLOSESOCKET(sock)             close(sock)   /* This will lead to double closes in some cases */
+#define CLOSESOCKET(sock)             close(sock)          /* This will lead to double closes in some cases */
 #define _open_osfhandle(handle, flag) (handle)
+
+static inline void sxe_socket_close(int sock) {close(sock);}
 #endif
 
 #endif /* __SXE_SOCKET_H__ */

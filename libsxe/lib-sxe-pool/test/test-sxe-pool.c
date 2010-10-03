@@ -42,20 +42,8 @@ enum TEST_STATE {
 #define TEST_POOL_GET_NUMBER_USED(  pool) sxe_pool_get_number_in_state(pool, TEST_STATE_USED)
 #define TEST_POOL_GET_NUMBER_ABUSED(pool) sxe_pool_get_number_in_state(pool, TEST_STATE_ABUSED)
 
-unsigned test_pool_visit_count;
 unsigned test_pool_1_timeout_call_count = 0;
 unsigned test_pool_2_timeout_call_count = 0;
-
-static void *
-test_visit_count(void * object, void * array)
-{
-    unsigned id = ((char *)object - (char *)array) / sizeof(unsigned);
-
-    SXEA11(id <= 3, "test_visit_count: id %u is > 3", id);
-    SXEA11(strcmp(sxe_pool_get_name(array), "cesspool") == 0, "Pool is called '%s', not 'cesspool'", sxe_pool_get_name(array));
-    test_pool_visit_count++;
-    return NULL;    /* Visit them all */
-}
 
 static void
 test_pool_1_timeout(void * array, unsigned array_index, void * caller_info)
@@ -69,7 +57,7 @@ test_pool_1_timeout(void * array, unsigned array_index, void * caller_info)
     }
 
     if (2 == test_pool_1_timeout_call_count) {
-        sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED, TEST_STATE_FREE);
+        sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED,   TEST_STATE_FREE);
     }
 
     SXER80("return");
@@ -83,7 +71,7 @@ test_pool_2_timeout(void * array, unsigned array_index, void * caller_info)
     test_pool_2_timeout_call_count ++;
 
     if (1 == test_pool_2_timeout_call_count) {
-        sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED, TEST_STATE_FREE);
+        sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED,   TEST_STATE_FREE);
     }
 
     if (2 == test_pool_2_timeout_call_count) {
@@ -91,9 +79,19 @@ test_pool_2_timeout(void * array, unsigned array_index, void * caller_info)
     }
 
     if (3 == test_pool_2_timeout_call_count) {
-        sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED, TEST_STATE_FREE);
+        sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED,   TEST_STATE_FREE);
     }
 
+    SXER80("return");
+}
+
+static void
+test_pool_3_timeout(void * array, unsigned array_index, void * caller_info)
+{
+    SXEE82("test_pool_3_timeout(array=%p,array_index=%u)", array, array_index);
+    SXE_UNUSED_PARAMETER(caller_info);
+    sxe_pool_set_indexed_element_state(array, array_index, 0, 1);
+    sxe_pool_set_indexed_element_state(array, array_index, 1, 0);
     SXER80("return");
 }
 
@@ -114,30 +112,35 @@ test_mock_gettimeofday(struct timeval * SXE_SOCKET_RESTRICT tv, struct timezone 
 int
 main(void)
 {
-    unsigned * pool;
-    size_t     size;
-    void     * base[2];
-    unsigned   i;
-    unsigned * pool_1_timeout;
-    unsigned * pool_2_timeout;
-    double     pool_1_timeouts[] = {0.0, 4.00, 3.00};
-    double     pool_2_timeouts[] = {0.0, 1.00, 2.00};
-    unsigned   node_a;
-    unsigned   node_b;
-    unsigned   oldest;
-    time_t     secs;
-    time_t     time_0;
-    double     oldtime;
+    unsigned      * pool;
+    size_t          size;
+    void          * base[2];
+    unsigned        i;
+    SXE_POOL_WALKER walker;
+    unsigned        j;
+    unsigned        id;
+    unsigned      * pool_1_timeout;
+    unsigned      * pool_2_timeout;
+    unsigned      * pool_3_timeout;
+    double          pool_1_timeouts[] = {0.0, 4.00, 3.00};
+    double          pool_2_timeouts[] = {0.0, 1.00, 2.00};
+    double          pool_3_timeouts[] = {1.0, 0.00};
+    unsigned        node_a;
+    unsigned        node_b;
+    unsigned        oldest;
+    time_t          secs;
+    time_t          time_0;
+    double          oldtime;
 
     time(&secs);
-    plan_tests(112);
+    plan_tests(110);
 
     /* Initialization causes expected state
      */
     ok((size = sxe_pool_size(4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= 4 * sizeof(*pool),
        "Expect pool size %u to be at least the size of the array %u", size, 4 * sizeof(*pool));
     SXEA10((base[0] = malloc(size)) != NULL, "Couldn't allocate memory for 1st copy of pool");
-    pool = sxe_pool_construct(base[0], "cesspool", 4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_LOCKS_DISABLED);
+    pool = sxe_pool_construct(base[0], "cesspool", 4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_OPTION_TIMED);
     SXEA10((base[1] = malloc(size)) != NULL, "Couldn't allocate memory for 2nd copy of pool");
     memcpy(base[1], base[0], size);
 
@@ -155,9 +158,13 @@ main(void)
         }
 
         is(TEST_POOL_GET_NUMBER_FREE(pool),   4,                             "4 free objects in newly created pool");
-        test_pool_visit_count = 0;
-        is(sxe_pool_walk_state(pool, TEST_STATE_FREE, test_visit_count, pool), NULL, "Walked the free state queue");
-        is(test_pool_visit_count,             4,                             "Visited 4 free objects in newly created pool");
+        sxe_pool_walker_construct(&walker, pool, TEST_STATE_FREE);
+
+        for (j = 0; (id = sxe_pool_walker_step(&walker)) != SXE_POOL_NO_INDEX; j++) {
+            SXEA11(id <= 3, "test_visit_count: id %u is > 3", id);
+        }
+
+        is(j,                                 4,                             "Visited 4 free objects in newly created pool");
         is(TEST_POOL_GET_NUMBER_USED(pool),   0,                             "0 used objects in newly created pool");
         is(TEST_POOL_GET_NUMBER_ABUSED(pool), 0,                             "0 abused objects in newly created pool");
         ok(sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED) == SXE_POOL_NO_INDEX, "Oldest object is SXE_POOL_NO_INDEX when pool is empty");
@@ -283,5 +290,12 @@ main(void)
     is(test_pool_2_timeout_call_count, 3, TEST_TIMEOUT "test_pool_2_timeout()     called; after 1 second(s): elements with TEST_STATE_USED/----------------- have rest time 0/- seconds");
 
     sxe_pool_delete(pool_1_timeout);   /* For coverage */
+
+    /* timeout with a pool of 1 objects */
+    pool_3_timeout = sxe_pool_new_with_timeouts("pool_3_timeout", 1, sizeof(*pool_3_timeout), 2, pool_3_timeouts,
+                                                test_pool_3_timeout, NULL);
+    test_mock_gettimeofday_timeval.tv_sec += 2;
+    sxe_pool_check_timeouts();
+
     return exit_status();
 }

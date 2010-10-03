@@ -19,16 +19,7 @@
  * THE SOFTWARE.
  */
 
-/*
-#include "sxe-list.h"
-#include "sxe-log.h"
-#include "sxe-spinlock.h"
-*/
 #include "sxe-pool-private.h"
-/*
-#include "sxe-util.h"
-#include "mock.h"
-*/
 
 /**
  * Construct a pool state walker (AKA iterator)
@@ -36,6 +27,8 @@
  * @param walker Pointer to the walker
  * @param array  Pointer to the pool array
  * @param state  State to walk
+ *
+ * @exception If the pool is both locked and timed, it cannot be walked safely
  */
 void
 sxe_pool_walker_construct(SXE_POOL_WALKER * walker, void * array, unsigned state)
@@ -43,8 +36,19 @@ sxe_pool_walker_construct(SXE_POOL_WALKER * walker, void * array, unsigned state
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
 
     SXEE83("sxe_pool_walker_construct(walker=%p,pool->name=%s,state=%u)", walker, pool->name, state);
+    SXEA11(!((pool->options & SXE_POOL_OPTION_LOCKED) && (pool->options & SXE_POOL_OPTION_TIMED)),
+           "sxe_pool_walker_construct: Can't walk thread safe timed pool %s safely", pool->name);
     sxe_list_walker_construct(&walker->list_walker, &SXE_POOL_QUEUE(pool)[state]);
-    walker->pool = pool;
+    walker->pool  = pool;
+    walker->state = state;
+
+    if (pool->options & SXE_POOL_OPTION_TIMED) {
+        walker->last.time  = 0.0;
+    }
+    else {
+        walker->last.count = 0;
+    }
+
     SXER80("return");
 }
 
@@ -53,67 +57,79 @@ sxe_pool_walker_construct(SXE_POOL_WALKER * walker, void * array, unsigned state
  *
  * @param walker Pointer to the pool state walker
  *
- * @return Index of the next object, SXE_POOL_NO_INDEX if the end of the state queue has been reached,
- *         or SXE_POOL_LOCK_NOT_TAKEN if this is a locked pool and the lock could not be taken
+ * @return Index of the next object or SXE_POOL_NO_INDEX if the end of the state queue has been reached.
+ *
+ * @note Thread safety is implemented by verifying that the last node stepped to is still in the same state queue. If it is not,
+ *       the state queue is rewalked to find a node with a time or count greater than or equal to the time that the last stepped
+ *       to node had when it was stepped to.
  */
 unsigned
 sxe_pool_walker_step(SXE_POOL_WALKER * walker)
 {
-    SXE_LIST_NODE * node;
+    SXE_POOL_NODE * node;
+    SXE_POOL_IMPL * pool = walker->pool;
     unsigned        result;
 
     SXEE81("sxe_pool_walker_step(walker=%p)", walker);
 
-    if ((result = sxe_pool_lock(walker->pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
+    if ((result = sxe_pool_lock(pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
         goto SXE_ERROR_OUT;
     }
 
-    if ((node = sxe_list_walker_step(&walker->list_walker)) == NULL) {
-        result = SXE_POOL_NO_INDEX;
-        goto SXE_EARLY_OUT;
+    /* If not at the head of the state queue and the current object has been moved to another state.
+     */
+    if (((node = sxe_list_walker_find(&walker->list_walker)) != NULL)
+     && (SXE_LIST_NODE_GET_ID(&node->list_node) != walker->state))
+     /* TODO: Check for touching */
+    {
+        SXEL83("sxe_pool_walker_step: node %u moved from state %u to state %u by another thread", node - SXE_POOL_NODES(pool),
+               walker->state, SXE_LIST_NODE_GET_ID(&node->list_node));
+
+        /* If there is a previous object and it has not been moved, get the new next one.
+         */
+        if (((node = sxe_list_walker_back(&walker->list_walker)) != NULL)
+         && (SXE_LIST_NODE_GET_ID(&node->list_node) == walker->state))
+         /* TODO: Check for touching */
+        {
+            node = sxe_list_walker_step(&walker->list_walker);
+        }
+        else {
+            sxe_list_walker_construct(&walker->list_walker, &SXE_POOL_QUEUE(pool)[walker->state]);
+
+            while ((node = sxe_list_walker_step(&walker->list_walker)) != NULL) {
+                if (pool->options & SXE_POOL_OPTION_TIMED) {
+                    if (node->last.time >= walker->last.time) {    /* Coverage Exclusion: TODO refactor SXE_POOL_TIME */
+                        break;                                     /* Coverage Exclusion: TODO refactor SXE_POOL_TIME */
+                    }
+                }
+                else {
+                    if (node->last.count >= walker->last.count) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        node = sxe_list_walker_step(&walker->list_walker);
     }
 
-    result = sxe_pool_index_from_list_node(node) - SXE_POOL_NODES((SXE_POOL_IMPL *)walker->pool);
+    result = SXE_POOL_NO_INDEX;
 
-SXE_EARLY_OUT:
-    sxe_pool_unlock(walker->pool);
+    if (node != NULL) {
+        result = node - SXE_POOL_NODES(pool);
 
-SXE_ERROR_OUT:
-    SXER81("return result=%u", result);
-    return result;
-}
-
-/**
- * Visit the objects in pool state until a visit returns a non-zero value or every object has been visited
- *
- * @param array        Pointer to the pool array
- * @param state        State to walk
- * @param visit        Function to call on each object
- * @param user_data    Arbitrary value to pass to visit function (e.g value to search for)
- *
- * @return NULL or non-NULL value returned from visit (indicates that the walk was stopped early - e.g. pointer to object found)
- *
- * @note If a lock failure occurs, NULL will be returned and the walk will be stopped early. If you need to be able to detected
- *       this, use a walker object and step it yourself.
- */
-
-void *
-sxe_pool_walk_state(void * array, unsigned state, void * (*visit)(void * object, void * user_data), void * user_data)
-{
-    SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
-    void          * result = NULL;
-    SXE_POOL_WALKER walker;
-    unsigned        id;
-
-    SXEE84("sxe_pool_walk_state(pool->name=%s,state=%u,visit=%p,user_data=%p)", pool->name, state, visit, user_data);
-    sxe_pool_walker_construct(&walker, array, state);
-
-    for (id = sxe_pool_walker_step(&walker); id != SXE_POOL_NO_INDEX && id != SXE_POOL_LOCK_NOT_TAKEN; id = sxe_pool_walker_step(&walker)) {
-        if ((result = (*visit)((char *)SXE_POOL_IMPL_TO_ARRAY(pool) + pool->size * id, user_data)) != NULL) {
-            break;
+        if (pool->options & SXE_POOL_OPTION_TIMED) {
+            walker->last.time  = node->last.time;
+        }
+        else {
+            walker->last.count = node->last.count;
         }
     }
 
-    SXER81("return result=%p", result);
+    sxe_pool_unlock(pool);
+
+SXE_ERROR_OUT:
+    SXER81("return %s", sxe_pool_return_to_string(result));
     return result;
 }

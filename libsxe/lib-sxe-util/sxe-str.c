@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -34,6 +34,23 @@ sxe_strnchr(const char * buf, char c, unsigned n)
 
         if (*buf == c) {
             return (char *)(unsigned long)buf;
+        }
+    }
+
+    return NULL;
+}
+
+char *
+sxe_strncspn(const char * buf, const char * reject, unsigned n)
+{
+    unsigned i;
+    unsigned j;
+
+    for (i = 0; (i < n) && (buf[i] != '\0'); i++) {
+        for (j = 0; reject[j] != '\0'; j++) {
+            if (buf[i] == reject[j]) {
+                return (char *)(unsigned long)&buf[i];
+            }
         }
     }
 

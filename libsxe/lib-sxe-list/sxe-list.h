@@ -45,6 +45,7 @@ typedef struct SXE_LIST {
 
 typedef struct SXE_LIST_WALKER {
     SXE_LIST      * list;
+    SXE_LIST_NODE * back;
     SXE_LIST_NODE * node;
 } SXE_LIST_WALKER;
 

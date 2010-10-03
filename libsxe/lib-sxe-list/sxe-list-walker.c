@@ -34,28 +34,50 @@ sxe_list_walker_construct(SXE_LIST_WALKER * walker, SXE_LIST * list)
 {
     SXEE82("sxe_list_walker_construct(walker=%p,list=%p)", walker, list);
     walker->list = list;
+    walker->back = &list->sentinel;
     walker->node = &list->sentinel;
     SXER80("return");
 }
 
 /**
- * Step to the next node in the list
+ * Go back to the previous node that the walker was pointing to
  *
  * @param walker Pointer to the list walker
  *
- * @return Pointer to the next node or NULL if the end of the list has been reached.
+ * @return Pointer to the current object or NULL if the walker was previously at the list head or has already been moved back.
  */
-SXE_LIST_NODE *
-sxe_list_walker_step(SXE_LIST_WALKER * walker)
+void *
+sxe_list_walker_back(SXE_LIST_WALKER * walker)
 {
-    SXE_LIST_NODE * result = NULL;
+    void * result = NULL;
 
-    SXEE81("sxe_list_walker_step(walker=%p)", walker);
+    SXEE81("sxe_list_walker_back(walker=%p)", walker);
 
-    walker->node = SXE_PTR_FIX(walker->list, SXE_LIST_NODE *, walker->node->next);
+    if (walker->back != &walker->list->sentinel) {
+        walker->node = walker->back;
+        walker->back = &walker->list->sentinel;
+        result = (char *)walker->node - walker->list->offset;
+    }
+
+    SXER81("return %p", result);
+    return result;
+}
+/**
+ * Find the current node that the walker is pointing to
+ *
+ * @param walker Pointer to the list walker
+ *
+ * @return Pointer to the current object or NULL if the walker is at the list head.
+ */
+void *
+sxe_list_walker_find(SXE_LIST_WALKER * walker)
+{
+    void * result = NULL;
+
+    SXEE81("sxe_list_walker_find(walker=%p)", walker);
 
     if (walker->node != &walker->list->sentinel) {
-        result = walker->node;
+        result = (char *)walker->node - walker->list->offset;
     }
 
     SXER81("return %p", result);
@@ -63,31 +85,25 @@ sxe_list_walker_step(SXE_LIST_WALKER * walker)
 }
 
 /**
- * Visit the objects in a list until a visit returns a non-zero value or every object has been visited
+ * Step to the next object in the list
  *
- * @param list         The list to walk
- * @param visit        Function to call on each object
- * @param user_data    Arbitrary value to pass to visit function (e.g value to search for)
+ * @param walker Pointer to the list walker
  *
- * @return NULL or non-NULL value returned from visit (indicates that the walk was stopped early - e.g. pointer to object found)
+ * @return Pointer to the next object or NULL if the end of the list has been reached.
  */
 void *
-sxe_list_walk(SXE_LIST * list, void * (*visit)(void * object, void * user_data), void * user_data)
+sxe_list_walker_step(SXE_LIST_WALKER * walker)
 {
-    SXE_LIST_WALKER walker;
-    SXE_LIST_NODE * node;
-    void          * result = NULL;
+    void * result = NULL;
 
-    SXEE83("sxe_list_walk(list=%p,visit=%p,user_data=%p)", list, visit, user_data);
+    SXEE81("sxe_list_walker_step(walker=%p)", walker);
+    walker->back = walker->node;
+    walker->node = SXE_PTR_FIX(walker->list, SXE_LIST_NODE *, walker->node->next);
 
-    sxe_list_walker_construct(&walker, list);
-
-    for (node = sxe_list_walker_step(&walker); node != NULL; node = sxe_list_walker_step(&walker)) {
-        if ((result = (*visit)((char *)node - list->offset, user_data)) != NULL) {
-            break;
-        }
+    if (walker->node != &walker->list->sentinel) {
+        result = (char *)walker->node - walker->list->offset;
     }
 
-    SXER81("return result=%p", result);
+    SXER81("return %p", result);
     return result;
 }
