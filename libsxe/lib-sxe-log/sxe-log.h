@@ -26,8 +26,6 @@
 #   define SXE_DEBUG 0
 #endif
 
-#define SXE_TIMESTAMP_SIZE 20   /* YYYYmmDDHHMMSS.hhh + '\0' + pad */
-
 /* The following log levels are based on discussions with Mario
  */
 typedef enum SXE_LOG_LEVEL {
@@ -1319,6 +1317,5 @@ extern SXE_LOG_LEVEL sxe_log_level;
 
 #include "sxe-log-proto.h"
 #include "sxe-str-encode-proto.h"
-#include "sxe-time-proto.h"
 
 #endif /* __SXE_LOG_H__ */

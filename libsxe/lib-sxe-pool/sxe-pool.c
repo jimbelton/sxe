@@ -33,15 +33,6 @@
 static SXE_LIST sxe_pool_timeout_list;
 static unsigned sxe_pool_timeout_count = 0;
 
-static inline double
-sxe_pool_local_get_time_in_seconds(void)
-{
-    struct timeval tv;
-
-    SXEA11(gettimeofday(&tv, NULL) >= 0, "gettimeofday failed: (%d)", errno);
-    return (double)tv.tv_sec + 1.e-6 * (double)tv.tv_usec;
-}
-
 const char *
 sxe_pool_get_name(void * array)
 {
@@ -110,7 +101,7 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
     SXE_POOL_IMPL * pool;
     unsigned        i;
     unsigned        sxe_log_level_saved;
-    double          current_time = 0.0;     /* Initialize to shut the compiler up */
+    SXE_TIME        current_time = 0;       /* Initialize to shut the compiler up */
 
     SXEE86("sxe_pool_construct(base=%p,name=%s,number=%u,size=%u,states=%u,options=%u)", base, name, number, size, states, options);
 
@@ -128,7 +119,7 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
 
     strncpy(pool->name, name, sizeof(pool->name));
     pool->name[sizeof(pool->name) - 1] = '\0';
-    pool->event_timeout = NULL;
+    pool->event_timeout                = NULL;
 
 #ifdef DEBUG
     memset(SXE_POOL_QUEUE(pool), 0xBE, sizeof(SXE_POOL_NODE) * states);
@@ -144,7 +135,7 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
     sxe_log_level = 5;
 
     if (options & SXE_POOL_OPTION_TIMED) {
-        current_time  = sxe_pool_local_get_time_in_seconds();
+        current_time  = sxe_time_get();
     }
     else {
         pool->next_count = 0;
@@ -259,14 +250,14 @@ sxe_pool_new_with_timeouts(
     pool                 = SXE_POOL_ARRAY_TO_IMPL(array);
     pool->event_timeout  = callback;
     pool->caller_info    = caller_info;
-    pool->state_timeouts = malloc(states * sizeof(*timeouts));
+    pool->state_timeouts = malloc(states * sizeof(SXE_TIME));
 
     SXEA11(pool->state_timeouts != NULL, "Error allocating SXE pool %s; state timeout array", name);
     SXEL82("allocated %u bytes to hold %u state timeouts", states * sizeof(*timeouts), states);
 
     for (i = 0; i < states; i++) {
         SXEL82("state %u has timeout %f", i, timeouts[i]);
-        pool->state_timeouts[i] = timeouts[i];
+        pool->state_timeouts[i] = sxe_time_from_double_seconds(timeouts[i]);
     }
 
     sxe_list_push(&sxe_pool_timeout_list, pool);
@@ -282,30 +273,30 @@ void
 sxe_pool_check_timeouts(void)
 {
     SXE_LIST_WALKER walker;
-    double          time_now;
+    SXE_TIME        time_now;
     SXE_POOL_IMPL * pool;
     unsigned        state;
-    double          timeout_for_this_state;
-    double          time_oldest_for_this_state;
-    double          time_oldest_for_this_state_last;
+    SXE_TIME        timeout_for_this_state;
+    SXE_TIME        time_oldest_for_this_state;
+    SXE_TIME        time_oldest_for_this_state_last;
     unsigned        index_oldest_for_this_state;
     unsigned        index_oldest_for_this_state_last;
 
     SXEE80("sxe_pool_check_timeouts()");
     sxe_list_walker_construct(&walker, &sxe_pool_timeout_list);
-    time_now = sxe_pool_local_get_time_in_seconds();
+    time_now = sxe_time_get();
 
     while ((pool = (SXE_POOL_IMPL *)sxe_list_walker_step(&walker)) != NULL) {
         for (state = 0; state < pool->states; state++) {
             timeout_for_this_state = pool->state_timeouts[state];
 
-            if (0.0 == timeout_for_this_state) {
+            if (timeout_for_this_state == 0) {
                 SXEL81("state %d timeout is infinite; ignoring", state);
                 continue;
             }
 
             index_oldest_for_this_state_last = SXE_POOL_NO_INDEX;
-            time_oldest_for_this_state_last = 0.0;
+            time_oldest_for_this_state_last  = 0;
 
             for (;;) {
                 index_oldest_for_this_state = sxe_pool_get_oldest_element_index(SXE_POOL_IMPL_TO_ARRAY(pool), state);
@@ -331,7 +322,7 @@ sxe_pool_check_timeouts(void)
                        index_oldest_for_this_state);
                 (*pool->event_timeout)(SXE_POOL_IMPL_TO_ARRAY(pool), index_oldest_for_this_state, pool->caller_info);
                 index_oldest_for_this_state_last = index_oldest_for_this_state;
-                time_oldest_for_this_state_last = time_oldest_for_this_state;
+                time_oldest_for_this_state_last  = time_oldest_for_this_state;
             }
         }
     }
@@ -360,7 +351,7 @@ sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned 
     sxe_list_remove(&SXE_POOL_QUEUE(pool)[old_state], node);
 
     if (pool->options & SXE_POOL_OPTION_TIMED) {
-        node->last.time  = sxe_pool_local_get_time_in_seconds();
+        node->last.time  = sxe_time_get();
     }
     else {
         node->last.count = pool->next_count++;
@@ -491,19 +482,19 @@ SXE_EARLY_OR_ERROR_OUT:
 }
 
 /**
- * Get the use time of the oldest object in a given state (or 0.0 if none)
+ * Get the use time of the oldest object in a given state (or 0 if none)
  *
  * @param array = Pointer to the pool array
  * @param state = State to check
  *
  * @exception Release mode assertion: the pool must be a timed pool
  */
-double
+SXE_TIME
 sxe_pool_get_oldest_element_time(void * array, unsigned state)
 {
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
     SXE_POOL_NODE * node;
-    double          last_time = 0.0;
+    SXE_TIME        last_time = 0;
 
     SXEE82("sxe_pool_get_oldest_element_time(pool->name=%s, state=%u)", pool->name, state);
     SXEA11(pool->options & SXE_POOL_OPTION_TIMED, "sxe_pool_get_oldest_element_time: pool %s is not a timed pool", pool->name);

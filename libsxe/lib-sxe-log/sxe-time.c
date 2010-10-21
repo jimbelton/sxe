@@ -26,9 +26,23 @@
 #include <unistd.h>
 
 #include "mock.h"
-#include "sxe-log.h"
+#include "sxe-time.h"
+
+#define          SXE_TIME_DIGITS_IN_FRACTION    9
+
+const unsigned   SXE_TIMESTAMP_LENGTH_MAXIMUM = SXE_TIMESTAMP_LENGTH(0) + SXE_TIME_DIGITS_IN_FRACTION;
+const unsigned   SXE_TIME_POWERS_OF_TEN[10]   = {1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
 /* Since these functions will be called from the log package, they should not themselves log */
+
+SXE_TIME
+sxe_time_get(void)
+{
+    struct timeval tv;
+
+    assert(gettimeofday(&tv, NULL) >= 0);
+    return ((SXE_TIME)tv.tv_sec << SXE_TIME_BITS_IN_FRACTION) + (SXE_TIME)tv.tv_usec * (1ULL << 32) / 1000000;
+}
 
 double
 sxe_get_time_in_seconds(void)
@@ -40,15 +54,36 @@ sxe_get_time_in_seconds(void)
 }
 
 char *
-sxe_time_to_string(char * buffer, unsigned length, double double_time)
+sxe_time_to_string(SXE_TIME sxe_time, char * buffer, unsigned length)
 {
     time_t    unix_time;
     struct tm broken_time;
+    unsigned  index;
 
-    unix_time = (time_t)double_time;
+    unix_time = (time_t)(sxe_time >> SXE_TIME_BITS_IN_FRACTION);
 
+    assert(length >= SXE_TIMESTAMP_LENGTH(0));
     assert(gmtime_r(&unix_time, &broken_time) != NULL);
     assert(strftime(buffer, length, "%Y%m%d%H%M%S", &broken_time) != 0);
-    assert(snprintf(&buffer[14], length - 14, ".%03u", (unsigned)((double_time - (unsigned)double_time) * 1000.0)) == 4);
+
+    if (length > SXE_TIMESTAMP_LENGTH(0)) {
+        sxe_time                            = (SXE_TIME_FRACTION)sxe_time;
+        buffer[SXE_TIMESTAMP_LENGTH(0) - 2] = '.';
+
+        if (length >= SXE_TIMESTAMP_LENGTH_MAXIMUM) {
+            length = SXE_TIMESTAMP_LENGTH_MAXIMUM;
+        }
+        else {
+            sxe_time /= SXE_TIME_POWERS_OF_TEN[SXE_TIMESTAMP_LENGTH_MAXIMUM - length];
+        }
+
+        buffer[length - 1] = '\0';
+
+        for (index = length - 1; index > SXE_TIMESTAMP_LENGTH(0) - 1; index--) {
+            buffer[index - 1] = sxe_time % 10 + '0';
+            sxe_time         /= 10;
+        }
+    }
+
     return buffer;
 }

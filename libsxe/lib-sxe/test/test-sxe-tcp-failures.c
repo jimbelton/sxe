@@ -35,6 +35,7 @@ SXE * listener;
 SXE * connectee = NULL;
 SXE * first_connector;
 SXE * second_connector;
+SXE * third_connector;
 
 static void
 test_event_connected(SXE * this)
@@ -170,7 +171,7 @@ main(void)
     tap_ev   event3;
     tap_ev   ev;
 
-    plan_tests(70);
+    plan_tests(71);
 
      /* Initialization failure cases.
      */
@@ -271,7 +272,7 @@ main(void)
     is(tap_ev_arg(event2, "this"), second_connector,         "2nd connector: Second connector closed"            );
     is(tap_ev_arg(event2, "buf_used"), 0,                    "2nd connector: 0 bytes in receive buffer"          );
 
-    /* Close and reallocate connection.
+    /* Close and reallocate connections.
      */
     sxe_close(first_connector);
     ok((first_connector = sxe_new_tcp(NULL, "127.0.0.1", 0, test_event_connected, test_event_read, test_event_close)) != NULL,
@@ -281,6 +282,9 @@ main(void)
     ok(tap_ev_arg(ev, "this") !=  first_connector,   "Reallocate: First connection close indication");
     is(tap_ev_arg(ev, "buf_used"), 0,                "Reallocate: 0 bytes in receive buffer"        );
 
+    ok((third_connector = sxe_new_tcp(NULL, "127.0.0.1", TEST_PORT + 1, test_event_connected, test_event_read, test_event_close)) != NULL,
+                                                     "Reallocate: start third connector");
+
     /* Test connection failures.
      */
     MOCK_SET_HOOK(socket, test_mock_socket);
@@ -288,19 +292,20 @@ main(void)
                                                    "Connection failure: Can't connect to listener when socket() fails");
     MOCK_SET_HOOK(socket, socket);
 
+
     MOCK_SET_HOOK(bind, test_mock_bind_efault);
-    is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_INTERNAL,
+    is(sxe_connect(third_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_INTERNAL,
                                                    "Connection failure: Can't connect to listener when bind() fails");
     MOCK_SET_HOOK(bind, bind);
 
     MOCK_SET_HOOK(bind, test_mock_bind_eaddrinuse);
-    is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_ADDRESS_IN_USE,
+    is(sxe_connect(third_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_ADDRESS_IN_USE,
                                                    "Connection failure: Can't connect to listener when address is in use");
     MOCK_SET_HOOK(bind, bind);
 
 
     MOCK_SET_HOOK(connect, test_mock_connect);
-    is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_INTERNAL,
+    is(sxe_connect(third_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_INTERNAL,
                                                    "Connection failure: Can't connect to listener when connect() fails");
     MOCK_SET_HOOK(connect, connect);
     sxe_close(listener);
@@ -312,8 +317,10 @@ main(void)
 
     ok((ev = tap_ev_shift())   != NULL,              "Connection failure: Got another event");
     is_eq(tap_ev_identifier(ev), "test_event_close", "Connection failure: It's another close event");
-    is(tap_ev_arg(ev, "this"), first_connector,      "Connection failure: First connection close indication" );
+    is(tap_ev_arg(ev, "this"), first_connector,      "Connection failure: third connection close indication" );
     is(tap_ev_arg(ev, "buf_used"), 0,                "Connection failure: 0 bytes in receive buffer");
+
+
 
     is(sxe_listen(listener), SXE_RETURN_OK,           "Reconnect failure: Recreated listener");
     is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_OK,

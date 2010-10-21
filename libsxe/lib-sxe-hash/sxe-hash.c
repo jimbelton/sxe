@@ -254,6 +254,16 @@ sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     return value;
 }
 
+void
+sxe_hash_give(void * array, unsigned id)
+{
+    SXE_HASH * hash  = SXE_HASH_ARRAY_TO_IMPL(array);
+
+    SXEE82("sxe_hash_give(hash=%s,id=%u)", sxe_pool_get_name(array), id);
+    sxe_pool_set_indexed_element_state(hash->pool, id, sxe_pool_index_to_state(array, id), SXE_HASH_UNUSED_BUCKET);
+    SXER80("return");
+}
+
 int
 sxe_hash_remove(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 {
@@ -271,7 +281,7 @@ sxe_hash_remove(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 
     if (id != SXE_HASH_KEY_NOT_FOUND) {
         value = hash->pool[id].value;
-        sxe_pool_set_indexed_element_state(hash->pool, id, sxe_pool_index_to_state(array, id), SXE_HASH_UNUSED_BUCKET);
+        sxe_hash_give(array, id);
     }
 
     SXER81("return value=%u", value);

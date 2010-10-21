@@ -19,19 +19,22 @@
  * THE SOFTWARE.
  */
 
-/* Simulate ANSI C99 for Visual C++ (another fine MS product) */
+#ifndef __SXE_THREAD__
+#include "sxe-log.h"
+#include "sxe-socket.h"
 
-#ifndef __SXE_STDINT_H
-#define __SXE_STDINT_H
+#define SXE_THREAD_OPTION_DEFAULTS 0
 
-typedef          __int8  int8_t ;
-typedef          __int16 int16_t;
-typedef          __int32 int32_t;
-typedef          __int64 int64_t;
-typedef int              int_least16_t;
-typedef unsigned __int8  uint8_t;
-typedef unsigned __int16 uint16_t;
-typedef unsigned __int32 uint32_t;
-typedef unsigned __int64 uint64_t;
+#ifdef _WIN32
+#   include <windows.h>
+    typedef HANDLE    SXE_THREAD;
+    typedef DWORD     SXE_THREAD_RETURN;
 
+#else
+#   include <pthread.h>
+    typedef pthread_t SXE_THREAD;
+    typedef void *    SXE_THREAD_RETURN;
+#endif
+
+#include "lib-sxe-thread-proto.h"
 #endif

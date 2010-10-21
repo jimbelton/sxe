@@ -19,9 +19,6 @@
 # THE SOFTWARE.
 #
 
-
-$(info make: TODO: start using -std=c89 again just like in project Ice)
-
 # Add GCC flags used on all platforms.
 #
 CFLAGS+=-c -g -O -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wchar-subscripts -Wcomment                   \
@@ -69,7 +66,7 @@ COPY               = cp -f
 COV_CFLAGS         = -fprofile-arcs -ftest-coverage
 COV_LFLAGS         = -coverage -lgcov
 COV_INIT           = $(DEL) $(DST.dir)/*.gcda $(DST.dir)/*.ok
-COV_REAP           = cd $(DST.dir) ; cp ../*.c . ; gcov *.c >/dev/null 2>&1
+COV_REAP           = cd $(DST.dir) ; cp -f ../*.c . ; gcov *.c >/dev/null 2>&1
 CXX                = g++
 LINK               = gcc
 LINK_OUT           = -o

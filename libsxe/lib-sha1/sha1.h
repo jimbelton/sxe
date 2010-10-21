@@ -28,4 +28,9 @@ typedef struct
 
 #include "lib-sha1-proto.h"
 
+#define SHA1Context                               sophos_sha1_ctx_t
+#define SHA1Reset(context)                        sophos_sha1_init(context)
+#define SHA1Input(context, message_array, length) sophos_sha1_update(context, (const char *)message_array, length)
+#define SHA1Result(context, digest)               (sophos_sha1_final(context, (char *)digest) == 0)
+
 #endif

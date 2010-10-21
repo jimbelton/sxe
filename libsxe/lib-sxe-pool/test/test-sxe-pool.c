@@ -128,47 +128,48 @@ main(void)
     unsigned        node_a;
     unsigned        node_b;
     unsigned        oldest;
-    time_t          secs;
     time_t          time_0;
-    double          oldtime;
+    SXE_TIME        oldtime;
+    SXE_TIME        curtime;
+    char            timestamp[SXE_TIMESTAMP_LENGTH(3)];
 
-    time(&secs);
+    time(&time_0);
     plan_tests(110);
 
     /* Initialization causes expected state
      */
     ok((size = sxe_pool_size(4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= 4 * sizeof(*pool),
        "Expect pool size %u to be at least the size of the array %u", size, 4 * sizeof(*pool));
-    SXEA10((base[0] = malloc(size)) != NULL, "Couldn't allocate memory for 1st copy of pool");
+    SXEA10((base[0] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 1st copy of pool");
     pool = sxe_pool_construct(base[0], "cesspool", 4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_OPTION_TIMED);
-    SXEA10((base[1] = malloc(size)) != NULL, "Couldn't allocate memory for 2nd copy of pool");
+    SXEA10((base[1] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 2nd copy of pool");
     memcpy(base[1], base[0], size);
 
-    is_eq(sxe_pool_get_name(pool), "cesspool", "sxe_pool_get_name() works");
+    is_eq(sxe_pool_get_name(pool),            "cesspool",                     "sxe_pool_get_name() works");
 
     for (i = 0; i < 2; i++) {
         if (i == 1) {
             pool = sxe_pool_from_base(base[1]);
             memset(base[0], 0xF0, size);
-            is(base[1],                       sxe_pool_to_base(pool),        "Pool %u array maps back to pool", i);
+            is(base[1],                       sxe_pool_to_base(pool),         "Pool %u array maps back to pool", i);
 
         }
         else {
-            is(pool,                          sxe_pool_from_base(base[i]),   "Pool %u array is the expected one", i);
+            is(pool,                          sxe_pool_from_base(base[i]),    "Pool %u array is the expected one", i);
         }
 
-        is(TEST_POOL_GET_NUMBER_FREE(pool),   4,                             "4 free objects in newly created pool");
+        is(TEST_POOL_GET_NUMBER_FREE(pool),   4,                              "4 free objects in newly created pool");
         sxe_pool_walker_construct(&walker, pool, TEST_STATE_FREE);
 
         for (j = 0; (id = sxe_pool_walker_step(&walker)) != SXE_POOL_NO_INDEX; j++) {
             SXEA11(id <= 3, "test_visit_count: id %u is > 3", id);
         }
 
-        is(j,                                 4,                             "Visited 4 free objects in newly created pool");
-        is(TEST_POOL_GET_NUMBER_USED(pool),   0,                             "0 used objects in newly created pool");
-        is(TEST_POOL_GET_NUMBER_ABUSED(pool), 0,                             "0 abused objects in newly created pool");
+        is(j,                                 4,                              "Visited 4 free objects in newly created pool");
+        is(TEST_POOL_GET_NUMBER_USED(pool),   0,                              "0 used objects in newly created pool");
+        is(TEST_POOL_GET_NUMBER_ABUSED(pool), 0,                              "0 abused objects in newly created pool");
         ok(sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED) == SXE_POOL_NO_INDEX, "Oldest object is SXE_POOL_NO_INDEX when pool is empty");
-        ok(sxe_pool_get_oldest_element_time( pool, TEST_STATE_USED) == 0.0,  "Oldest time 0.0 when pool is empty");
+        ok(sxe_pool_get_oldest_element_time( pool, TEST_STATE_USED) == 0,     "Oldest time is 0 when pool is empty");
 
         /*****
          * Verify the state between each of the following operations
@@ -181,58 +182,67 @@ main(void)
          */
         sxe_pool_set_indexed_element_state(pool, 0, TEST_STATE_FREE, TEST_STATE_USED);
         sxe_pool_set_indexed_element_state(pool, 2, TEST_STATE_FREE, TEST_STATE_USED);
-        is( sxe_pool_index_to_state(pool, 0), TEST_STATE_USED, "Index 0 is in use");
-        is( sxe_pool_index_to_state(pool, 2), TEST_STATE_USED, "Index 2 is in use");
+        is(sxe_pool_index_to_state(pool, 0), TEST_STATE_USED,                 "Index 0 is in use");
+        is(sxe_pool_index_to_state(pool, 2), TEST_STATE_USED,                 "Index 2 is in use");
 
-        time_0 = sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED);
-        ok( time_0                         >  0.0,  "Pool not empty so oldest time not 0");
-        is( TEST_POOL_GET_NUMBER_FREE(pool),   2  ,  "Pool state is now: 2 free");
-        is( TEST_POOL_GET_NUMBER_USED(pool),   2  ,  "Pool state is now: 2 used");
+        oldtime = sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED);
+        ok(oldtime                                                != 0,       "Pool not empty so oldest time is %s, not 0",
+           sxe_time_to_string(oldtime, timestamp, sizeof(timestamp)));
+        is(TEST_POOL_GET_NUMBER_FREE(pool),  2  ,                             "Pool state is now: 2 free");
+        is(TEST_POOL_GET_NUMBER_USED(pool),  2  ,                             "Pool state is now: 2 used");
+
+        /* Wait for the next tick before touching your nodes :)
+         */
+        while ((curtime = sxe_time_get()) <= oldtime) {
+        }
 
         sxe_pool_touch_indexed_element(pool, 0);
-        is( sxe_pool_index_to_state(pool, 0), TEST_STATE_USED, "Index 0 is in use");
-        is( sxe_pool_index_to_state(pool, 2), TEST_STATE_USED, "Index 2 is in use");
-        ok( sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) > time_0, "Touch a used node causes an update");
-        is( TEST_POOL_GET_NUMBER_FREE(pool),   2  ,  "Pool state is now: 2 free");
-        is( TEST_POOL_GET_NUMBER_USED(pool),   2  ,  "Pool state is now: 2 used");
+        is(sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED), 2,       "After touching 0, element 2 should be oldest");
+        sxe_pool_touch_indexed_element(pool, 2);
+        is(sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED), 0,       "After touching 2, element 0 should be oldest");
+        ok(sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) > oldtime, "Touching element 0 updated its time to %s",
+           sxe_time_to_string(sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED), timestamp, sizeof(timestamp)));
+        is(TEST_POOL_GET_NUMBER_FREE(pool),  2  ,                             "Pool state is now: 2 free");
+        is(TEST_POOL_GET_NUMBER_USED(pool),  2  ,                             "Pool state is now: 2 used");
 
         sxe_pool_set_indexed_element_state(pool, 0, TEST_STATE_USED, TEST_STATE_FREE);
-        is( sxe_pool_index_to_state(pool, 0), TEST_STATE_FREE, "Index 0 has now been freed");
-        is( sxe_pool_index_to_state(pool, 2), TEST_STATE_USED, "Index 2 is still in use");
-        ok( sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) >  0.0,  "Pool still not empty so oldest time is not 0");
-        is( TEST_POOL_GET_NUMBER_FREE(pool),   3  ,  "Pool state is now: 3 free");
-        is( TEST_POOL_GET_NUMBER_USED(pool),   1  ,  "Pool state is now: 1 used");
+        is(sxe_pool_index_to_state(pool, 0), TEST_STATE_FREE,                 "Index 0 has now been freed");
+        is(sxe_pool_index_to_state(pool, 2), TEST_STATE_USED,                 "Index 2 is still in use");
+        ok(sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) >  0.0,    "Pool still not empty so oldest time is not 0");
+        is(TEST_POOL_GET_NUMBER_FREE(pool),  3  ,                             "Pool state is now: 3 free");
+        is(TEST_POOL_GET_NUMBER_USED(pool),  1  ,                             "Pool state is now: 1 used");
 
         sxe_pool_touch_indexed_element(pool, 0);
-        is( sxe_pool_index_to_state(pool, 0), TEST_STATE_FREE, "Index 0 is still free");
-        is( sxe_pool_index_to_state(pool, 2), TEST_STATE_USED, "Index 2 is still in use");
-        ok( sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) >  0.0,  "Pool not empty so oldest time not 0");
-        is( TEST_POOL_GET_NUMBER_FREE(pool),   3  ,  "Touch of a free node doesn't change pool state");
-        is( TEST_POOL_GET_NUMBER_USED(pool),   1  ,  "Touch of a free node doesn't change pool state");
+        is(sxe_pool_index_to_state(pool, 0), TEST_STATE_FREE,                 "Index 0 is still free");
+        is(sxe_pool_index_to_state(pool, 2), TEST_STATE_USED,                 "Index 2 is still in use");
+        ok(sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) >  0.0,    "Pool not empty so oldest time not 0");
+        is(TEST_POOL_GET_NUMBER_FREE(pool),  3  ,                             "Touch of a free node doesn't change pool state");
+        is(TEST_POOL_GET_NUMBER_USED(pool),  1  ,                             "Touch of a free node doesn't change pool state");
 
         sxe_pool_set_indexed_element_state(pool, 2, TEST_STATE_USED, TEST_STATE_FREE);
-        is( sxe_pool_index_to_state(pool, 0), TEST_STATE_FREE, "Index 0 is still free");
-        is( sxe_pool_index_to_state(pool, 2), TEST_STATE_FREE, "Index 2 is free as well");
-        ok( sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) == 0.0,  "Pool is empty so oldest time is 0.0");
-        is( TEST_POOL_GET_NUMBER_FREE(pool),   4  ,  "Pool state is now: 4 free");
-        is( TEST_POOL_GET_NUMBER_USED(pool),   0  ,  "Pool state is now: 0 used");
+        is(sxe_pool_index_to_state(pool, 0), TEST_STATE_FREE,                 "Index 0 is still free");
+        is(sxe_pool_index_to_state(pool, 2), TEST_STATE_FREE,                 "Index 2 is free as well");
+        ok(sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED) == 0.0,    "Pool is empty so oldest time is 0.0");
+        is(TEST_POOL_GET_NUMBER_FREE(pool),   4  ,                            "Pool state is now: 4 free");
+        is(TEST_POOL_GET_NUMBER_USED(pool),   0  ,                            "Pool state is now: 0 used");
 
         /* test allocating two objects consecutively using sxe_pool_next_free()
          */
         node_a = sxe_pool_set_oldest_element_state(pool, TEST_STATE_FREE, TEST_STATE_USED);
-        is(sxe_pool_index_to_state(pool, node_a), TEST_STATE_USED, "The node A given really is in use");
+        is(sxe_pool_index_to_state(pool, node_a), TEST_STATE_USED,            "The node A given really is in use");
         node_b = sxe_pool_set_oldest_element_state(pool, TEST_STATE_FREE, TEST_STATE_USED);
-        is(sxe_pool_index_to_state(pool, node_b), TEST_STATE_USED, "The node B given really is in use");
+        is(sxe_pool_index_to_state(pool, node_b), TEST_STATE_USED,            "The node B given really is in use");
 
         /* track the state of the pool (check for oldest time and object, used and freed objects)
          */
-        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)), node_a,           "The oldest is node A");
+        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)), node_a, "The oldest is node A");
         oldtime = sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED);
-        ok(oldtime >= (double)secs,                                "Oldest time %f >= start time %u", oldtime, (unsigned)secs);
+        ok(oldtime >= ((SXE_TIME)time_0 << 32),                               "Oldest time %s >= start time %lu",
+           sxe_time_to_string(oldtime, timestamp, sizeof(timestamp)), time_0);
         sxe_pool_touch_indexed_element(pool, node_a);
-        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)), node_b,           "The oldest is now node B");
-        is(TEST_POOL_GET_NUMBER_FREE(pool), 2,                      "Pool state is now: 2 free");
-        is(TEST_POOL_GET_NUMBER_USED(pool), 2,                      "Pool state is now: 2 used");
+        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)), node_b, "The oldest is now node B");
+        is(TEST_POOL_GET_NUMBER_FREE(pool), 2,                                "Pool state is now: 2 free");
+        is(TEST_POOL_GET_NUMBER_USED(pool), 2,                                "Pool state is now: 2 used");
 
         /* TODO: Better tests of the time values and how the oldest time changes
          *       in different scenarios (touch, mark_free, get_next_free, ...) */
@@ -248,15 +258,15 @@ main(void)
 
         /* Make sure a third state works
          */
-        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_ABUSED)), 2,                "Object 2 is oldest in abused state");
-        is(sxe_pool_index_to_state(pool, oldest), TEST_STATE_ABUSED,                                "Object thinks it's abused");
+        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_ABUSED)), 2,         "Object 2 is oldest in abused state");
+        is(sxe_pool_index_to_state(pool, oldest), TEST_STATE_ABUSED,                         "Object thinks it's abused");
         sxe_pool_set_indexed_element_state(pool, oldest, TEST_STATE_ABUSED, TEST_STATE_FREE);
-        is(TEST_POOL_GET_NUMBER_FREE(pool),                          1,                              "Pool has one free object");
-        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_ABUSED)), 3,                "Object 3 is in abused state");
-        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)),   1,                "Object 1 is in used state");
-        is(sxe_pool_index_to_state(pool, oldest), TEST_STATE_USED,                                  "Object thinks it's used");
+        is(TEST_POOL_GET_NUMBER_FREE(pool),                          1,                      "Pool has one free object");
+        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_ABUSED)), 3,         "Object 3 is in abused state");
+        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)),   1,         "Object 1 is in used state");
+        is(sxe_pool_index_to_state(pool, oldest), TEST_STATE_USED,                           "Object thinks it's used");
         sxe_pool_set_indexed_element_state(pool, oldest, TEST_STATE_USED, TEST_STATE_FREE);
-        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)),   0,                "Object 0 is in used state");
+        is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)),   0,         "Object 0 is in used state");
     }
 
     #define TEST_TIMEOUT "Test timeout: "

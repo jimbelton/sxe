@@ -143,8 +143,6 @@ convention_usage :
 	@echo usage: make convention_to_do
 	@echo usage: make convention
 
-$(info make: TODO: externalize dependencies a la Ice?)
-
 #	convention_to_do			- doesn't exit1
 
 # NOTE: convention_no_fixme is the last check so that code containing 'fixme' may be checked for convention failures before it is ready to commit.

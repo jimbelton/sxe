@@ -1,4 +1,4 @@
-LIBRARIES        = sxe-pool
+LIBRARIES = sxe-thread
 include ../dependencies.mak
 
 ifneq ($(OS),Windows_NT)

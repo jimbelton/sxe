@@ -19,8 +19,6 @@
 # THE SOFTWARE.
 #
 
-# TODO: Dependency generation for test programs
-
 # usage: mak should be a top level component. The higher level makefile is expected to define:
 #   COM.dir                = The directory which is the root of the component being built (usually "." or "..")
 #   TOP.dir                = The directory which includes "mak" (usually ".." or "../..")
@@ -43,12 +41,22 @@ endif
 #   - @$(MAKE_PERL_ECHO) "make: building: $@"
 #
 
+define MAKE_PERL_ECHO_BOLD
+$(PERL) -e $(OSQUOTE) \
+	$$text  = shift @ARGV; \
+    $$text .= qq[ ]; \
+    $$text .= qq[=] x ( 128 - length ($$text) ); \
+    printf qq[$(OSPC)s $(OSPC)s\n], $$text, scalar localtime; \
+	exit 0; \
+	$(OSQUOTE)
+endef
+
 define MAKE_PERL_ECHO
 $(PERL) -e $(OSQUOTE) \
 	$$text  = shift @ARGV; \
     $$text .= qq[ ]; \
     $$text .= qq[-] x ( 128 - length ($$text) ); \
-    printf qq[$(OSPC)s\n], $$text; \
+    printf qq[$(OSPC)s $(OSPC)s\n], $$text, scalar localtime; \
 	exit 0; \
 	$(OSQUOTE)
 endef
@@ -179,7 +187,7 @@ DEP.includes := $(foreach PACKAGE, $(DEP.lib_pkgs) $(DEP.dll_pkgs), $(COM.dir)/$
 IFLAGS      = $(CC_INC). $(CC_INC)$(OS_class) $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR))
 #IFLAGS     += $(if $(findstring port,$(LIB_DEPENDENCIES)),$(CC_INC)$(COM.dir)/lib-port/$(OS_class),)
 #IFLAGS     += $(if $(findstring tap,$(LIB_DEPENDENCIES)),$(CC_INC)$(COM.dir)/lib-tap/$(DST.dir),)
-#IFLAGS_TEST = $(CC_INC)$(COM.dir)/lib-tap/$(DST.dir)
+IFLAGS_TEST = $(CC_INC)$(COM.dir)/../libsxe/lib-tap/$(DST.dir) $(CC_INC)./test
 CFLAGS     += -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir) $(foreach DIR, $(DEP.includes), $(CC_INC)$(DIR)/$(DST.dir))
 CFLAGS_TEST = $(IFLAGS_TEST)
 SRC.c      := $(wildcard *.c) $(subst $(OS_class)/,,$(wildcard $(OS_class)/*.c))
@@ -213,7 +221,7 @@ COMMON_TEST.objs := $(patsubst test/%.c,$(DST.dir)/test/%$(EXT.obj),$(COMMON_TES
 
 $(DEP.dirs):
 ifndef MAKE_PEER_DEPENDENTS
-	@$(MAKE_PERL_ECHO) "make: building: peer dependent: $@"
+	@$(MAKE_PERL_ECHO_BOLD) "make: building: peer dependent: $@"
 ifeq ($(COM.dir),.)
 	$(MAKE) -C $@ MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
 else
@@ -257,7 +265,7 @@ release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DE
 ifneq ($(DST.inc),)
 	make DST.dir=$(DST.dir) include
 endif
-	@echo make: $(DST.lib)$(DST.exe) is up-to-date
+	@echo make: building: $(DST.lib)$(DST.exe) is up-to-date
 
 .PHONY: coverage_clean run_tests release debug coverage
 
@@ -271,7 +279,9 @@ test:				coverage_clean run_tests
 	@$(MAKE_PERL_ECHO) "make: tests complete"
 ifdef DO_COVERAGE
 ifneq ($(strip $(DST.oks)),)
+	@$(MAKE_PERL_ECHO) "make: coverage: reap"
 	@$(COVERAGE_REAP)
+	@$(MAKE_PERL_ECHO) "make: coverage: check"
 	@$(COVERAGE_CHECK)
 	@$(DEL) $(DST.dir)$(DIR_SEP)*.c
 endif

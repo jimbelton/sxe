@@ -91,10 +91,12 @@ sub source_scan
     while (my $line = <$in>)
     {
         if ($line =~ /^\s*#\s*include\s*"([^"]+)/) {
+            chomp $line;
             my $file = $1;
 
             for my $dir (@includes) {
                 if (-e $dir."/".$file) {
+                    printf qq[$0: DEBUG: include file     found: %s\n], $line if ( exists $ENV{MAKE_DEBUG} );
                     push(@file_stack, $source_path);
                     $output .= $dir."/".$file." ".source_scan($dir, $file);
                     $file    = "";
@@ -110,23 +112,38 @@ sub source_scan
                 # in the output subdirectory of the directory containing the file that included it.
                 #
                 if ($file =~ /^(.+)-proto.h$/) {
+                    printf qq[$0: DEBUG: proto   file not found: %s\n], $line if ( exists $ENV{MAKE_DEBUG} );
                     my $src  = $1;
                     my $leaf = ($source_dir eq ".") ? basename(cwd()) : basename($source_dir);
                     $output .= $source_dir."/".$output_dir."/".$file." ";
 
                     if (-f "$source_dir/$src.c") {
+                        my $tmp_target = "$source_dir/$output_dir/%-proto.h";
+                        my $tmp_mak_macro = uc ( $tmp_target );
+                           $tmp_mak_macro =~ s~\.~_DOT_~gs;
+                           $tmp_mak_macro =~ s~[^a-z0-9]~_~gis;
+                           $tmp_mak_macro =~ s~[^a-z0-9]~_~gis;
                         $output_proto_rules->{$file} =
-                            "$source_dir/$output_dir/%-proto.h: $source_dir/%.c\n"
-                             ."\t\@\$(MAKE_PERL_ECHO) \"make: building: \$\@\"\n"
-                             ."\tcd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -o $output_dir \$(notdir \$*.c)\n"
-                             ."\n";
+                             "ifndef $tmp_mak_macro\n"
+                            ."$tmp_mak_macro := 1\n"
+                            ."$tmp_target: $source_dir/%.c\n"
+                            ."\t\@\$(MAKE_PERL_ECHO) \"make: building: \$\@\"\n"
+                            ."\tcd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -o $output_dir \$(notdir \$*.c)\n"
+                            ."endif\n\n";
                     }
                     elsif ($src eq $leaf) {
+                        my $tmp_target = "$source_dir/$output_dir/$leaf-proto.h";
+                        my $tmp_mak_macro = uc ( $tmp_target );
+                           $tmp_mak_macro =~ s~\.~_DOT_~gs;
+                           $tmp_mak_macro =~ s~[^a-z0-9]~_~gis;
+                           $tmp_mak_macro =~ s~[^a-z0-9]~_~gis;
                         $output_proto_rules->{$file} =
-                            "$source_dir/$output_dir/$leaf-proto.h: \$(wildcard $source_dir/*.h) \$(wildcard $source_dir/*.c)\n"
-                             ."\t\@\$(MAKE_PERL_ECHO) \"make: building: \$\@\"\n"
-                             ."\tcd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -d -o $output_dir\n"
-                             ."\n";
+                             "ifndef $tmp_mak_macro\n"
+                            ."$tmp_mak_macro := 1\n"
+                            ."$tmp_target: \$(wildcard $source_dir/*.h) \$(wildcard $source_dir/*.c)\n"
+                            ."\t\@\$(MAKE_PERL_ECHO) \"make: building: \$\@\"\n"
+                            ."\tcd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -d -o $output_dir\n"
+                            ."endif\n\n";
                     }
                     else {
                         warn("mkdeps.pl: warning: Can't generate prototype file '$file' in directory '$source_dir'");
@@ -136,11 +153,12 @@ sub source_scan
                 # Not a generated file.  This is hokey, because this dependency just gets lost.
                 #
                 else {
+                    printf qq[$0: DEBUG: include file not found:*%s\n], $line if ( exists $ENV{MAKE_DEBUG} );
                     warn("mkdeps.pl: warning: Can't find included file '$file'");
                 }
-            }
-        }
-    }
+            } # if ($file)
+        } # if ($line =~ /^\s*#\s*include\s*"([^"]+)/)
+    } # while (my $line = <$in>)
 
     return $output;
 }
@@ -161,7 +179,16 @@ while ($ARGV[0] && substr($ARGV[0], 0, 1) =~ /[-\/]/) {
             push(@includes, $value);
         }
         elsif ($value ne $os_src_dir) {
-            die("mkdeps.pl: Error: include directory $value: $!\n");
+            # todo: figure out a way to make make stop on the following error (instead of flowery highlighting workaround)
+            die <<EOL
+
+vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+mkdeps.pl: Error: include directory $value: $!
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+EOL
         }
     }
 
@@ -192,7 +219,18 @@ my $out_file;
 
 open($out_file, ">$output_dir/$source_file_stripped.d")
     or die("mkdep.pl: Error: Unable to create file $output_dir/$source_file_stripped.d");
-print $out_file $output_proto_rules->{$_} foreach keys %$output_proto_rules;
-print $out_file ("$output_dir/$source_file_stripped.$ext_obj $output_dir/$source_file_stripped.d: $output$ARGV[0] GNUmakefile\n");
+print $out_file $output_proto_rules->{$_} foreach sort keys %$output_proto_rules;
+print $out_file ("$output_dir/$source_file_stripped.$ext_obj $output_dir/$source_file_stripped.d: \\\n");
+{
+    my $h;
+    foreach my $dep ( split ( m~\s+~, $output ) ) {
+        $h->{$dep} ++;
+    }
+    foreach my $dep ( sort keys %{ $h } ) {
+        print $out_file ("    $dep \\\n");
+    }
+}
+print $out_file ("    $ARGV[0] \\\n");
+print $out_file ("    GNUmakefile\n");
 close($out_file);
 exit(0);

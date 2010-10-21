@@ -19,19 +19,28 @@
  * THE SOFTWARE.
  */
 
-/* Simulate ANSI C99 for Visual C++ (another fine MS product) */
+#include <string.h>
 
-#ifndef __SXE_STDINT_H
-#define __SXE_STDINT_H
+#include "sha1.h"
+#include "sxe-time.h"
+#include "tap.h"
 
-typedef          __int8  int8_t ;
-typedef          __int16 int16_t;
-typedef          __int32 int32_t;
-typedef          __int64 int64_t;
-typedef int              int_least16_t;
-typedef unsigned __int8  uint8_t;
-typedef unsigned __int16 uint16_t;
-typedef unsigned __int32 uint32_t;
-typedef unsigned __int64 uint64_t;
+char value[] = "the quick brown fox jumped over the lazy dog 01234567890!@#$%^&*";
 
-#endif
+int
+main(void)
+{
+    SXE_TIME    start_time;
+    unsigned    i;
+    SOPHOS_SHA1 sha1;
+
+    plan_tests(1);
+    start_time = sxe_time_get();
+
+    for (i = 0; sxe_time_get() - start_time < sxe_time_from_unix_time(1); i++) {
+        sophos_sha1(value, sizeof(value) - 1, (char *)&sha1);
+    }
+
+    ok(i > 0, "Computed %u SHA1's of %u byte messages in 1 second", i, sizeof(value) - 1);
+    return exit_status();
+}

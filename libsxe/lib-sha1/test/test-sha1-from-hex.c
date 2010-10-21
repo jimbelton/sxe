@@ -33,25 +33,32 @@ static unsigned char sxe_sha1_expected_bytes[] = {0x2c, 0xe6, 0x79, 0x52, 0x86, 
 int
 main(void)
 {
-    SOPHOS_SHA1 sha1_expected;
-    SOPHOS_SHA1 sha1_got;
+    SOPHOS_SHA1  sha1_expected;
+    SOPHOS_SHA1  sha1_got;
+    char         sha1_in_hex[41];
 
-    plan_tests(3);
+    plan_tests(5);
+
+    /* from hex to bytes */
     ok(sha1_from_hex(&sha1_got, "goofy goober") != SXE_RETURN_OK, "Conversion from hex 'goofy goober' to SHA1 failed");
     is(sha1_from_hex(&sha1_got, SHA1_HEX),         SXE_RETURN_OK, "Conversion from hex '%s' to SHA1 succeeded", SHA1_HEX);
 
     memcpy(&sha1_expected, sxe_sha1_expected_bytes, sizeof(sha1_expected));
 
     if (memcmp(&sha1_got, &sha1_expected, sizeof(SOPHOS_SHA1)) == 0) {
-        pass(                                                         "SHA1 is as expected");
+        pass("SHA1 is as expected");
     }
     else {
         SXEL10("Expected:");
         SXED10(&sha1_expected, sizeof(sha1_expected));
         SXEL10("Got:");
         SXED10(&sha1_got,      sizeof(sha1_got));
-        fail(                                                         "SHA1 is not as expected");
+        fail("SHA1 is not as expected");
     }
+
+    /* from bytes to hex */
+    ok(sha1_to_hex(&sha1_got, sha1_in_hex, sizeof(sha1_in_hex)) == SXE_RETURN_OK, "sha1_to_hex ran successfully");
+    ok(memcmp(sha1_in_hex, SHA1_HEX, sizeof(SHA1_HEX)) == 0, "sha1_to_hex is accurate");
 
     return exit_status();
 }

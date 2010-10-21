@@ -919,14 +919,13 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
     else
 #endif
     {
-        /* If the local address is not INADDR_ANY:0, bind it to the socket.
-         */
-        if ((this->local_addr.sin_addr.s_addr != htonl(INADDR_ANY)) || (this->local_addr.sin_port != 0)) {
+        /* If the local port is not 0, bind it to the socket. */
+        if (this->local_addr.sin_port != 0) {
             SXEL81I("Connecting using local TCP port: %hu", ntohs(this->local_addr.sin_port));
 
             if (bind(that_socket, (struct sockaddr *)&this->local_addr, sizeof(this->local_addr)) == SXE_SOCKET_ERROR_OCCURRED) {
                 if (sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EADDRINUSE)) {
-                    SXEL33I("Can't connect to local TCP port: %hu (%d) %s", ntohs(this->local_addr.sin_port),
+                    SXEL33I("Can't connect using local TCP port: %hu (%d) %s", ntohs(this->local_addr.sin_port),
                             sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
                     result = SXE_RETURN_ERROR_ADDRESS_IN_USE;
                 }

@@ -19,19 +19,44 @@
  * THE SOFTWARE.
  */
 
-/* Simulate ANSI C99 for Visual C++ (another fine MS product) */
+#ifndef __SXE_TIME_H__
+#define __SXE_TIME_H__
 
-#ifndef __SXE_STDINT_H
-#define __SXE_STDINT_H
+#include <stdint.h>
+#include <time.h>
 
-typedef          __int8  int8_t ;
-typedef          __int16 int16_t;
-typedef          __int32 int32_t;
-typedef          __int64 int64_t;
-typedef int              int_least16_t;
-typedef unsigned __int8  uint8_t;
-typedef unsigned __int16 uint16_t;
-typedef unsigned __int32 uint32_t;
-typedef unsigned __int64 uint64_t;
+/* Format: YYYYmmDDHHMMSS[.fff...] + '\0'
+ */
+#define SXE_TIMESTAMP_LENGTH(fractional_digits) (16 + (fractional_digits))
+#define SXE_TIME_BITS_IN_FRACTION               (sizeof(SXE_TIME_FRACTION) * 8)
 
-#endif
+typedef uint64_t SXE_TIME;
+typedef uint32_t SXE_TIME_FRACTION;
+
+static inline time_t
+sxe_time_to_unix_time(SXE_TIME sxe_time)
+{
+    return (time_t)(sxe_time >> SXE_TIME_BITS_IN_FRACTION);
+}
+
+static inline SXE_TIME
+sxe_time_from_unix_time(time_t unix_time)
+{
+    return (SXE_TIME)(unix_time) << SXE_TIME_BITS_IN_FRACTION;
+}
+
+static inline SXE_TIME
+sxe_time_from_double_seconds(double seconds)
+{
+    return ((uint64_t)seconds << SXE_TIME_BITS_IN_FRACTION) + (seconds - (double)(uint64_t)seconds) * (1ULL << 32);
+}
+
+static inline double
+sxe_time_to_double_seconds(SXE_TIME sxe_time)
+{
+    return (double)((uint64_t)sxe_time >> SXE_TIME_BITS_IN_FRACTION) + (double)(uint32_t)sxe_time / (1ULL << 32);
+}
+
+#include "sxe-time-proto.h"
+
+#endif /* __SXE_LOG_H__ */

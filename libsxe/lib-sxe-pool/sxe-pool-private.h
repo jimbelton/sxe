@@ -35,7 +35,7 @@
 typedef struct SXE_POOL_NODE {
     SXE_LIST_NODE list_node;
     union {
-        double   time;
+        SXE_TIME time;
         uint64_t count;
     } last;
 } SXE_POOL_NODE;
@@ -51,7 +51,7 @@ typedef struct SXE_POOL_IMPL {
     SXE_LIST             * queue;
     SXE_POOL_EVENT_TIMEOUT event_timeout;
     void                 * caller_info;
-    double               * state_timeouts;
+    SXE_TIME             * state_timeouts;
     SXE_LIST_NODE          timeout_node;
     uint64_t               next_count;
 } SXE_POOL_IMPL;

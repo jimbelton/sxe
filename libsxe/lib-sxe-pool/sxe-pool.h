@@ -23,6 +23,7 @@
 #define __SXE_POOL_H__
 
 #include "sxe-list.h"
+#include "sxe-time.h"
 #include "sxe-util.h"
 
 #define SXE_POOL_NO_INDEX             -1U
@@ -41,7 +42,7 @@ typedef struct SXE_POOL_WALKER {
     void       * pool;
     unsigned     state;
     union {
-        double   time;
+        SXE_TIME time;
         uint64_t count;
     } last;
 } SXE_POOL_WALKER;

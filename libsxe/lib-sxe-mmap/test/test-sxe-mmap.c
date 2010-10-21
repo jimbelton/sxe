@@ -31,6 +31,7 @@
 #include "sxe-spawn.h"
 #include "sxe-spinlock.h"
 #include "sxe-test.h"
+#include "sxe-time.h"
 #include "tap.h"
 
 #define TEST_FILE_SIZE      (1024 * 1024 * 64)
