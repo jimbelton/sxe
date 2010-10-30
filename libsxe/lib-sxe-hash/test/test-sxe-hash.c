@@ -82,8 +82,8 @@ test_hash_sha1(void)
 
 typedef struct TEST_HASH_STRING_PAYLOAD
 {
-    SOPHOS_SHA1  sha1;
     char         value[8];
+    SOPHOS_SHA1  sha1;
 } TEST_HASH_STRING_PAYLOAD;
 
 static void
@@ -94,7 +94,8 @@ test_hash_sha1_variable_data(void)
     unsigned                   id;
     SOPHOS_SHA1                sha1;
 
-    hash = sxe_hash_new_plus("test_hash_sha1_variable_data", 10, sizeof(TEST_HASH_STRING_PAYLOAD), SXE_HASH_OPTION_UNLOCKED);
+    hash = sxe_hash_new_plus("test_hash_sha1_variable_data", 10, sizeof(TEST_HASH_STRING_PAYLOAD),
+                            offsetof(TEST_HASH_STRING_PAYLOAD, sha1), sizeof(SOPHOS_SHA1), SXE_HASH_OPTION_UNLOCKED);
 
     for (i = 0; i < strings_number; i++) {
         ok((id = sxe_hash_take(hash))           != SXE_HASH_FULL,          "Allocated index %u for element %u of %u",

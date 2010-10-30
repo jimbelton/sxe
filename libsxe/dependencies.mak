@@ -33,10 +33,10 @@ ALL_LIBRARIES    = sxe-sync-ev sxe-pool-tcp sxe-hash sha1 sxe-pool sxe-thread sx
 LIB_DEPENDENCIES = $(call remove_to,$(LIBRARIES),$(ALL_LIBRARIES))
 
 # Convention opt-out list
-CONVENTION_OPTOUT_LIST = lib-mock lib-port
+CONVENTION_OPTOUT_LIST = lib-lookup3 lib-mock lib-port
 
 # Coverage opt-out list
-COVERAGE_OPTOUT_LIST   = lib-mock lib-port lib-sha1 lib-tap
+COVERAGE_OPTOUT_LIST   = lib-lookup3 lib-mock lib-port lib-sha1 lib-tap
 
 include $(TOP.dir)/mak/mak-common.mak
 

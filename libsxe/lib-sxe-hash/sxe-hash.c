@@ -45,22 +45,25 @@
  * @return A pointer to an array of hash elements
  */
 void *
-sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_size, unsigned options)
+sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_size, unsigned key_offset, unsigned key_size,
+                  unsigned options)
 {
     SXE_HASH * hash;
     unsigned   size;
 
-    SXEE82("sxe_hash_new(name=%s,element_count=%u)", name, element_count);
-    size         = sizeof(SXE_HASH) + sxe_pool_size(element_count, element_size,
-                                                    element_count + SXE_HASH_BUCKETS_RESERVED);
+    SXEE86("sxe_hash_new(name=%s,element_count=%u,element_size=%u,key_offset=%u,key_size=$u,options=%u)", name, element_count,
+           element_size, key_offset, key_size, options);
+    size = sizeof(SXE_HASH) + sxe_pool_size(element_count, element_size, element_count + SXE_HASH_BUCKETS_RESERVED);
     SXEA12((hash = malloc(size)) != NULL, "Unable to allocate %u bytes of memory for hash %s", size, name);
     SXEL82("Base address of hash %s = %p", name, hash);
 
     /* Note: hash + 1 == pool base */
-    hash->pool   = sxe_pool_construct(hash + 1, name, element_count, element_size,
-                                      element_count + SXE_HASH_BUCKETS_RESERVED, options);
-    hash->count  = element_count;
-    hash->size   = element_size;
+    hash->pool   = sxe_pool_construct(hash + 1, name, element_count, element_size, element_count + SXE_HASH_BUCKETS_RESERVED,
+                                      options & SXE_HASH_OPTION_LOCKED ? SXE_POOL_OPTION_LOCKED : 0);
+    hash->count      = element_count;
+    hash->size       = element_size;
+    hash->key_offset = key_offset;
+    hash->key_size   = key_size;
 
     SXER81("return array=%p", hash->pool);
     return hash->pool;
@@ -83,7 +86,7 @@ sxe_hash_new(const char * name, unsigned element_count)
 
     SXEE82("sxe_hash_new(name=%s,element_count=%u)", name, element_count);
 
-    array = sxe_hash_new_plus(name, element_count, sizeof(SXE_HASH_KEY_VALUE_PAIR), SXE_HASH_OPTION_UNLOCKED);
+    array = sxe_hash_new_plus(name, element_count, sizeof(SXE_HASH_KEY_VALUE_PAIR), 0, sizeof(SXE_SHA1), SXE_HASH_OPTION_UNLOCKED);
     SXER81("return array=%p", array);
     return array;
 }
@@ -130,16 +133,18 @@ sxe_hash_take(void * array)
 }
 
 /**
- * Default hash key function
+ * Default hash key function; returns the first word of the key; useful when key is a SHA1
  *
- * @param key = Key to hash
+ * @param key  = Key to hash
+ * @param size = Size of key to hash
  *
  * @return Checksum (i.e. hash value) of key
  */
 static unsigned
-sxe_hash_key_default(const void * key)
+sxe_hash_key_default(const void * key, unsigned size)
 {
-    SXEE81("sxe_hash_key_default(key=%s)", key);
+    SXEE83("sxe_hash_key_default(key=%.*s, size=%u)", size, key, size);
+    SXE_UNUSED_PARAMETER(size);
     SXER81("return sum=%u", *(const unsigned *)key);
     return *(const unsigned *)key;
 }
@@ -161,12 +166,12 @@ sxe_hash_look(void * array, const void * key)
     SXE_POOL_WALKER walker;
 
     SXEE82("sxe_hash_look(hash=%s,key=%p)", sxe_pool_get_name(array), key);
-    bucket = sxe_hash_key_default(key) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    bucket = sxe_hash_key_default(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
     SXEL81("Looking in bucket %u", bucket);
     sxe_pool_walker_construct(&walker, array, bucket);
 
     while ((id = sxe_pool_walker_step(&walker)) != SXE_HASH_KEY_NOT_FOUND) {
-        if (memcmp((char *)array + id * hash->size, key, sizeof(SOPHOS_SHA1)) == 0) {
+        if (memcmp((char *)array + id * hash->size + hash->key_offset, key, hash->key_size) == 0) {
             break;
         }
     }
@@ -190,8 +195,8 @@ sxe_hash_add(void * array, unsigned id)
 
     SXEE82("sxe_hash_add(hash=%s,id=%u)", sxe_pool_get_name(array), id);
 
-    key = &((char *)array)[id * hash->size];
-    bucket = sxe_hash_key_default(key) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    key = &((char *)array)[id * hash->size + hash->key_offset];
+    bucket = sxe_hash_key_default(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
     SXEL82("Adding element %u to bucket %u", id, bucket);
     sxe_pool_set_indexed_element_state(array, id, SXE_HASH_NEW_BUCKET, bucket);
     SXER80("return");
@@ -216,12 +221,12 @@ sxe_hash_set(void * array, const char * sha1_as_char, unsigned sha1_key_len, uns
     }
 
     sha1_from_hex(&sha1, sha1_as_char);
-    bucket_index = sxe_hash_key_default(&sha1) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    bucket_index = sxe_hash_key_default(&sha1, sizeof(sha1)) % hash->count + SXE_HASH_BUCKETS_RESERVED;
     sxe_pool_set_indexed_element_state(hash->pool, id, SXE_HASH_NEW_BUCKET, bucket_index);
 
     SXEL91("setting key and value at index=%u", id);
-    memcpy(&hash->pool[id].sha1, &sha1, sizeof(sha1));
-    hash->pool[id].value = value;
+    memcpy(&((SXE_HASH_KEY_VALUE_PAIR *)hash->pool)[id].sha1, &sha1, sizeof(sha1));
+    ((SXE_HASH_KEY_VALUE_PAIR *)hash->pool)[id].value = value;
 
 SXE_EARLY_OUT:
     SXER81("return id=%u", id);
@@ -247,7 +252,7 @@ sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     id = sxe_hash_look(array, &sha1);
 
     if (id != SXE_HASH_KEY_NOT_FOUND) {
-        value = hash->pool[id].value;
+        value = ((SXE_HASH_KEY_VALUE_PAIR *)hash->pool)[id].value;
     }
 
     SXER81("return value=%u", value);
@@ -280,7 +285,7 @@ sxe_hash_remove(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     id = sxe_hash_look(array, &sha1);
 
     if (id != SXE_HASH_KEY_NOT_FOUND) {
-        value = hash->pool[id].value;
+        value = ((SXE_HASH_KEY_VALUE_PAIR *)hash->pool)[id].value;
         sxe_hash_give(array, id);
     }
 

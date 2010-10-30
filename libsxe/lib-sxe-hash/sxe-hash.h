@@ -26,12 +26,13 @@
 
 #include "sha1.h"
 #include "sxe-pool.h"
+#include "sxe-util.h"
 
 #define SXE_HASH_KEY_NOT_FOUND      ~0U
 #define SXE_HASH_FULL               ~0U
 #define SXE_HASH_SHA1_AS_HEX_LENGTH (2 * sizeof(SOPHOS_SHA1))
-#define SXE_HASH_OPTION_LOCKED      SXE_POOL_OPTION_LOCKED
-#define SXE_HASH_OPTION_UNLOCKED    0
+#define SXE_HASH_OPTION_LOCKED       SXE_BIT_OPTION(0)
+#define SXE_HASH_OPTION_UNLOCKED     0
 
 typedef struct SXE_HASH_KEY_VALUE_PAIR {
     SOPHOS_SHA1 sha1;
@@ -39,9 +40,12 @@ typedef struct SXE_HASH_KEY_VALUE_PAIR {
 } SXE_HASH_KEY_VALUE_PAIR;
 
 typedef struct SXE_HASH {
-    SXE_HASH_KEY_VALUE_PAIR * pool;
-    unsigned                  count;
-    unsigned                  size;
+    void   * pool;
+    unsigned count;
+    unsigned size;
+    unsigned key_offset;
+    unsigned key_size;
+    unsigned options;
 } SXE_HASH;
 
 #include "sxe-hash-proto.h"
