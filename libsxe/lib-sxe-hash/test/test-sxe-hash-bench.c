@@ -56,7 +56,6 @@ main(int argc, char * argv[])
         sxe_hash_add(hash, id);
     }
 
-#if TODO
     hash = sxe_hash_new_plus("testhash", 1 << 16, sizeof(SXE_SHA1), 0, sizeof(SXE_SHA1), SXE_HASH_OPTION_UNLOCKED);
     start_time = sxe_time_get();
 
@@ -70,7 +69,6 @@ main(int argc, char * argv[])
         sophos_sha1(key, 8, (char *)&hash[id]);
         sxe_hash_add(hash, id);
     }
-#endif
 
     printf("SHA1: hashed %u 8 byte keys in 1 second\n", i);
     return 0;

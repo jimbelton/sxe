@@ -19,41 +19,6 @@
  * THE SOFTWARE.
  */
 
-#ifndef __SXE_HASH_H__
-#define __SXE_HASH_H__
+#include "sxe-hash.h"
 
-#include <stdint.h>
-
-#include "sha1.h"
-#include "sxe-pool.h"
-#include "sxe-util.h"
-
-#define SXE_HASH_KEY_NOT_FOUND       ~0U
-#define SXE_HASH_FULL                ~0U
-#define SXE_HASH_SHA1_AS_HEX_LENGTH  (2 * sizeof(SOPHOS_SHA1))
-
-#define SXE_HASH_OPTION_UNLOCKED      0
-#define SXE_HASH_OPTION_LOCKED        SXE_BIT_OPTION(0)
-#define SXE_HASH_OPTION_PREHASHED     0
-#define SXE_HASH_OPTION_LOOKUP3_HASH  SXE_BIT_OPTION(2)
-
-/* Classic hash: prehashed SHA1 key to unsigned value
- */
-typedef struct SXE_HASH_KEY_VALUE_PAIR {
-    SOPHOS_SHA1 sha1;
-    int         value;
-} SXE_HASH_KEY_VALUE_PAIR;
-
-typedef struct SXE_HASH {
-    void      * pool;
-    unsigned    count;
-    unsigned    size;
-    unsigned    key_offset;
-    unsigned    key_size;
-    unsigned    options;
-    unsigned (* hash_key)(const void * key, unsigned size);
-} SXE_HASH;
-
-#include "lib-sxe-hash-proto.h"
-#endif
-
+#define SXE_HASH_ARRAY_TO_IMPL(array) ((SXE_HASH *)sxe_pool_to_base(array) - 1)
