@@ -35,7 +35,7 @@
 #define SXE_HASH_OPTION_UNLOCKED      0
 #define SXE_HASH_OPTION_LOCKED        SXE_BIT_OPTION(0)
 #define SXE_HASH_OPTION_PREHASHED     0
-#define SXE_HASH_OPTION_LOOKUP3_HASH  SXE_BIT_OPTION(2)
+#define SXE_HASH_OPTION_LOOKUP3_HASH  SXE_BIT_OPTION(1)
 
 /* Classic hash: prehashed SHA1 key to unsigned value
  */

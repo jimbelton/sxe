@@ -45,31 +45,26 @@ main(int argc, char * argv[])
     hash = sxe_hash_new_plus("testhash", 1 << 16, sizeof(SXE_SHA1), 0, sizeof(SXE_SHA1), SXE_HASH_OPTION_UNLOCKED);
     start_time = sxe_time_get();
 
-    for (i = 0; sxe_time_get() - start_time < sxe_time_from_unix_time(1); i++) {
-        if ((id = sxe_hash_take(hash)) == SXE_HASH_FULL) {
-            i = i *  (sxe_time_get() - start_time) / sxe_time_from_unix_time(1);
-            break;
-        }
-
+    for (i = 0; i < 10000; i++) {
+        id = sxe_hash_take(hash);
         snprintf(key, sizeof(key), "%08x", i);
         sophos_sha1(key, 8, (char *)&hash[id]);
         sxe_hash_add(hash, id);
     }
 
-    hash = sxe_hash_new_plus("testhash", 1 << 16, sizeof(SXE_SHA1), 0, sizeof(SXE_SHA1), SXE_HASH_OPTION_UNLOCKED);
+    printf("SHA1: times %llu .. %llu = %llu\n", start_time, sxe_time_get(), sxe_time_get() - start_time);
+    printf("SHA1: hashed %u 8 bytes keys per second\n", (unsigned)(((uint64_t)i << 32) / (sxe_time_get() - start_time)));
+
+    hash = sxe_hash_new_plus("testhash", 1 << 16, sizeof(SXE_SHA1), 0, 8, SXE_HASH_OPTION_UNLOCKED | SXE_HASH_OPTION_LOOKUP3_HASH);
     start_time = sxe_time_get();
 
-    for (i = 0; sxe_time_get() - start_time < sxe_time_from_unix_time(1); i++) {
-        if ((id = sxe_hash_take(hash)) == SXE_HASH_FULL) {
-            i = i *  (sxe_time_get() - start_time) / sxe_time_from_unix_time(1);
-            break;
-        }
-
-        snprintf(key, sizeof(key), "%08x", i);
-        sophos_sha1(key, 8, (char *)&hash[id]);
+    for (i = 0; i < 10000; i++) {
+        id = sxe_hash_take(hash);
+        snprintf((char *)&hash[id], sizeof(key), "%08x", i);
         sxe_hash_add(hash, id);
     }
 
-    printf("SHA1: hashed %u 8 byte keys in 1 second\n", i);
+    printf("lookup3: hashed %u 8 byte keys per second\n", (unsigned)(((uint64_t)i << 32) / (sxe_time_get() - start_time)));
+
     return 0;
 }

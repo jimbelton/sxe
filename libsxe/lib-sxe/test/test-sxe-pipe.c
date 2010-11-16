@@ -98,7 +98,7 @@ main(void)
     (void)test_event_read;
     (void)test_event_close;
 #else
-    unsigned short port = 9091;
+    unsigned short port;
     char           path[64];
     char           buffer[4096];
     pid_t          pid;
@@ -109,16 +109,16 @@ main(void)
     sxe_register(6, 0);
     is(sxe_init(), SXE_RETURN_OK,                                                        "sxe_init succeeded");
 
-    tcp_listener  = sxe_new_tcp(NULL, "INADDR_ANY", port, test_event_tcp_connected, test_event_read, test_event_close);
+    tcp_listener  = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_tcp_connected, test_event_read, test_event_close);
     ok(tcp_listener != NULL,                                                             "Allocated TCP listener");
-    ok(sxe_listen(tcp_listener) == SXE_RETURN_OK,                                        "Listening for TCP connections");
-
+    is(sxe_listen(tcp_listener), SXE_RETURN_OK,                                          "Listening for TCP connections");
+    port = SXE_LOCAL_PORT(tcp_listener);
     tcp_connector = sxe_new_tcp(NULL, "INADDR_ANY", 0,    test_event_tcp_connected, test_event_read, test_event_close);
     ok(tcp_connector != NULL,                                                            "Allocated TCP connector");
     ok(sxe_connect(tcp_connector, "127.0.0.1", port) == SXE_RETURN_OK,                   "Initiated TCP connection");
 
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(2)), "test_event_tcp_connected",      "One side of the TCP connection");
-    is_eq(tap_ev_identifier(test_tap_ev_shift_wait(2)), "test_event_tcp_connected",      "The other side of the TCP connection");
+    is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_tcp_connected",      "The other side of the TCP connection");
     ok(tcp_accepted != NULL,                                                             "TCP connection accepted");
 
     pid = getpid();

@@ -21,6 +21,7 @@
 
 #include <string.h>
 
+#include "lookup3.h"
 #include "sxe-hash-private.h"
 
 #define SXE_HASH_UNUSED_BUCKET    0
@@ -28,12 +29,32 @@
 #define SXE_HASH_BUCKETS_RESERVED 2
 
 /**
+ * Default hash key function; returns the first word of the key; useful when key is a SHA1
+ *
+ * @param key  = Key to hash
+ * @param size = Size of key to hash
+ *
+ * @return Checksum (i.e. hash value) of key
+ */
+static unsigned
+sxe_prehashed_key_hash(const void * key, unsigned size)
+{
+    SXEE83("sxe_prehashed_key_hash(key=%.*s, size=%u)", size, key, size);
+    SXE_UNUSED_PARAMETER(size);
+    SXER81("return sum=%u", *(const unsigned *)key);
+    return *(const unsigned *)key;
+}
+
+/**
  * Allocate and contruct a hash
  *
  * @param name          = Name of the hash, used in diagnostics
  * @param element_count = Maximum number of elements in the hash
- * @param element_size  = Size of each element in the hash
- * @param options       = SXE_HASH_OPTION_LOCKED | SXE_HASH_OPTION_UNLOCKED
+ * @param element_size  = Size of each element in the hash in bytes
+ * @param key_offset    = Offset of start of key from start of element in bytes
+ * @param key_size      = Size of the key in bytes
+ * @param options       = SXE_HASH_OPTION_UNLOCKED  | SXE_HASH_OPTION_LOCKED       (single threaded  or use locking)
+ *                      + SXE_HASH_OPTION_PREHASHED | SXE_HASH_OPTION_LOOKUP3_HASH (key is prehashed or use lookup3)
  *
  * @return A pointer to an array of hash elements
  */
@@ -57,6 +78,7 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
     hash->size       = element_size;
     hash->key_offset = key_offset;
     hash->key_size   = key_size;
+    hash->hash_key   = options & SXE_HASH_OPTION_LOOKUP3_HASH ? lookup3_hash : sxe_prehashed_key_hash;
 
     SXER81("return array=%p", hash->pool);
     return hash->pool;
@@ -103,23 +125,6 @@ sxe_hash_take(void * array)
 }
 
 /**
- * Default hash key function; returns the first word of the key; useful when key is a SHA1
- *
- * @param key  = Key to hash
- * @param size = Size of key to hash
- *
- * @return Checksum (i.e. hash value) of key
- */
-unsigned
-sxe_hash_private_key_default(const void * key, unsigned size)
-{
-    SXEE83("sxe_hash_private_key_default(key=%.*s, size=%u)", size, key, size);
-    SXE_UNUSED_PARAMETER(size);
-    SXER81("return sum=%u", *(const unsigned *)key);
-    return *(const unsigned *)key;
-}
-
-/**
  * Look for a key in the hash
  *
  * @param array = Pointer to the hash array
@@ -136,7 +141,7 @@ sxe_hash_look(void * array, const void * key)
     SXE_POOL_WALKER walker;
 
     SXEE82("sxe_hash_look(hash=%s,key=%p)", sxe_pool_get_name(array), key);
-    bucket = sxe_hash_private_key_default(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    bucket = hash->hash_key(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
     SXEL81("Looking in bucket %u", bucket);
     sxe_pool_walker_construct(&walker, array, bucket);
 
@@ -166,7 +171,7 @@ sxe_hash_add(void * array, unsigned id)
     SXEE82("sxe_hash_add(hash=%s,id=%u)", sxe_pool_get_name(array), id);
 
     key = &((char *)array)[id * hash->size + hash->key_offset];
-    bucket = sxe_hash_private_key_default(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
+    bucket = hash->hash_key(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
     SXEL82("Adding element %u to bucket %u", id, bucket);
     sxe_pool_set_indexed_element_state(array, id, SXE_HASH_NEW_BUCKET, bucket);
     SXER80("return");

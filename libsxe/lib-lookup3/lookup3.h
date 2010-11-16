@@ -21,7 +21,6 @@
 
 #ifndef __LOOKUP3_H__
 #define __LOOKUP3_H__
-
+#include <stdint.h>
 #include "lookup3-proto.h"
 #endif
-

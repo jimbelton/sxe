@@ -39,12 +39,14 @@
 int
 main(void)
 {
-    SXE_HASH * hash;
-    int        i;
-    int        counter[MAX_BUCKET_INDEX];
+    SXE_HASH    * hash;
+    unsigned      i;
+    unsigned      id;
+    unsigned      bucket;
+    int           counter[MAX_BUCKET_INDEX];
     SXE_LOG_LEVEL old_log_level;
 
-    plan_tests(1);
+    plan_tests(2);
     old_log_level = sxe_log_level;
     sxe_log_level = SXE_LOG_LEVEL_DEBUG;
 
@@ -53,25 +55,45 @@ main(void)
 
     for (i = 0; i < HASH_SIZE; i++)
     {
-        unsigned id;
-        char     in_buf[5];
-        char     out_buf[41];
+        char in_buf[5];
+        char out_buf[41];
 
         snprintf(in_buf, 5, "%d", i);
         sha1sum( in_buf, 4, out_buf);
         id = sxe_hash_set(hash, out_buf, SXE_HASH_SHA1_AS_HEX_LENGTH, 1U);
-        id = sxe_pool_index_to_state(hash, id);
-        SXEA11(id < MAX_BUCKET_INDEX, "Bucket index %u is out of range", id);
-        counter[id]++;
+        bucket = sxe_pool_index_to_state(hash, id);
+        SXEA11(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
+        counter[bucket]++;
 
-        if (counter[id] > MAX_ALLOWED_PER_BUCKET_INDEX) {
-            diag("Count at bucket index %u is greater than %u", counter[id], MAX_ALLOWED_PER_BUCKET_INDEX);
+        if (counter[bucket] > MAX_ALLOWED_PER_BUCKET_INDEX) {
+            diag("Count at bucket index %u is greater than %u", counter[bucket], MAX_ALLOWED_PER_BUCKET_INDEX);
             break;
         }
     }
 
-    sxe_log_level = old_log_level;
+    is(i, HASH_SIZE, "%u items SHA1 hashed and no bucket has more that %u entries", i, MAX_ALLOWED_PER_BUCKET_INDEX);
 
-    is(i, HASH_SIZE, "%u items hashed and no bucket has more that %u entries", i, MAX_ALLOWED_PER_BUCKET_INDEX);
+    memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
+    hash = sxe_hash_new_plus("lookup3", HASH_SIZE, sizeof(SXE_HASH), 0, 8, SXE_HASH_OPTION_LOOKUP3_HASH);
+
+    for (i = 0; i < HASH_SIZE; i++)
+    {
+        id = sxe_hash_take(hash);
+        snprintf((char *)&hash[id], 9, "%08x", i);
+        sxe_hash_add(hash, id);
+
+        bucket = sxe_pool_index_to_state(hash, id);
+        SXEA11(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
+        counter[bucket]++;
+
+        if (counter[bucket] > MAX_ALLOWED_PER_BUCKET_INDEX + 1) {
+            diag("Count at bucket index %u is greater than %u", counter[bucket], MAX_ALLOWED_PER_BUCKET_INDEX + 1);
+            break;
+        }
+    }
+
+    is(i, HASH_SIZE, "%u items lookup3 hashed and no bucket has more that %u entries", i, MAX_ALLOWED_PER_BUCKET_INDEX + 1);
+
+    sxe_log_level = old_log_level;
     return exit_status();
 }
