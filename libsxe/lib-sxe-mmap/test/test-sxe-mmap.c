@@ -78,7 +78,7 @@ main(int argc, char ** argv)
 
         shared_spinlock = (SXE_SPINLOCK *)(unsigned)(shared + 1024);
 
-        InterlockedAdd((long* )(unsigned)&shared[0], 1);
+        InterlockedExchangeAdd((long* )(unsigned)&shared[0], 1);
         start_time = sxe_get_time_in_seconds();
 
         while (shared[0] != TEST_MMAP_INSTANCES) {

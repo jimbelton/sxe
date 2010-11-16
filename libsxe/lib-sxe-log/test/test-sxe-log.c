@@ -135,7 +135,8 @@ log_line(SXE_LOG_LEVEL level, char * line)
     case 12:
         is(level, SXE_LOG_LEVEL_FATAL, "Assertions are logged at level FATAL");
         ok((strstr(line, "ERROR: debug assertion 'this != &self' failed at test/test-sxe-log.c") != NULL) ||
-           (strstr(line, "ERROR: debug assertion 'this != &self' failed at sxe/lib-sxe-log/test/test-sxe-log.c") != NULL),
+           (strstr(line, "ERROR: debug assertion 'this != &self' failed at sxe/lib-sxe-log/test/test-sxe-log.c") != NULL) ||
+           (strstr(line, "ERROR: debug assertion 'this != &self' failed at ../libsxe/lib-sxe-log/test/test-sxe-log.c") != NULL),
            "Assertion includes expected stringized test");
 #ifdef WINDOWS_NT
         diag("info: You can expect and ignore a message saying:");
@@ -170,13 +171,16 @@ main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
-    plan_tests(35);
+    plan_tests(41);
 
-    /* sxe_return_to_string() */
+    /* Test sxe_return_to_string()
+     */
     is_eq(sxe_return_to_string(SXE_RETURN_OK),             "OK"            , "sxe_return_to_string(SXE_RETURN_OK) eq \"OK\"");
     is_eq(sxe_return_to_string(SXE_RETURN_ERROR_INTERNAL), "ERROR_INTERNAL", "sxe_return_to_string(SXE_RETURN_ERROR_INTERNAL) eq \"ERROR_INTERNAL\"");
-    is_eq(sxe_return_to_string(~0U),                       "INVALID_VALUE",  "sxe_return_to_string(~0U) eq \"INVALID_VALUE\"");
-
+    is(   sxe_return_to_string(~0U),                        NULL,            "sxe_return_to_string(~0U) == NULL");
+    TEST_CASE_RETURN_TO_STRING(NO_UNUSED_ELEMENTS);
+    TEST_CASE_RETURN_TO_STRING(IN_PROGRESS);
+    TEST_CASE_RETURN_TO_STRING(UNCATEGORIZED);
     TEST_CASE_RETURN_TO_STRING(WARN_CACHE_DOUBLE_INITIALIZED);
     TEST_CASE_RETURN_TO_STRING(WARN_WOULD_BLOCK);
     TEST_CASE_RETURN_TO_STRING(WARN_ALREADY_CLOSED);
@@ -188,8 +192,11 @@ main(int argc, char *argv[]) {
     TEST_CASE_RETURN_TO_STRING(ERROR_ADDRESS_IN_USE);
     TEST_CASE_RETURN_TO_STRING(ERROR_INTERRUPTED);
     TEST_CASE_RETURN_TO_STRING(ERROR_COMMAND_NOT_RUN);
-    TEST_CASE_RETURN_TO_STRING(UNCATEGORIZED);
-    TEST_CASE_RETURN_TO_STRING(INVALID_VALUE);    /* Just for coverage */
+    TEST_CASE_RETURN_TO_STRING(ERROR_LOCK_NOT_TAKEN);
+    TEST_CASE_RETURN_TO_STRING(ERROR_INCORRECT_STATE);
+    TEST_CASE_RETURN_TO_STRING(ERROR_TIMED_OUT);
+    TEST_CASE_RETURN_TO_STRING(ERROR_WRITE_FAILED);
+    TEST_CASE_RETURN_TO_STRING(INVALID_VALUE);           /* Just for coverage */
 
     ok(signal(SIGABRT, test_abort_handler) != SIG_ERR, "Caught abort signal");
     sxe_log_hook_line_out(NULL); /* for coverage */

@@ -47,11 +47,11 @@
  */
 void plan_tests(unsigned int tests);
 
-#ifdef WINDOWS_NT
+#ifdef _WIN32
 #define __func__ __FUNCTION__
 #endif
 
-#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L) && !defined(__GNUC__) && !defined(WINDOWS_NT)
+#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L) && !defined(__GNUC__) && !defined(_WIN32)
 # error "Needs gcc or C99 compiler for variadic macros."
 #else
 

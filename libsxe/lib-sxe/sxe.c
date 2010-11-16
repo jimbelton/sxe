@@ -77,6 +77,7 @@ static unsigned         sxe_free_tail         = SXE_ID_NEXT_NONE;
 static unsigned         sxe_stat_total_accept = 0;
 static unsigned         sxe_stat_total_read   = 0;
 static unsigned         sxe_has_been_inited   = 0;
+static int              sxe_listen_backlog    = SOMAXCONN;
 
 /**
  * Called by each protocol plugin before initialization.
@@ -217,7 +218,9 @@ sxe_new_internal(SXE                    * this              ,
 {
     SXE * that = NULL;
 
-    SXEE83I("sxe_new_internal(sockaddr_in=%08x:%hu, path=%s)", local_addr->sin_addr.s_addr, ntohs(local_addr->sin_port), path);
+    SXEE87I("sxe_new_internal(local_addr=%08x:%hu,in_event_connected=%p,in_event_read=%p,in_event_close=%p,is_tcp=%s,path=%s)",
+            local_addr->sin_addr.s_addr, ntohs(local_addr->sin_port), in_event_connected, in_event_read, in_event_close,
+            is_tcp ? "TRUE" : "FALSE", path);
 
     if (sxe_free_head == SXE_ID_NEXT_NONE) {
         SXEL30I("Warning: ran out of connections, concurrency too high");
@@ -840,7 +843,7 @@ sxe_listen(SXE * this)
         }
     }
 
-    if (this->is_tcp && (listen(socket_listen, SOMAXCONN) < 0)) {
+    if (this->is_tcp && (listen(socket_listen, sxe_listen_backlog) < 0)) {
         SXEL22I("Error listening on socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         goto SXE_EARLY_OUT;
     }
@@ -848,8 +851,8 @@ sxe_listen(SXE * this)
     this->socket       = socket_listen;
     this->socket_as_fd = _open_osfhandle(socket_listen, 0);
     socket_listen      = SXE_SOCKET_INVALID;
-    SXEL86I("connection id of new listen socket is %d, socket_as_fd=%d, SOMAXCONN=%d, address=%s:%hu, path=%s", this->id,
-            this->socket_as_fd, SOMAXCONN, inet_ntoa(this->local_addr.sin_addr), ntohs(this->local_addr.sin_port), this->path);
+    SXEL86I("connection id of new listen socket is %d, socket_as_fd=%d, backlog=%d, address=%s:%hu, path=%s", this->id,
+            this->socket_as_fd, sxe_listen_backlog, inet_ntoa(this->local_addr.sin_addr), ntohs(this->local_addr.sin_port), this->path);
 
     ev_io_init((struct ev_io*)&this->io, (this->is_tcp ? sxe_io_cb_accept : sxe_io_cb_read), this->socket_as_fd, EV_READ);
     ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
@@ -866,6 +869,15 @@ SXE_EARLY_OR_ERROR_OUT:
     return result;
 }
 
+void
+sxe_set_listen_backlog(int listen_backlog)
+{
+    SXEE81("sxe_set_listen_backlog(listen_backlog=%d)", listen_backlog);
+    SXEL82("backlog was %d; now setting to %d", sxe_listen_backlog, listen_backlog);
+    sxe_listen_backlog = listen_backlog;
+    SXER80("return");
+}
+
 SXE_RETURN
 sxe_connect_pipe(SXE * this)
 {
@@ -879,15 +891,47 @@ sxe_connect_pipe(SXE * this)
     return result;
 }
 
+/**
+ * Construct a SXE address
+ *
+ * @param address_out Pointer to address variable, set by function
+ * @param ip          Pointer to '\0' terminated IP address in dotted decimal
+ * @param port        Port number in host byte order
+ *
+ * @return address_out
+ */
+
+const struct sockaddr_in *
+sxe_construct_address(struct sockaddr_in * address_out, const char * ip, unsigned short port)
+{
+    memset(address_out, 0x00, sizeof(*address_out));
+    address_out->sin_family      = AF_INET;
+    address_out->sin_port        = htons(port);
+    address_out->sin_addr.s_addr = inet_addr(ip);
+    return address_out;
+}
+
+/**
+ * Connect a SXE to an address
+ *
+ * @param this Pointer to the SXE
+ * @param ip   Pointer to '\0' terminated IP address in dotted decimal
+ * @param port Port number in host byte order
+ *
+ * @return SXE_RETURN_ERROR_ALREADY_CONNECTED if already connected, SXE_RETURN_ERROR_INTERNAL on unexpected error
+ *         creating/binding/connecting socket, SXE_RETURN_ERROR_ADDRESS_IN_USE if SXE local address is already in use, or
+ *         SXE_RETURN_OK on success.
+ */
+
 SXE_RETURN
 sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
 {
-    SXE_RETURN           result = SXE_RETURN_ERROR_INTERNAL;
-    int                  that_socket;
-    struct sockaddr    * peer_address;
-    SXE_SOCKLEN_T        peer_address_length;
+    SXE_RETURN         result = SXE_RETURN_ERROR_INTERNAL;
+    int                that_socket;
+    struct sockaddr  * peer_address;
+    SXE_SOCKLEN_T      peer_address_length;
 #ifndef _WIN32
-    struct sockaddr_un   pipe_address;
+    struct sockaddr_un pipe_address;
 #endif
 
     SXEE85I("sxe_connect(this=%p, peer_ip==%s, peer_port=%hu) // socket=%d, path=%s", this, peer_ip, peer_port, this->socket, this->path);
@@ -913,14 +957,28 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
         pipe_address.sun_family = AF_UNIX;
         strcpy(pipe_address.sun_path, this->path);
 
-        peer_address        = (struct sockaddr *) &pipe_address;
+        peer_address        = (struct sockaddr *)&pipe_address;
         peer_address_length = sizeof(pipe_address.sun_family) + strlen(pipe_address.sun_path);
     }
     else
 #endif
     {
-        /* If the local port is not 0, bind it to the socket. */
-        if (this->local_addr.sin_port != 0) {
+        /* From ip(7) - Linux man page:
+         *   When a process wants to receive new incoming packets or connections,
+         *   it should bind a socket to a local interface address using bind(2).
+         *   Only one IP socket may be bound to any given local (address, port)
+         *   pair. When INADDR_ANY is specified in the bind call the socket will
+         *   be bound to *ALL* local interfaces. When listen(2) or connect(2) are
+         *               ^^^^^
+         *   called on an unbound socket, it is automatically bound to a random
+         *   free port with the local address set to *INADDR_ANY*.
+         *                                           ^^^^^^^^^^^^
+         * Therefore: If the local address is not INADDR_ANY:0, bind it to the socket. */
+        if (this->local_addr.sin_port == 0) {
+            SXEA10I(this->local_addr.sin_addr.s_addr == htonl(INADDR_ANY), "Port must be non-zero if IP is not INADDR_ANY; see ip(7) Linux man page");
+            SXEL80I("Connecting using local TCP port: randomly allocated by the stack on IP INADDR_ANY");
+        }
+        else {
             SXEL81I("Connecting using local TCP port: %hu", ntohs(this->local_addr.sin_port));
 
             if (bind(that_socket, (struct sockaddr *)&this->local_addr, sizeof(this->local_addr)) == SXE_SOCKET_ERROR_OCCURRED) {
@@ -936,17 +994,10 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
                 goto SXE_ERROR_OUT;
             }
         }
-        else {
-            SXEL80I("Connecting using local TCP port: randomly allocated by the stack");
-        }
 
-        memset(&this->peer_addr,           0x00, sizeof(this->peer_addr));
-        this->peer_addr.sin_family       = AF_INET;
-        this->peer_addr.sin_port         = htons(peer_port);
-        this->peer_addr.sin_addr.s_addr  = inet_addr(peer_ip);
-
+        sxe_construct_address(&this->peer_addr, peer_ip, peer_port);
         peer_address        = (struct sockaddr *)&this->peer_addr ;
-        peer_address_length =              sizeof(this->peer_addr);
+        peer_address_length = sizeof(             this->peer_addr);
     }
 
     sxe_set_socket_options(this, that_socket);

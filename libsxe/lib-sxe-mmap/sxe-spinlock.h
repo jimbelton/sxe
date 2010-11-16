@@ -56,16 +56,15 @@
 
 #if (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__) > 40100
 
-long InterlockedCompareExchange(volatile long * const Destination, const long Exchange, const long Comperand);
-
-__INTRIN_INLINE long InterlockedCompareExchange(volatile long * const Destination, const long Exchange, const long Comperand)
+static inline long
+InterlockedCompareExchange(volatile long * const Destination, const long Exchange, const long Comperand)
 {
     return __sync_val_compare_and_swap(Destination, Comperand, Exchange);
 }
 
-long InterlockedAdd(long volatile * Addend, long Value);
-
-__INTRIN_INLINE long InterlockedAdd(long volatile * Addend, long Value) {
+static inline long
+InterlockedExchangeAdd(long volatile * Addend, long Value)
+{
     return __sync_add_and_fetch(Addend, Value);
 }
 

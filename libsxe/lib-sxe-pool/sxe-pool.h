@@ -26,9 +26,10 @@
 #include "sxe-time.h"
 #include "sxe-util.h"
 
-#define SXE_POOL_NO_INDEX             -1U
-#define SXE_POOL_LOCK_TAKEN           -2U        /* Only used in sxe_pool_set_indexed_element_state_locked() */
-#define SXE_POOL_LOCK_NOT_TAKEN       -3U        /* Used in sxe_pool_*_locked() to indicate we gave up trying to acquire lock */
+#define SXE_POOL_LOCK_TAKEN            0        /* Only used by sxe_pool_set_indexed_element_state() */
+#define SXE_POOL_NO_INDEX             -1U       /* All elements are in use or state is empty         */
+#define SXE_POOL_INCORRECT_STATE      -2U       /* Element is not in the expected state              */
+#define SXE_POOL_LOCK_NOT_TAKEN       -3U       /* We gave up trying to acquire lock                 */
 #define SXE_POOL_NAME_MAXIMUM_LENGTH   31
 
 #define SXE_POOL_OPTION_UNLOCKED       0

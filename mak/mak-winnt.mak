@@ -45,7 +45,7 @@ CC_OUT     = /Fo
 CC_INC     = /I
 
 # For /DFD_SETSIZE=2048 see http://msdn.microsoft.com/en-us/library/6e3b887c.aspx
-CFLAGS     = /c /WX /nologo /Fd$(DST.dir)/vc60.pdb /DWINDOWS_NT=1 /DWIN32 /DFD_SETSIZE=2048 /Dinline=__inline
+CFLAGS     = /c /WX /nologo /Z7 /DWINDOWS_NT=1 /DWIN32 /DFD_SETSIZE=2048 /Dinline=__inline
 ifneq ($(filter debug,$(MAKECMDGOALS)),)
 CFLAGS    += /MTd
 else

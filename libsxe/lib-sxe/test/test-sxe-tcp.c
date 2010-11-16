@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -132,12 +132,13 @@ main(int argc, char *argv[])
 
     /* Test one-shot listeners
      */
-    ++port;
-    ok((listener = sxe_new_tcp(NULL, "INADDR_ANY", port, test_event_connected, test_event_read, test_event_close)) != NULL,
+    port++;
+    ok((listener = sxe_new_tcp(NULL, "127.0.0.1", port, test_event_connected, test_event_read, test_event_close)) != NULL,
                                                                                         "reallocated listener");
     listener->is_accept_oneshot = 1;
-    ok((connector = sxe_new_tcp(NULL, "127.0.0.1", 0, test_event_connected, test_event_read, test_event_close)) != NULL,
+    ok((connector = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_connected, test_event_read, test_event_close)) != NULL,
                                                                                         "re-reallocated connector");
+    sxe_set_listen_backlog(1024);
     is(sxe_listen(listener), SXE_RETURN_OK,                                             "created one-shot listener");
     is(sxe_connect(connector, "127.0.0.1", port), SXE_RETURN_OK,                        "connected to one-shot listener");
     is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_connected", "got 3rd connected event");

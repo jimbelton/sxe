@@ -182,10 +182,11 @@ SXE_ERROR_OUT:
  * @param cmd       = Command to run
  * @param buf       = A buffer for resulting output
  * @param buf_max   = The max length of the buf parameter
+ * @return          = The number of bytes writen
  *
  * @note the command specified will be run in a 'sh -c'
  *
- * @example result = sxe_spawn("ls -la | grep \.log", buf, sizeof(buf));
+ * @example buf_used = sxe_spawn_backticks("ls -la | grep \.log", buf, sizeof(buf));
  */
 
 unsigned int

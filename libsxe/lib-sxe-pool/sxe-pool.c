@@ -20,6 +20,7 @@
  */
 
 #include <errno.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "sxe-list.h"
@@ -29,6 +30,9 @@
 #include "mock.h"
 
 #include "sxe-pool-private.h"
+
+#define SXE_POOL_ON_INCORRECT_STATE_RETURN_FALSE 0
+#define SXE_POOL_ON_INCORRECT_STATE_ABORT        1
 
 static SXE_LIST sxe_pool_timeout_list;
 static unsigned sxe_pool_timeout_count = 0;
@@ -333,21 +337,27 @@ sxe_pool_check_timeouts(void)
 /**
  * Internal lockless function to move a specific object from one state queue to the tail of another
  */
-static void
-sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned old_state, unsigned new_state)
+static bool
+sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned old_state, unsigned new_state,
+                                            unsigned on_incorrect_state)
 {
-    SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
+    bool            success = false;
+    SXE_POOL_IMPL * pool    = SXE_POOL_ARRAY_TO_IMPL(array);
     SXE_POOL_NODE * node;
 
-    SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
-    SXEE84("sxe_pool_set_indexed_element_state_unlocked(pool->name=%s,id=%u,old_state=%u,new_state=%u)",
-           pool->name, id, old_state, new_state);
+    SXEE85("sxe_pool_set_indexed_element_state_unlocked(pool=%s,id=%u,old_state=%u,new_state=%u,on_incorrect_state=%s)",
+           pool->name, id, old_state, new_state,
+           on_incorrect_state == SXE_POOL_ON_INCORRECT_STATE_ABORT ? "ABORT" : "RETURN_FALSE");
 
     node = &SXE_POOL_NODES(pool)[id];
-    SXEA85(SXE_LIST_NODE_GET_ID(&node->list_node) == old_state,
-           "sxe_pool_set_indexed_element_state_unlocked(pool->name=%s,id=%u,old_state=%u,new_state=%u): Object is in state %u",
-           pool->name, node - SXE_POOL_NODES(pool),
-           old_state, new_state, SXE_LIST_NODE_GET_ID(&node->list_node));
+
+    if (SXE_LIST_NODE_GET_ID(&node->list_node) != old_state) {
+        SXEA15(on_incorrect_state != SXE_POOL_ON_INCORRECT_STATE_ABORT,
+               "sxe_pool_set_indexed_element_state_unlocked(pool=%s,id=%u,old_state=%u,new_state=%u): Object is in state %u",
+               pool->name, node - SXE_POOL_NODES(pool), old_state, new_state, SXE_LIST_NODE_GET_ID(&node->list_node));
+        goto SXE_EARLY_OUT;
+    }
+
     sxe_list_remove(&SXE_POOL_QUEUE(pool)[old_state], node);
 
     if (pool->options & SXE_POOL_OPTION_TIMED) {
@@ -358,7 +368,11 @@ sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned 
     }
 
     sxe_list_push(&SXE_POOL_QUEUE(pool)[new_state], &node->list_node);
-    SXER80("return");
+    success = true;
+
+SXE_EARLY_OUT:
+    SXER81("return %s", success ? "true // success" : "false // failure");
+    return success;
 }
 
 /**
@@ -382,11 +396,60 @@ sxe_pool_set_indexed_element_state(void * array, unsigned id, unsigned old_state
         goto SXE_ERROR_OUT;
     }
 
-    sxe_pool_set_indexed_element_state_unlocked(array, id, old_state, new_state);
+    SXEA10(sxe_pool_set_indexed_element_state_unlocked(array, id, old_state, new_state, SXE_POOL_ON_INCORRECT_STATE_ABORT),
+           "sxe_pool_set_indexed_element_state_unlocked failed: internal fatal error");
     sxe_pool_unlock(pool);
 
 SXE_ERROR_OUT:
     SXER81("return %s", sxe_pool_return_to_string(result));
+    return result;
+}
+
+/**
+ * Try to move a specific object from one state queue to the tail of another
+ *
+ * @param array           Pointer to the pool array
+ * @param id              Index of the element to move
+ * @param old_state       State to move the element from
+ * @param new_state_inout Pointer to a state; on input, state to move the element from; on output, state the element is in
+ *
+ * @return id if the move occured (in this case, *new_state_inout will be unchanged); SXE_POOL_INCORRECT_STATE if the element
+ *         was not in old_state (in this case, *new_state_inout will be set to the state the element was in); or
+ *         SXE_POOL_LOCK_NOT_TAKEN if the pool lock could not be taken
+ */
+unsigned
+sxe_pool_try_to_set_indexed_element_state(void * array, unsigned id, unsigned old_state, unsigned * new_state_inout)
+{
+    SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
+    unsigned        result = SXE_POOL_INCORRECT_STATE;
+
+    SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
+    SXEE84("sxe_pool_set_indexed_element_state(pool->name=%s,id=%u,old_state=%u,new_state=%u)",
+           pool->name, id, old_state, *new_state_inout);
+    SXEA83(id < pool->number, "sxe_pool_set_indexed_element_state(pool->name=%s,id=%u): Index is too big (number=%u)",
+           pool->name, id, pool->number);
+    SXEA83(old_state <= pool->states, "state %u is greater than maximum state %u for pool %s", old_state, pool->states, pool->name);
+    SXEA83(*new_state_inout <= pool->states, "state %u is greater than maximum state %u for pool %s", *new_state_inout, pool->states, pool->name);
+
+    if (sxe_pool_lock(pool) == SXE_POOL_LOCK_NOT_TAKEN) {
+        result = SXE_POOL_LOCK_NOT_TAKEN;    /* Coverage exclusion: Add tests before using in multiprocess code */
+        goto SXE_ERROR_OUT;                  /* Coverage exclusion: Add tests before using in multiprocess code */
+    }
+
+    if (sxe_pool_set_indexed_element_state_unlocked(array, id, old_state, *new_state_inout, SXE_POOL_ON_INCORRECT_STATE_RETURN_FALSE)) {
+        result = id;
+    }
+    else {
+        *new_state_inout = sxe_pool_index_to_state(array, id);
+    }
+
+    sxe_pool_unlock(pool);
+
+SXE_ERROR_OUT:
+    SXER81((result == SXE_POOL_LOCK_NOT_TAKEN || result == SXE_POOL_INCORRECT_STATE) ? "return %s" : "return %u",
+           result == SXE_POOL_LOCK_NOT_TAKEN  ? "LOCK_NOT_TAKEN"  :
+           result == SXE_POOL_INCORRECT_STATE ? "INCORRECT_STATE" :
+           (void *)result);
     return result;
 }
 
@@ -419,7 +482,8 @@ sxe_pool_set_oldest_element_state(void * array, unsigned old_state, unsigned new
     }
 
     result = node - SXE_POOL_NODES(pool);
-    sxe_pool_set_indexed_element_state_unlocked(array, result, old_state, new_state);
+    SXEA10(sxe_pool_set_indexed_element_state_unlocked(array, result, old_state, new_state, SXE_POOL_ON_INCORRECT_STATE_ABORT),
+           "sxe_pool_set_indexed_element_state_unlocked failed: internal fatal error");
 
 SXE_EARLY_OUT:
     sxe_pool_unlock(pool);
@@ -448,7 +512,8 @@ sxe_pool_touch_indexed_element(void * array, unsigned id)
 
     node  = &SXE_POOL_NODES(pool)[id];
     state = SXE_LIST_NODE_GET_ID(&node->list_node);
-    sxe_pool_set_indexed_element_state_unlocked(array, id, state, state);
+    SXEA10(sxe_pool_set_indexed_element_state_unlocked(array, id, state, state, SXE_POOL_ON_INCORRECT_STATE_ABORT),
+           "sxe_pool_set_indexed_element_state_unlocked failed: internal fatal error");
     sxe_pool_unlock(pool);
 
 SXE_ERROR_OUT:
@@ -470,7 +535,7 @@ sxe_pool_get_oldest_element_index(void * array, unsigned state)
     SXEA83(state <= pool->states, "state %u is greater than maximum state %u for pool %s", state, pool->states, pool->name);
 
     if ((node = sxe_list_peek_head(&SXE_POOL_QUEUE(pool)[state])) == NULL) {
-        SXEL82("No objects in state %u, returning SXE_POOL_NO_INDEX", pool->name, state);
+        SXEL81("No objects in state %u, returning SXE_POOL_NO_INDEX", state);
         goto SXE_EARLY_OUT;
     }
 
@@ -508,9 +573,35 @@ sxe_pool_get_oldest_element_time(void * array, unsigned state)
     last_time = node->last.time;
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER81("return %f", last_time);
+    SXER81("return %f", sxe_time_to_double_seconds(last_time));
     return last_time;
 }
+
+/**
+ * Get the time of a given object has been in it's current state,  by index
+ *
+ * @param array = Pointer to the pool array
+ * @param state = State to check
+ *
+ * @exception Release mode assertion: the pool must be a timed pool
+ */
+SXE_TIME
+sxe_pool_get_element_time_by_index(void * array, unsigned element)
+{
+    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
+    SXE_POOL_NODE * node;
+
+    SXEE82("sxe_pool_get_element_time_by_index(pool->name=%s, index=%u)", pool->name, element);
+    SXEA11(pool->options & SXE_POOL_OPTION_TIMED, "sxe_pool_get_element_time_by_index: pool %s is not a timed pool", pool->name);
+    SXEA83(element < pool->number, "index %u is greater than maximum index %u for pool %s", element, pool->number, pool->name);
+
+    node = &SXE_POOL_NODES(pool)[element];
+
+SXE_EARLY_OR_ERROR_OUT:
+    SXER81("return %llu", node->last.time);
+    return node->last.time;
+}
+
 
 void
 sxe_pool_delete(void * array)

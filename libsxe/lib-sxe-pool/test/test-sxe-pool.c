@@ -132,9 +132,11 @@ main(void)
     SXE_TIME        oldtime;
     SXE_TIME        curtime;
     char            timestamp[SXE_TIMESTAMP_LENGTH(3)];
+    unsigned        state;
+    unsigned        oldest_index;
 
     time(&time_0);
-    plan_tests(110);
+    plan_tests(120);
 
     /* Initialization causes expected state
      */
@@ -188,6 +190,9 @@ main(void)
         oldtime = sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED);
         ok(oldtime                                                != 0,       "Pool not empty so oldest time is %s, not 0",
            sxe_time_to_string(oldtime, timestamp, sizeof(timestamp)));
+        oldest_index = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED);
+        ok(oldtime == sxe_pool_get_element_time_by_index(pool, oldest_index), "Get time by index matches get time by oldest element");
+        
         is(TEST_POOL_GET_NUMBER_FREE(pool),  2  ,                             "Pool state is now: 2 free");
         is(TEST_POOL_GET_NUMBER_USED(pool),  2  ,                             "Pool state is now: 2 used");
 
@@ -205,6 +210,10 @@ main(void)
         is(TEST_POOL_GET_NUMBER_FREE(pool),  2  ,                             "Pool state is now: 2 free");
         is(TEST_POOL_GET_NUMBER_USED(pool),  2  ,                             "Pool state is now: 2 used");
 
+        state = TEST_STATE_FREE;
+        is(sxe_pool_try_to_set_indexed_element_state(pool, 0, TEST_STATE_ABUSED, &state), SXE_POOL_INCORRECT_STATE,
+                                                                              "Element 0 is not in ABUSED state");
+        is(state, TEST_STATE_USED,                                            "Element 0 is in the USED state");
         sxe_pool_set_indexed_element_state(pool, 0, TEST_STATE_USED, TEST_STATE_FREE);
         is(sxe_pool_index_to_state(pool, 0), TEST_STATE_FREE,                 "Index 0 has now been freed");
         is(sxe_pool_index_to_state(pool, 2), TEST_STATE_USED,                 "Index 2 is still in use");
@@ -247,8 +256,11 @@ main(void)
         /* TODO: Better tests of the time values and how the oldest time changes
          *       in different scenarios (touch, mark_free, get_next_free, ...) */
 
-        sxe_pool_set_indexed_element_state(pool, node_a, TEST_STATE_USED, TEST_STATE_FREE);
-        ok(sxe_pool_set_oldest_element_state(pool, TEST_STATE_FREE, TEST_STATE_USED) != node_a, "Doen't immediately reallocate node A after freeing it");
+        state = TEST_STATE_FREE;
+        is(sxe_pool_try_to_set_indexed_element_state(pool, node_a, TEST_STATE_USED, &state), node_a,
+                                                                              "Try to set succeeded in setting element state");
+        is(state, TEST_STATE_FREE,                                            "New state was not changed, as expected");
+        ok(sxe_pool_set_oldest_element_state(pool, TEST_STATE_FREE, TEST_STATE_USED) != node_a, "Doesn't immediately reallocate node A after freeing it");
 
         /* allocate all objects in pool, then test expected behaviour
          */
