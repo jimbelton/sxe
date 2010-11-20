@@ -22,6 +22,8 @@
 #ifndef __SXE_LOG_H__
 #define __SXE_LOG_H__
 
+#include <stdbool.h>
+
 #ifndef SXE_DEBUG
 #   define SXE_DEBUG 0
 #endif
@@ -36,9 +38,9 @@ typedef enum SXE_LOG_LEVEL {
     SXE_LOG_LEVEL_INFORMATION,    /* e.g. SXLd transactions                                  */
     SXE_LOG_LEVEL_DEBUG,          /* e.g. External function entry/return                     */
     SXE_LOG_LEVEL_TRACE,          /* e.g. Internal function entry/return and further logging */
-    SXE_LOG_LEVEL_DUMP,           /* Packet dumps                                            */
+    SXE_LOG_LEVEL_DUMP,           /* e.g. Packet/structure dumps, periodic idle behaviour    */
     SXE_LOG_LEVEL_LIBRARY_TRACE,  /* Trace for generic library functions                     */
-    SXE_LOG_LEVEL_LIBRARY_DUMP,   /* Packet dumps for generic library functions              */
+    SXE_LOG_LEVEL_LIBRARY_DUMP,   /* e.g. Packet/structure dumps, periodic idle behaviour    */
     SXE_LOG_LEVEL_OVER_MAXIMUM    /* Guard value: do not use this                            */
 } SXE_LOG_LEVEL;
 
@@ -49,7 +51,11 @@ typedef enum SXE_LOG_LEVEL {
 
 #define SXE_EARLY_OR_ERROR_OUT goto SXE_EARLY_OUT; SXE_EARLY_OUT: goto SXE_ERROR_OUT; SXE_ERROR_OUT
 
-typedef enum SXE_BOOL { SXE_FALSE = 0, SXE_TRUE = 1 } SXE_BOOL;
+/* For those who like their bools to be SXE
+ */
+typedef bool      SXE_BOOL;
+#define SXE_FALSE false
+#define SXE_TRUE  true
 
 typedef enum SXE_RETURN {
     SXE_RETURN_OK = 0,
@@ -741,6 +747,27 @@ extern SXE_LOG_LEVEL sxe_log_level;
 #define SXEV99(func,con,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)  ((void)(func))
 #define SXED90(ptr,len)
 #endif
+
+#define SXEE50(fmt)                                     SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt                           );}
+#define SXEE51(fmt,a1)                                  SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1                        );}
+#define SXEE52(fmt,a1,a2)                               SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2                     );}
+#define SXEE53(fmt,a1,a2,a3)                            SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2,a3                  );}
+#define SXEE54(fmt,a1,a2,a3,a4)                         SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2,a3,a4               );}
+#define SXEE55(fmt,a1,a2,a3,a4,a5)                      SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2,a3,a4,a5            );}
+#define SXEE56(fmt,a1,a2,a3,a4,a5,a6)                   SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2,a3,a4,a5,a6         );}
+#define SXEE57(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2,a3,a4,a5,a6,a7      );}
+#define SXEE58(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
+#define SXEE59(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log_entry(~0U,5,__FILE__,__LINE__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
+#define SXER50(fmt)                                     SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt                           ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER51(fmt,a1)                                  SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1                        ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER52(fmt,a1,a2)                               SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2                     ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER53(fmt,a1,a2,a3)                            SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2,a3                  ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER54(fmt,a1,a2,a3,a4)                         SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2,a3,a4               ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER55(fmt,a1,a2,a3,a4,a5)                      SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2,a3,a4,a5            ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER56(fmt,a1,a2,a3,a4,a5,a6)                   SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2,a3,a4,a5,a6         ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER57(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2,a3,a4,a5,a6,a7      ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER58(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   ); sxe_log_return(~0U,5,__FILE__,__LINE__);}
+#define SXER59(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_VERBOSITY_AT_LEAST(5) {sxe_log      (~0U,5,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9); sxe_log_return(~0U,5,__FILE__,__LINE__);}
 
 #define SXE_ID4LOG ((this) != NULL ? (this)->id : ~0U)
 

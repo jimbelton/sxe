@@ -29,7 +29,6 @@
 #include "sxe-test.h"
 #include "sxe-util.h"
 #include "tap.h"
-#include "test/common.h"
 
 static void
 test_event_connected(SXE * this)

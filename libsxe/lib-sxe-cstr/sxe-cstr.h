@@ -23,10 +23,11 @@
 #define __SXE_CSTR_H__
 
 #include <stdarg.h>    /* For sxe_cstr_vprintf */
+#include <stdbool.h>
 #include <time.h>      /* For sxe_cstr_ftime   */
 
-#define SXE_CSTR_EMPTY         (const sxe_cstr *)"\0"     /* Empty sxe_cstr   */
-#define SXE_CSTR_LITERAL(text) (const sxe_cstr *)#text    /* Literal sxe_cstr */
+#define SXE_CSTR_EMPTY      ((const SXE_CSTR *)sxe_cstr_empty)
+#define SXE_CSTR_CAST(text) ((const SXE_CSTR *)((text)[0] == '\0' ? sxe_cstr_empty : (const char *)(text)))
 
 /* A sxe_cstr is a counted string (pronounced keester)
  */
@@ -37,15 +38,17 @@ typedef struct SXE_CSTR_IMPL
     unsigned        size;       /* Size of buffer.                    */
     unsigned short  len;        /* Length of buffer.                  */
     char *          buf;        /* Pointer to buffer if static.       */
-} sxe_cstr;
+} SXE_CSTR;
+
+extern char sxe_cstr_empty[];
 
 #include "lib-sxe-cstr-proto.h"
 
-static inline int sxe_cstr_eq(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) == 0;}
-static inline int sxe_cstr_ge(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) >= 0;}
-static inline int sxe_cstr_gt(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) >  0;}
-static inline int sxe_cstr_le(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) <= 0;}
-static inline int sxe_cstr_lt(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) <  0;}
-static inline int sxe_cstr_ne(const sxe_cstr * left, const sxe_cstr * right) {return sxe_cstr_cmp(left, right) != 0;}
+static inline bool sxe_cstr_eq(const SXE_CSTR * left, const SXE_CSTR * right) {return sxe_cstr_cmp(left, right) == 0;}
+static inline bool sxe_cstr_ge(const SXE_CSTR * left, const SXE_CSTR * right) {return sxe_cstr_cmp(left, right) >= 0;}
+static inline bool sxe_cstr_gt(const SXE_CSTR * left, const SXE_CSTR * right) {return sxe_cstr_cmp(left, right) >  0;}
+static inline bool sxe_cstr_le(const SXE_CSTR * left, const SXE_CSTR * right) {return sxe_cstr_cmp(left, right) <= 0;}
+static inline bool sxe_cstr_lt(const SXE_CSTR * left, const SXE_CSTR * right) {return sxe_cstr_cmp(left, right) <  0;}
+static inline bool sxe_cstr_ne(const SXE_CSTR * left, const SXE_CSTR * right) {return sxe_cstr_cmp(left, right) != 0;}
 
 #endif

@@ -27,7 +27,6 @@
 #include "sxe-test.h"
 #include "sxe-util.h"
 #include "tap.h"
-#include "test/common.h"
 
 #define TEST_PORT 9191
 
@@ -428,7 +427,7 @@ main(void)
      */
     sxe_close(listener);
     sxe_close(listener);
-    ev_loop_nonblock();    /* Post process any unexpected events triggered by the close. */
+    test_process_all_libev_events();    /* Post process any unexpected events triggered by the close. */
     is(tap_ev_length(), 0,                                                   "Double close: No further events generated");
 
     is(sxe_fini(), SXE_RETURN_OK,                                            "finished with sxe");

@@ -29,7 +29,6 @@
 #include "sxe-test.h"
 #include "sxe-util.h"
 #include "tap.h"
-#include "test/common.h"
 
 static void
 test_event_connected(SXE * this)
@@ -128,7 +127,7 @@ main(int argc, char *argv[])
     /* Write to a peer who has closed
      */
     is(sxe_write(connector, "HELLO AGAIN", 11), SXE_RETURN_ERROR_NO_CONNECTION,         "can't write to a closed SXE object");
-    ev_loop_nonblock();
+    test_process_all_libev_events();
 
     /* Test one-shot listeners
      */

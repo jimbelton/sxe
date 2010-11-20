@@ -39,9 +39,17 @@ on 1 byte), but shoehorning those bytes into integers efficiently is messy.
 #include <stdio.h>      /* defines printf for tests */
 #include <time.h>       /* defines time_t for timings in the test */
 #include <stdint.h>     /* defines uint32_t etc */
-#include <sys/param.h>  /* attempt to define endianness */
-#ifdef linux
-# include <endian.h>    /* attempt to define endianness */
+
+#ifdef _WIN32    /* Sophos extension: define endianness for X86 and X64 versions of Windows */
+    #if defined(_M_IX86) || defined(_M_X64)
+        #define __LITTLE_ENDIAN 1
+        #define __BYTE_ORDER    __LITTLE_ENDIAN
+    #endif
+#else
+    #include <sys/param.h>  /* attempt to define endianness */
+    #ifdef linux
+        #include <endian.h>    /* attempt to define endianness */
+    #endif
 #endif
 
 #include "lookup3.h"

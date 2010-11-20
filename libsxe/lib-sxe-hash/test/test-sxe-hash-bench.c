@@ -20,6 +20,7 @@
  */
 
 #include <stdio.h>
+#include <unistd.h>    /* For snprintf on Windows */
 
 #include "sha1.h"
 #include "sxe-hash.h"

@@ -50,6 +50,8 @@ typedef struct SXE_SHA1 {
 
 extern unsigned char sxe_rot13_char[];
 
+#define SXE_BOOL_TO_STR(bool_val) (bool_val) ? "true" : "false"
+
 #include "lib-sxe-util-proto.h"
 
 #endif

@@ -566,7 +566,7 @@ sxe_pool_get_oldest_element_time(void * array, unsigned state)
     SXEA83(state <= pool->states, "state %u is greater than maximum state %u for pool %s", state, pool->states, pool->name);
 
     if ((node = sxe_list_peek_head(&SXE_POOL_QUEUE(pool)[state])) == NULL) {
-        SXEL52("sxe_pool_get_oldest_element_time(pool->name=%s): No objects in state %u", pool->name, state);
+        SXEL82("sxe_pool_get_oldest_element_time(pool->name=%s): No objects in state %u", pool->name, state);
         goto SXE_EARLY_OUT;
     }
 

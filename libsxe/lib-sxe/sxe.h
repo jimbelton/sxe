@@ -22,6 +22,8 @@
 #ifndef __SXE_H__
 #define __SXE_H__
 
+#include <stdbool.h>
+
 #include "ev.h"
 #include "sxe-log.h"        /* For SXE_BOOL */
 #include "sxe-socket.h"

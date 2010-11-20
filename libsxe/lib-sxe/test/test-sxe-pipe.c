@@ -30,7 +30,6 @@
 #include "sxe-test.h"
 #include "sxe-util.h"
 #include "tap.h"
-#include "test/common.h"
 
 #if (SXE_BUF_SIZE >= 2048) || (SXE_BUF_SIZE < 1024)
 #   error "Message size must be changed (SXE_BUF_SIZE < 1024 or >= 2048)"

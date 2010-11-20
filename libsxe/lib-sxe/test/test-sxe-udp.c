@@ -1,15 +1,15 @@
 /* Copyright (c) 2010 Sophos Group.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -57,15 +57,6 @@ event_read(SXE * this, int length)
     }
 
     SXER60("return");
-}
-
-static int
-test_ev_loop_nonblock(void)
-{
-    SXEE61("%s()", __func__);
-    ev_loop(ev_default_loop(EVFLAG_AUTO), EVLOOP_NONBLOCK);
-    SXER60("return");
-    return 1;
 }
 
 #define SXE_CAST_SSIZE_T_TO_LONG(_x) ((long)(_x))
@@ -189,7 +180,7 @@ test_case_sxe_udp_both_ends(void)
 
     is(sxe_write_to(client, "HELo\n", 5, &addr), SXE_RETURN_OK, "Sent query to server");
     test_ev_loop_wait(2);
-    test_ev_loop_nonblock();
+    test_process_all_libev_events();
 
     is(server_read_event_count, 1, "Received event for server read");
     is(client_read_event_count, 0, "No events received on client");
@@ -225,7 +216,7 @@ test_case_sxe_udp_happy_path(void)
         diag("Error: %s", sxe_socket_get_last_error_as_str());
     }
 
-    test_ev_loop_nonblock();
+    test_process_all_libev_events();
     is(read_state, 1, "Received the first UDP packet");
     client_addr.sin_family      = AF_INET;
     client_addr.sin_port        = htons(remote_port);
@@ -263,7 +254,7 @@ test_case_sxe_recvfrom_sendto_errors(void)
         sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
     MOCK_SKIP_END;
     MOCK_SET_HOOK(recvfrom, test_recvfrom);
-    test_ev_loop_nonblock();
+    test_process_all_libev_events();
     MOCK_SET_HOOK(recvfrom, recvfrom);
     is(read_state, 1, "Did not receive another UDP packet");
 
@@ -284,10 +275,8 @@ test_case_sxe_recvfrom_sendto_errors(void)
 }
 
 int
-main(int argc, char *argv[]) {
+main(void) {
     plan_tests(28);
-    SXE_UNUSED_PARAMETER(argc);
-    SXE_UNUSED_PARAMETER(argv);
 
     /* TODO: investigate failure on windows if udp_both_ends is run after happy_path test
      *   - it seems ev has an issue re-using a previously closed fd */

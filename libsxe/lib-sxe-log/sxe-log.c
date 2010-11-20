@@ -265,7 +265,7 @@ sxe_log_buffer_set_prefix(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
              mytm.tm_mday, mytm.tm_hour, mytm.tm_min, mytm.tm_sec, mytv.tv_usec / 1000, ProcessId);
 #endif
 
-    if (id == ~0U) {
+    if (id == ~0U || id == (~0U - 1)) {
         strcat(log_buffer, "------ ");
     }
     else {
@@ -316,7 +316,7 @@ sxe_log(unsigned id, SXE_LOG_LEVEL level, const char *fmt, ...)
     i = sxe_log_buffer_set_prefix(log_buffer, id, level);
     va_start(ap, fmt);
 
-    if (!sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s- ", SXE_LOG_INDENT * 2, "")) ||
+    if (!sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s%s", SXE_LOG_INDENT * 2, "", (id == ~0U - 1) ? "" : "- ")) ||
         !sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, fmt    , ap                          )))
     {
         goto SXE_EARLY_OUT;

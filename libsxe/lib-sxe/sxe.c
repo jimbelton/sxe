@@ -80,6 +80,41 @@ static unsigned         sxe_has_been_inited   = 0;
 static int              sxe_listen_backlog    = SOMAXCONN;
 
 /**
+ * Check the validity of a SXE
+ *
+ * @param this = the SXE
+ *
+ * @return true if valid, false if not
+ */
+
+bool
+sxe_is_valid(SXE * this)
+{
+    bool valid = false;
+
+    SXEE81("sxe_is_valid(this=%p)", this);
+    SXEL93("SXE array %p, total %u and size %u", sxe_array, sxe_array_total, sizeof(SXE) + sxe_extra_size);
+
+    if ((this < sxe_array) || ((char *)this > (char *)sxe_array + (sxe_array_total - 1) * (sizeof(SXE) + sxe_extra_size))) {
+        SXEL83("SXE pointer %p is not in the valid range %p to %p", this, sxe_array,
+               (char *)sxe_array + (sxe_array_total - 1) * (sizeof(SXE) + sxe_extra_size));
+        goto SXE_EARLY_OUT;
+    }
+
+    if (((char *)this - (char *)sxe_array) % (sizeof(SXE) + sxe_extra_size) != 0) {
+        SXEL83("SXE pointer %p is not a multiple of %u bytes from the base address %p", this, sizeof(SXE) + sxe_extra_size,
+               sxe_array);
+        goto SXE_EARLY_OUT;
+    }
+
+    valid = true;
+
+SXE_EARLY_OUT:
+    SXER81("return %s", SXE_BOOL_TO_STR(valid));
+    return valid;
+}
+
+/**
  * Called by each protocol plugin before initialization.
  */
 void
@@ -412,6 +447,7 @@ sxe_io_cb_read(EV_P_ ev_io * io, int revents)
     SXE_SOCKLEN_T            peer_addr_size = sizeof(this->peer_addr);
     int                      length;
     int                      reads_remaining_this_event = SXE_IO_CB_READ_MAXIMUM;
+    int                      last_socket_error = 0;
 #ifndef _WIN32
     struct msghdr            message_header;
     int                      fd_from_recvmsg;
@@ -517,6 +553,7 @@ SXE_TRY_AND_READ_AGAIN:
         else {
             length = recvfrom(this->socket, this->in_buf + this->in_total, sizeof(this->in_buf) - this->in_total, 0,
                               (struct sockaddr *)&this->peer_addr, &peer_addr_size);
+            last_socket_error = sxe_socket_get_last_error();
             SXEA81I(peer_addr_size == sizeof(this->peer_addr), "Peer address is not an IPV4 address (peer_addr_size=%d)",
                     peer_addr_size);
             SXEL83I("Read %d bytes from peer IP %u:%hu", length, inet_ntoa(this->peer_addr.sin_addr),
@@ -554,7 +591,7 @@ SXE_TRY_AND_READ_AGAIN:
         }
         else {
             if (length < 0) {
-                switch (sxe_socket_get_last_error()) {
+                switch ((last_socket_error == 0) ? sxe_socket_get_last_error() : last_socket_error) {
 
                 case SXE_SOCKET_ERROR(EWOULDBLOCK): // EAGAIN
                     SXEL81I("Socket %d is not ready", this->socket);
