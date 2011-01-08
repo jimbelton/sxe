@@ -113,6 +113,7 @@ sxe_return_to_string(SXE_RETURN ret)
     SXE_RETURN_CASE(NO_UNUSED_ELEMENTS);
     SXE_RETURN_CASE(IN_PROGRESS);
     SXE_RETURN_CASE(UNCATEGORIZED);
+    SXE_RETURN_CASE(END_OF_FILE);
     SXE_RETURN_CASE(WARN_CACHE_DOUBLE_INITIALIZED);
     SXE_RETURN_CASE(WARN_WOULD_BLOCK);
     SXE_RETURN_CASE(WARN_ALREADY_CLOSED);
@@ -122,6 +123,7 @@ sxe_return_to_string(SXE_RETURN ret)
     SXE_RETURN_CASE(ERROR_NO_CONNECTION);
     SXE_RETURN_CASE(ERROR_ALREADY_CONNECTED);
     SXE_RETURN_CASE(ERROR_INVALID_URI);
+    SXE_RETURN_CASE(ERROR_BAD_MESSAGE_RECEIVED);
     SXE_RETURN_CASE(ERROR_ADDRESS_IN_USE);
     SXE_RETURN_CASE(ERROR_INTERRUPTED);
     SXE_RETURN_CASE(ERROR_COMMAND_NOT_RUN);
@@ -301,6 +303,43 @@ sxe_log_init(void)
         sxe_log_level = sxe_log_level <= SXE_LOG_LEVEL_MINIMUM ? SXE_LOG_LEVEL_MINIMUM : sxe_log_level;
         sxe_log_level = sxe_log_level >= SXE_LOG_LEVEL_MAXIMUM ? SXE_LOG_LEVEL_MAXIMUM : sxe_log_level;
     }
+}
+
+/**
+ * Set log level
+ *
+ * @param level Level to set (e.g. SXE_LOG_LEVEL_INFO)
+ *
+ * @return Previous log level
+ */
+
+SXE_LOG_LEVEL
+sxe_log_set_level(SXE_LOG_LEVEL level)
+{
+    SXE_LOG_LEVEL level_previous;
+
+    level_previous = sxe_log_level;
+    sxe_log_level  = level;
+    return level_previous;
+}
+
+/**
+ * Decrease log level
+ *
+ * @param level Level to decrease to (e.g. SXE_LOG_LEVEL_WARN); If log level is already less than this value, no action is taken
+ *
+ * @return Previous log level
+ *
+ * @note To restore the log level, set it to the value returned by this function.
+ */
+SXE_LOG_LEVEL
+sxe_log_decrease_level(SXE_LOG_LEVEL level)
+{
+    SXE_LOG_LEVEL level_previous;
+
+    level_previous = sxe_log_level;
+    sxe_log_level  = level < level_previous ? level : level_previous;
+    return level_previous;
 }
 
 void

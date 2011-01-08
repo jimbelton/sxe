@@ -96,9 +96,8 @@ sxe_spawn(SXE                    * this,
         goto SXE_ERROR_OUT;
     }
 
-    result = sxe_listen(that->sxe);
-    SXEA62I(result == SXE_RETURN_OK, "Listen on parent SXE %u failed: %s", SXE_ID(that->sxe), sxe_return_to_string(result));
-    that->sxe->is_accept_oneshot = 1;
+    result = sxe_listen_oneshot(that->sxe);
+    SXEA62I(result == SXE_RETURN_OK, "One-shot listen on parent SXE %u failed: %s", SXE_ID(that->sxe), sxe_return_to_string(result));
     SXEL61I("Listening for a one-shot SXE on port %hu", SXE_LOCAL_PORT(that->sxe));
 
 #ifdef WIN32

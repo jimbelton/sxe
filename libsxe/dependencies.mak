@@ -28,8 +28,8 @@ TOP.dir = $(COM.dir)/..
 # This is used by both the package GNUmakefiles and the top level GNUmakefile
 #
 remove_to = $(if $(filter $(1),$(2)),$(call remove_to,$(1),$(wordlist 2,$(words $(2)),$(2))),$(2))
-ALL_LIBRARIES    = sxe-sync-ev sxe-pool-tcp sxe-hash lookup3 sha1 sxe-pool sxe-thread sxe-mmap sxe-spawn sxe sxe-list \
-                   sxe-socket sxe-test ev sxe-cstr sxe-util sxe-log mock port tap
+ALL_LIBRARIES    = sxe-lua sxe-httpd sxe-http sxe-sync-ev sxe-pool-tcp sxe-hash lookup3 sha1 sxe-spawn sxe sxe-pool sxe-thread \
+				   sxe-mmap sxe-list sxe-socket sxe-test ev lua sxe-cstr sxe-util sxe-log mock port tap
 LIB_DEPENDENCIES = $(call remove_to,$(LIBRARIES),$(ALL_LIBRARIES))
 
 # Convention opt-out list

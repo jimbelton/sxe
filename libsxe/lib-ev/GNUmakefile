@@ -9,12 +9,14 @@ include ../dependencies.mak
 ifeq ($(OS),Windows_NT)
 # Compilation flags which sound good but are not found in the activestate build log for EV
 #CFLAGS += -DDEV_SELECT_IS_WINSOCKET=1
+
 # Compilation flags not found in the activestate build log for EV
 CFLAGS += -DEV_STANDALONE=1
 CFLAGS += -D_USE_32BIT_TIME_T
 CFLAGS += -D_CRT_NONSTDC_NO_DEPRECATE
 CFLAGS += -D_CRT_SECURE_NO_DEPRECATE
 CFLAGS += -D_CRT_SECURE_NO_WARNINGS
+
 # Compilation flags inspired by:
 # http://ppm4.activestate.com/MSWin32-x86/5.10/1000/M/ML/MLEHMANN/EV-3.8.d/log-20090811T021343.txt
 # and
@@ -45,10 +47,7 @@ endif
 
 $(info make: TODO: make coverage test should not complain about lack of .c.gcov files, since there are no tests being run)
 
-release debug coverage:		ev.h
-
-clean::
-	$(DEL) ev.h                        $(TO_NUL) $(FAKE_PASS)
+release debug coverage:		$(DST.dir)/ev.h
 
 $(info make: TODO: use Perl EV module test suite to test our freshly built libev)
 
@@ -60,7 +59,7 @@ $(DST.dir)/ev$(EXT.lib):	$(DST.dir)/ev$(EXT.obj)
 	@$(MAKE_PERL_ECHO) "make: building: $@"
 	$(LIB_CMD) $(LIB_FLAGS) $(LIB_OUT)$@ $^
 
-$(DST.dir)/ev$(EXT.obj):	$(DST.dir)/$(THIRD_PARTY.dir)/ev.c ev.h
+$(DST.dir)/ev$(EXT.obj):	$(DST.dir)/$(THIRD_PARTY.dir)/ev.c $(DST.dir)/ev.h
 	@$(MAKE_PERL_ECHO) "make: building: $@"
 	$(CC) $(CFLAGS) $< $(CC_OUT)$@
 
@@ -86,7 +85,7 @@ endif
 
 $(info make: TODO: update dep. gen. so that temp. files, e.g. ev.h, get copied into $(DST.dir) (and not ./) folder)
 
-ev.h:				$(DST.dir)/$(THIRD_PARTY.dir)/ev.h
+$(DST.dir)/ev.h:			$(DST.dir)/$(THIRD_PARTY.dir)/ev.h
 	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(COPY) $(call OSPATH,$^) $@
+	$(COPY) $(call OSPATH,$^) $(call OSPATH,$@)
 

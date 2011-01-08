@@ -121,9 +121,11 @@ test_case_setup(void)
 static void
 test_case_cleanup(void)
 {
-    test_process_all_libev_events();             /* Don't block, but queue any events that happen to be ready */
-    SXEA10(tap_ev_length()                   == 0, "No unprocessed events are lurking in the client queue");
-    SXEA10(tap_ev_queue_length(server_queue) == 0, "No unprocessed events are lurking in the server queue");
+    tap_ev ev;
+
+    test_process_all_libev_events();               /* Don't block, but queue any events that happen to be ready */
+    SXEA11((ev = tap_ev_shift())                   == NULL, "No unprocessed events in the client queue (%s)", tap_ev_identifier(ev));
+    SXEA11((ev = tap_ev_queue_shift(server_queue)) == NULL, "No unprocessed events in the server queue (%s)", tap_ev_identifier(ev));
     sxe_fini();
 }
 

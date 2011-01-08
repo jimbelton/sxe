@@ -45,6 +45,7 @@
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
+#include <sys/sendfile.h>
 #include <sys/un.h>           /* For pipes (AKA UNIX domain sockets) on UNIX                                 */
 
 #define PIPE_PATH_MAX sizeof(((struct sockaddr_un *)NULL)->sun_path)    /* Maximum size of a UNIX pipe path  */
@@ -53,13 +54,19 @@
 #include "mock.h"
 #include "sxe.h"
 #include "sxe-log.h"
+#include "sxe-pool.h"
 #include "sxe-socket.h"
 #include "sxe-util.h"
 
 /* TODO: change sxld so that the udp packet is read only once by sxld (and not sxe and sxld) */
 
 #define SXE_WANT_CALLER_READS_UDP 0
-#define SXE_ID_NEXT_NONE          ~0U
+
+typedef enum SXE_STATE {
+    SXE_STATE_FREE,
+    SXE_STATE_USED,
+    SXE_STATE_NUMBER_OF_STATES
+} SXE_STATE;
 
 typedef union SXE_CONTROL_MESSAGE_FD {
     struct cmsghdr alignment;
@@ -68,16 +75,16 @@ typedef union SXE_CONTROL_MESSAGE_FD {
 
 int                     sxe_caller_read_udp_length;      /* If is_caller_reads_udp caller returns length read here */
 struct ev_loop        * sxe_private_main_loop = NULL;    /* Private to this package; do not export via sxe.h       */
+
 static unsigned         sxe_extra_size        = 0;
 static unsigned         sxe_array_total       = 0;
-static unsigned         sxe_array_used        = 0;
 static SXE            * sxe_array             = NULL;
-static unsigned         sxe_free_head         = SXE_ID_NEXT_NONE;
-static unsigned         sxe_free_tail         = SXE_ID_NEXT_NONE;
 static unsigned         sxe_stat_total_accept = 0;
 static unsigned         sxe_stat_total_read   = 0;
 static unsigned         sxe_has_been_inited   = 0;
 static int              sxe_listen_backlog    = SOMAXCONN;
+
+static inline bool sxe_is_free(SXE * this) {return sxe_pool_index_to_state(sxe_array, this->id) == SXE_STATE_FREE;}
 
 /**
  * Check the validity of a SXE
@@ -152,40 +159,30 @@ sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 #endif
 
 /**
- * Called at initialization after all plugins have registered.
+ * Initialize SXE objects
+ *
+ * @return    SXE_RETURN_OK
+ *
+ * @note      Call at initialization after all plugins have registered
+ *
+ * @exception Aborts if SXE is already initialized, sxe_register has not been called, or memory cannot be allocated
  */
 SXE_RETURN
 sxe_init(void)
 {
     SXE_RETURN       result = SXE_RETURN_ERROR_INTERNAL;
-    unsigned         i;
     struct sigaction sigaction_saved;
 
     SXEE80("sxe_init()");
-    SXEA10(sxe_array_total > 0, "Error: sxe_register() needs to be called before sxe_init()");
-
+    SXEA10(!sxe_has_been_inited, "sxe_init: SXE is already initialized");
+    SXEA10(sxe_array_total > 0,  "sxe_init: Error: sxe_register() must be called before sxe_init()");
     sxe_socket_init();
 
     /* TODO: Check that sxe_array_total is smaller than system ulimit -n */
 
-    SXEL82("calloc(%d, %d)", sizeof(SXE) + sxe_extra_size, sxe_array_total);
-    sxe_array = calloc(sizeof(SXE) + sxe_extra_size, sxe_array_total);
-
-    if (sxe_array == NULL) {
-        SXEL12("calloc() failed for %d connections: %s", sxe_array_total, strerror(errno));
-        result = SXE_RETURN_ERROR_ALLOC;
-        goto SXE_EARLY_OUT;
-    }
-
-    for (i = 0; i < sxe_array_total; ++i) {
-        sxe_array[i].id      =  i;
-        sxe_array[i].id_next = (i + 1);
-        sxe_array[i].socket  = SXE_SOCKET_INVALID;
-    }
-
-    sxe_free_head                    = 0;
-    sxe_free_tail                    = sxe_array_total - 1;
-    sxe_array[sxe_free_tail].id_next = SXE_ID_NEXT_NONE;
+    SXEL82("Allocating %u SXEs of %u bytes each", sxe_array_total, sizeof(SXE) + sxe_extra_size);
+    sxe_array = sxe_pool_new("sxe_pool", sxe_array_total, sizeof(SXE) + sxe_extra_size, SXE_STATE_NUMBER_OF_STATES,
+                             SXE_POOL_OPTION_TIMED);
 
     if (!sxe_private_main_loop) {
         /* Initialize libev, but don't let it take over the SIGCHLD signal.
@@ -204,9 +201,6 @@ sxe_init(void)
 
     sxe_has_been_inited = 1;
     result = SXE_RETURN_OK;
-
-SXE_EARLY_OR_ERROR_OUT:
-
     SXER81("return %s", sxe_return_to_string(result));
     return result;
 }
@@ -218,23 +212,18 @@ sxe_fini(void)
     SXEE80("sxe_fini()");
 
     if (sxe_array == NULL) {
-        SXEL80("sxe_fini() called before sxe_init()");
+        SXEL80("sxe_fini(): called before successful sxe_init()");
         goto SXE_ERROR_OUT;
     }
 
-    free(sxe_array);
-
+    sxe_pool_delete(sxe_array);
     sxe_extra_size        = 0;
     sxe_array_total       = 0;
-    sxe_array_used        = 0;
     sxe_array             = NULL;
-    sxe_free_head         = SXE_ID_NEXT_NONE;
-    sxe_free_tail         = SXE_ID_NEXT_NONE;
     sxe_stat_total_accept = 0;
     sxe_stat_total_read   = 0;
     sxe_has_been_inited   = 0;
-
-    result = SXE_RETURN_OK;
+    result                = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
 
@@ -248,44 +237,37 @@ sxe_new_internal(SXE                    * this              ,
                  SXE_IN_EVENT_CONNECTED   in_event_connected,
                  SXE_IN_EVENT_READ        in_event_read     ,
                  SXE_IN_EVENT_CLOSE       in_event_close    ,
-                 SXE_BOOL                 is_tcp            ,
+                 SXE_BOOL                 is_stream            ,
                  const char             * path              )
 {
-    SXE * that = NULL;
+    unsigned id;
+    SXE    * that = NULL;
 
-    SXEE87I("sxe_new_internal(local_addr=%08x:%hu,in_event_connected=%p,in_event_read=%p,in_event_close=%p,is_tcp=%s,path=%s)",
+    SXEE87I("sxe_new_internal(local_addr=%08x:%hu,in_event_connected=%p,in_event_read=%p,in_event_close=%p,is_stream=%s,path=%s)",
             local_addr->sin_addr.s_addr, ntohs(local_addr->sin_port), in_event_connected, in_event_read, in_event_close,
-            is_tcp ? "TRUE" : "FALSE", path);
+            SXE_BOOL_TO_STR(is_stream), path);
 
-    if (sxe_free_head == SXE_ID_NEXT_NONE) {
-        SXEL30I("Warning: ran out of connections, concurrency too high");
+    if ((id = sxe_pool_set_oldest_element_state(sxe_array, SXE_STATE_FREE, SXE_STATE_USED)) == SXE_POOL_NO_INDEX) {
+        SXEL30I("sxe_new: Warning: ran out of connections; concurrency too high");
         goto SXE_EARLY_OUT;
     }
 
-    that                      = &sxe_array[sxe_free_head];
-    memcpy(&that->local_addr, local_addr, sizeof(that->local_addr));
+    that                      = &sxe_array[id];
+    that->id                  = id;
     that->path                = path;
-    that->is_tcp              = is_tcp;
-    that->is_accept_oneshot   = 0;
-    that->is_caller_reads_udp = 0;
+    that->flags               = is_stream ? SXE_FLAG_IS_STREAM : 0;
     that->in_event_connected  = in_event_connected;
     that->in_event_read       = in_event_read;
     that->in_event_close      = in_event_close;
     that->socket_as_fd        = -1;
-    sxe_free_head             = that->id_next;
-    that->id_next             = SXE_ID_NEXT_NONE;
-    that->next_socket         = -1;
-    sxe_array_used++;
-    SXEA10I((sxe_array_used < sxe_array_total) || (sxe_free_head == SXE_ID_NEXT_NONE),
-            "All sxes are used, but free head is not none");
-
-    if (sxe_free_head == SXE_ID_NEXT_NONE) {
-        SXEA10I(sxe_free_tail == that->id, "Last item in list not pointed to by both head and tail");
-        sxe_free_tail = SXE_ID_NEXT_NONE;
-    }
+    that->socket              = SXE_SOCKET_INVALID;
+    that->next_socket         = SXE_SOCKET_INVALID;
+    that->in_total            = 0;
+    that->in_consumed         = 0;
+    memcpy(&that->local_addr, local_addr, sizeof(that->local_addr));
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER82I("return id=%d // new connection, used=%u", (that != NULL ? (int)that->id : -1), sxe_array_used);
+    SXER83I((that != NULL ? "%s%p // id=%u" : "%sNULL"), "return that=", that, (that != NULL ? that->id : ~0U));
     return that;
 }
 
@@ -296,13 +278,13 @@ sxe_new(SXE                    * this              ,
         SXE_IN_EVENT_CONNECTED   in_event_connected,
         SXE_IN_EVENT_READ        in_event_read     ,
         SXE_IN_EVENT_CLOSE       in_event_close    ,
-        SXE_BOOL                 is_tcp            ,
+        SXE_BOOL                 is_stream         ,
         const char             * path              )
 {
     SXE                * that = NULL;
     struct sockaddr_in   local_addr;
 
-    SXEE84I("sxe_new(local_ip=%s,local_port=%hu,is_tcp=%s,path=%s)", local_ip, local_port, is_tcp ? "TRUE" : "FALSE", path);
+    SXEE84I("sxe_new(local_ip=%s,local_port=%hu,is_stream=%s,path=%s)", local_ip, local_port, SXE_BOOL_TO_STR(is_stream), path);
     memset(&local_addr, 0, sizeof(local_addr));
 
 #ifndef _WIN32
@@ -326,7 +308,7 @@ sxe_new(SXE                    * this              ,
         }
     }
 
-    that = sxe_new_internal(this, &local_addr, in_event_connected, in_event_read, in_event_close, is_tcp, path);
+    that = sxe_new_internal(this, &local_addr, in_event_connected, in_event_read, in_event_close, is_stream, path);
 
 SXE_EARLY_OR_ERROR_OUT:
     SXER83I("return that=%p; // id=%u, port=%hu", that, (that == NULL ? ~0U : that->id),
@@ -391,7 +373,7 @@ sxe_set_socket_options(SXE * this, int sock)
 
     /* Windows Sockets implementation of SO_REUSEADDR seems to be badly broken.
      */
-    if (this->is_tcp) {
+    if (this->flags & SXE_FLAG_IS_STREAM) {
 #ifndef WINDOWS_NT
         flags = 1;
         SXEV83I(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
@@ -472,8 +454,6 @@ sxe_io_cb_read(EV_P_ ev_io * io, int revents)
 SXE_TRY_AND_READ_AGAIN:
         if (this->path) {
 #ifndef _WIN32
-            /* Receive the length of the data into the first word, and the data that follows into the receive buffer
-             */
             io_vector[0].iov_base =        this->in_buf  + this->in_total;
             io_vector[0].iov_len  = sizeof(this->in_buf) - this->in_total;
             message_header.msg_control    = &control_message_buf;
@@ -526,7 +506,7 @@ SXE_TRY_AND_READ_AGAIN:
                          this->socket_as_fd = this->next_socket;    /* Same thing, since pipes are UNIX only    */
                          this->next_socket  = -1;                   /* Won't be used again, but clear it anyway */
                          this->path         = NULL;
-                         this->is_tcp       = SXE_TRUE;
+                         this->flags       |=  SXE_FLAG_IS_STREAM;
 
                          ev_io_init((struct ev_io*)&this->io, sxe_io_cb_read, this->socket, EV_READ);
                          ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
@@ -536,13 +516,13 @@ SXE_TRY_AND_READ_AGAIN:
             }
 #endif
         }
-        else if (this->is_tcp) {
+        else if (this->flags & SXE_FLAG_IS_STREAM) {
             /* Use recv(), not read() for Windows Sockets API compatibility
              */
             length = recv(this->socket, this->in_buf + this->in_total, sizeof(this->in_buf) - this->in_total, 0);
         }
 #if SXE_WANT_CALLER_READS_UDP
-        else if (this->is_caller_reads_udp) {
+        else if (this->flags & SXE_FLAG_IS_CALLER_READS) {
             do {
                 (*this->in_event_read)(this, 0);
             } while (sxe_caller_read_udp_length > 0);
@@ -567,12 +547,20 @@ SXE_TRY_AND_READ_AGAIN:
             /* If the buffer is full, SXE must wait for the caller to clear it before asking ev for more EVREAD events.
              */
             if (this->in_total == SXE_BUF_SIZE) {
-                SXEL80I("Buffer is full: stopping read events");
+                if (this->in_consumed) {
+                    SXEL80I("Shuffling the buffer to make room for more data");
+                    memmove(this->in_buf, SXE_BUF(this), SXE_BUF_USED(this));
+                    this->in_total -= this->in_consumed;
+                    this->in_consumed = 0;
+                }
+                else {
+                    SXEL80I("Buffer is full: stopping read events");
 #ifdef EV_MULTIPLICITY
-                ev_io_stop(sxe_private_main_loop, &this->io);
+                    ev_io_stop(sxe_private_main_loop, &this->io);
 #else
-                ev_io_stop(&this->io);
+                    ev_io_stop(&this->io);
 #endif
+                }
             }
 
             /* for now... quick and dirty statistics */
@@ -582,10 +570,12 @@ SXE_TRY_AND_READ_AGAIN:
             //debug     SXEL52I("sxe_stat_total_read=%u, sxe_stat_total_accept=%u", sxe_stat_total_read, sxe_stat_total_accept); /* COVERAGE EXCLUSION: Statistics */
             //debug }
 
-            (*this->in_event_read)(this, length);
-            reads_remaining_this_event--;
+            if (!(this->flags & SXE_FLAG_IS_PAUSED)) {
+                (*this->in_event_read)(this, length);
+                reads_remaining_this_event--;
+            }
 
-            if (!(this->is_tcp || (this->path != NULL)) && reads_remaining_this_event) {
+            if (!(this->flags & SXE_FLAG_IS_STREAM) && reads_remaining_this_event) {
                 goto SXE_TRY_AND_READ_AGAIN;
             }
         }
@@ -601,7 +591,7 @@ SXE_TRY_AND_READ_AGAIN:
                  */
                 case SXE_SOCKET_ERROR(ECONNRESET):
                     SXEL83I("Failed to read from socket %d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
-                    break;
+                    break; /* Coverage Exclusion: TODO */
 
                 /* Should never get here.
                  */
@@ -616,7 +606,7 @@ SXE_TRY_AND_READ_AGAIN:
                 SXEL81I("Failed to read from socket %d: (0) zero bytes read - disconnect", this->socket);
             }
 
-            if (this->is_tcp) {
+            if (this->flags & SXE_FLAG_IS_STREAM) {
                 /* Close the SXE object before calling the close callback.  This allows the SXE object to be inspected (e.g. to
                  * determine the value of its user data) and to be immediately reused in the callback.
                  */
@@ -641,12 +631,59 @@ sxe_buf_clear(SXE * this)
 {
     SXEE80I("sxe_buf_clear()");
 
-    if (SXE_BUF_USED(this) == SXE_BUF_SIZE) {
+    if (this->in_total == SXE_BUF_SIZE) {
         SXEL80I("Buffer was full: restarting read events");
         ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
     }
 
-    this->in_total = 0;
+    this->in_consumed = 0;
+    this->in_total    = 0;
+    SXER80I("return");
+}
+
+/**
+ * Consume part of the data in the SXE input buffer
+ *
+ * @param this  Pointer to the SXE
+ * @param bytes Number of bytes to consume
+ *
+ * @note Consuming automatically pauses the SXE; further read events must be reenabled with sxe_buf_resume()
+ */
+void
+sxe_buf_consume(SXE * this, unsigned bytes)
+{
+    SXEE81I("sxe_buf_consume(bytes=%u)", bytes);
+    SXEA82I(bytes <= SXE_BUF_SIZE,       "attempt to consume %u bytes, which is more than SXE_BUF_SIZE (%u)", bytes, SXE_BUF_SIZE);
+    SXEA82I(bytes <= SXE_BUF_USED(this), "attempt to consume %u bytes, which is more than SXE_BUF_USED (%u)", bytes, SXE_BUF_USED(this));
+    this->in_consumed += bytes;
+    this->flags       |= SXE_FLAG_IS_PAUSED;
+
+    if (this->in_consumed == this->in_total) {
+        SXEL80I("Consumed the whole buffer; clearing");
+        sxe_buf_clear(this);
+    }
+
+    SXER80I("return");
+}
+
+/**
+ * Resume read events on a SXE
+ *
+ * @param this  Pointer to the SXE
+ *
+ * @note if there is unconsumed data in the buffer, a read event is immediately generated with the 'length' read being the
+ *       amount of unconsumed data; be careful to call this function outside of any critical sections
+ */
+void
+sxe_buf_resume(SXE * this)
+{
+    SXEE80I("sxe_buf_resume()");
+    this->flags &= ~SXE_FLAG_IS_PAUSED;
+
+    if (SXE_BUF_USED(this) != 0) {
+        (*this->in_event_read)(this, SXE_BUF_USED(this));
+    }
+
     SXER80I("return");
 }
 
@@ -707,10 +744,9 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
 #endif
 
         sxe_set_socket_options(this, that_socket);
-        SXEL80I("Checking whether this is a one-shot socket");
 
-        if (this->is_accept_oneshot) {
-            SXEL80I("Close listening socket, and replace with accepted socket");
+        if (this->flags & SXE_FLAG_IS_ONESHOT) {
+            SXEL80I("Closing one-shot listening socket and replacing with accepted socket");
             ev_io_stop(sxe_private_main_loop, &this->io);
             CLOSESOCKET(this->socket);
             close(this->socket_as_fd);
@@ -718,37 +754,32 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
             that = this;
         }
         else {
-            SXEL80I("Creating new sxe internal object thingy");
-            that = sxe_new_internal( this                    ,
-                                    &this->local_addr        ,
-                                     this->in_event_connected,
-                                     this->in_event_read     ,
-                                     this->in_event_close    ,
-                                     this->is_tcp            ,
-                                     this->path              );
+            SXEL80I("Creating a new SXE");
+            that = sxe_new_internal(this, &this->local_addr, this->in_event_connected, this->in_event_read,
+                                    this->in_event_close, this->flags & SXE_FLAG_IS_STREAM, this->path);
 
             if (that == NULL) {
-                SXEL31I("Warning: failed to allocate a connection from socket %d: out of connections.", this->socket);
+                SXEL31I("Warning: failed to allocate a connection from socket %d: out of connections", this->socket);
                 goto SXE_ERROR_OUT;
             }
         }
 
-        that->socket       = that_socket;
-        that->socket_as_fd = _open_osfhandle(that_socket, 0);
+        that->socket               = that_socket;
+        that->socket_as_fd         = _open_osfhandle(that_socket, 0);
         SXE_USER_DATA_AS_INT(that) = SXE_USER_DATA_AS_INT(this);
         memcpy(&that->peer_addr, &peer_addr, sizeof(that->peer_addr));
 
         SXEL82I("add accepted connection to watch list, socket==%d, socket_as_fd=%d", that_socket, that->socket_as_fd);
         ev_io_init((struct ev_io*)&that->io, sxe_io_cb_read, that->socket_as_fd, EV_READ);
         ev_io_start(sxe_private_main_loop, (struct ev_io*)&that->io);
-
-        sxe_stat_total_accept ++;
+        sxe_stat_total_accept++;
 
         if (that->in_event_connected != NULL) {
             (*that->in_event_connected)(that);
         }
-    } while ((NULL == this->path) && (this != that));
-    /* todo: is there a way to greedily accept on unix domanin sockets? and do we care? :-) */
+    } while ((this->path == NULL) && (this != that));
+
+    /* TODO: is there a way to greedily accept on unix domain sockets? and do we care? :-) */
 
     goto SXE_EARLY_OUT;
 
@@ -812,8 +843,17 @@ SXE_EARLY_OUT:
     SXER80I("return");
 }
 
+/**
+ * Listen for connections (or packets for UDP) on a SXE
+ *
+ * @param this  SXE to listen on
+ * @param flags 0 or SXE_FLAG_IS_ONESHOT to specify a one-shot listener that turns into the connection on accept
+ *
+ * @return SXE_RETURN_OK on success, SXE_RETURN_ERROR_ADDRESS_IN_USE if the SXE's address is in use, or
+ *         SXE_RETURN_ERROR_INTERNAL
+ */
 SXE_RETURN
-sxe_listen(SXE * this)
+sxe_listen_plus(SXE * this, unsigned flags)
 {
     SXE_RETURN         result        = SXE_RETURN_ERROR_INTERNAL;
     int                socket_listen = SXE_SOCKET_INVALID;
@@ -823,20 +863,26 @@ sxe_listen(SXE * this)
     struct sockaddr_un pipe_address;
 #endif
 
-    SXEE81I("sxe_listen(this=%p)", this);
-    SXEA80I(this != NULL, "object pointer is NULL");
+    SXEE82I("sxe_listen(this=%p, flags=%p)", this, flags);
+    SXEA10I(this  != NULL,                   "sxe_listen: object pointer is NULL");
+    SXEA10I(!sxe_is_free(this),              "sxe_listen: connection has not been allocated (state=FREE)");
+    SXEA11I(!(flags & ~SXE_FLAG_IS_ONESHOT), "sxe_listen: a flag other than SXE_FLAG_IS_ONESHOT was given: 0x%08x",
+            flags & ~SXE_FLAG_IS_ONESHOT);
 
     if (this->socket >= 0) {
         SXEL21I("Listener is already in use (socket=%d)", this->socket);
         goto SXE_EARLY_OUT;
     }
 
-    if ((socket_listen = socket((this->path ? AF_UNIX : AF_INET), (this->is_tcp ? SOCK_STREAM : SOCK_DGRAM), 0)) == SXE_SOCKET_INVALID) {
+    socket_listen = socket(this->path ? AF_UNIX : AF_INET, ((this->flags & SXE_FLAG_IS_STREAM) ? SOCK_STREAM : SOCK_DGRAM), 0);
+
+    if (socket_listen == SXE_SOCKET_INVALID) {
         SXEL22I("Error creating listening socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         goto SXE_EARLY_OUT;
     }
 
-    SXEL83I("%d == listen_socket = socket(%s, %s, 0)", socket_listen, this->path ? "AF_UNIX" : "AF_INET", this->is_tcp ? "SOCK_STREAM" : "SOCK_DGRAM");
+    SXEL83I("%d == listen_socket = socket(%s, %s, 0)", socket_listen, this->path ? "AF_UNIX" : "AF_INET",
+            (this->flags & SXE_FLAG_IS_STREAM) ? "SOCK_STREAM" : "SOCK_DGRAM");
 
 #ifndef _WIN32
     if (this->path) {
@@ -880,18 +926,19 @@ sxe_listen(SXE * this)
         }
     }
 
-    if (this->is_tcp && (listen(socket_listen, sxe_listen_backlog) < 0)) {
+    if ((this->flags & SXE_FLAG_IS_STREAM) && (listen(socket_listen, sxe_listen_backlog) < 0)) {
         SXEL22I("Error listening on socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         goto SXE_EARLY_OUT;
     }
 
+    this->flags       |= flags;            /* Set one-shot, if specified by the caller */
     this->socket       = socket_listen;
     this->socket_as_fd = _open_osfhandle(socket_listen, 0);
     socket_listen      = SXE_SOCKET_INVALID;
     SXEL86I("connection id of new listen socket is %d, socket_as_fd=%d, backlog=%d, address=%s:%hu, path=%s", this->id,
             this->socket_as_fd, sxe_listen_backlog, inet_ntoa(this->local_addr.sin_addr), ntohs(this->local_addr.sin_port), this->path);
 
-    ev_io_init((struct ev_io*)&this->io, (this->is_tcp ? sxe_io_cb_accept : sxe_io_cb_read), this->socket_as_fd, EV_READ);
+    ev_io_init((struct ev_io*)&this->io, ((this->flags & SXE_FLAG_IS_STREAM) ? sxe_io_cb_accept : sxe_io_cb_read), this->socket_as_fd, EV_READ);
     ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
 
     result = SXE_RETURN_OK;
@@ -958,6 +1005,8 @@ sxe_construct_address(struct sockaddr_in * address_out, const char * ip, unsigne
  * @return SXE_RETURN_ERROR_ALREADY_CONNECTED if already connected, SXE_RETURN_ERROR_INTERNAL on unexpected error
  *         creating/binding/connecting socket, SXE_RETURN_ERROR_ADDRESS_IN_USE if SXE local address is already in use, or
  *         SXE_RETURN_OK on success.
+ *
+ * @exception Aborts if _this_ is NULL or points to a free connection object
  */
 
 SXE_RETURN
@@ -971,8 +1020,10 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
     struct sockaddr_un pipe_address;
 #endif
 
-    SXEE85I("sxe_connect(this=%p, peer_ip==%s, peer_port=%hu) // socket=%d, path=%s", this, peer_ip, peer_port, this->socket, this->path);
-    SXEA80I(this != NULL, "connection pointer is NULL");
+    SXEE85I("sxe_connect(this=%p, peer_ip==%s, peer_port=%hu) // socket=%d, path=%s", this, peer_ip, peer_port, this->socket,
+            this->path);
+    SXEA10I(this != NULL,       "sxe_connect: connection pointer is NULL");
+    SXEA10I(!sxe_is_free(this), "sxe_connect: connection has not been allocated (state=FREE)");
 
     if (this->socket != SXE_SOCKET_INVALID) {
         SXEL21I("Connection is already in use (socket=%d)", this->socket);
@@ -1137,7 +1188,7 @@ sxe_write_pipe(SXE * this, const void * buf, unsigned size, int fd_to_send)
     if (sendmsg(this->socket, &message_header, 0) < 0) {
         SXEL23I("sxe_write_pipe(): Error writing to socket %d: (%d) %s", this->socket,    /* Coverage Exclusion: TODO */
                 sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());         /* Coverage Exclusion: TODO */
-        goto SXE_ERROR_OUT;
+        goto SXE_ERROR_OUT; /* Coverage Exclusion: TODO */
     }
 
     result = SXE_RETURN_OK;
@@ -1154,8 +1205,8 @@ sxe_write_to(SXE * this, const void * buf, unsigned size, const struct sockaddr_
     SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
     int        ret;
 
-    SXEA80I(this != NULL,  "sxe_write_to(): connection pointer is NULL");
-    SXEA80I(!this->is_tcp, "sxe_write_to(): connection is a udp object");
+    SXEA80I(this != NULL,                        "sxe_write_to(): connection pointer is NULL");
+    SXEA80I(!(this->flags & SXE_FLAG_IS_STREAM), "sxe_write_to(): SXE is not a UDP SXE");
     SXEE85I("sxe_write_to(this=%p,size=%u,sockaddr_in=%s:%hu) // socket=%d", this, size, inet_ntoa(dest_addr->sin_addr),
             ntohs(dest_addr->sin_port), this->socket);
     SXED90I(buf, size);
@@ -1184,8 +1235,8 @@ sxe_write(SXE * this, const void * buf, unsigned size)
     SXE_RETURN  result = SXE_RETURN_ERROR_INTERNAL;
     int         ret;
 
-    SXEA80I(this != NULL, "connection pointer is NULL");
-    SXEA80I(this->is_tcp, "connection pointer is a tcp connection");
+    SXEA80I(this != NULL,                       "SXE pointer is NULL");
+    SXEA80I((this->flags & SXE_FLAG_IS_STREAM), "SXE is not a stream SXE");
     SXEE86I("sxe_write(buf='%c%c%c%c...', size=%u) // socket=%d",
         *((const char *)buf + 0),
         *((const char *)buf + 1),
@@ -1202,8 +1253,11 @@ sxe_write(SXE * this, const void * buf, unsigned size)
     }
 
     /* Use send(), not write(), for WSA compatibility
+     *
+     * Note: Use SXE_SOCKET_MSG_NOSIGNAL to avoid rare occurrence when connection closed by peer but locally the TCP
+     *       stack thinks the connection is still open.  On Windows, this is the normal behaviour.
      */
-    if ((ret = send(this->socket, buf, size, 0)) != (int)size) {
+    if ((ret = send(this->socket, buf, size, SXE_SOCKET_MSG_NOSIGNAL)) != (int)size) {
         /* TODO: Need to support TCP flow control
          */
         if (ret >= 0) {
@@ -1234,6 +1288,82 @@ SXE_EARLY_OR_ERROR_OUT:
     return result;
 }
 
+#ifndef WINDOWS_NT
+static void
+sxe_io_cb_sendfile(EV_P_ ev_io * io, int revents)
+{
+    SXE * this = (SXE *)io;
+    SXE_UNUSED_PARAMETER(loop);
+    SXE_UNUSED_PARAMETER(revents);
+
+    SXEE83I("sxe_io_cb_sendfile(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    sxe_sendfile(this, this->sendfile_in_fd, this->sendfile_bytes, this->out_event_written);
+    SXER80("return");
+}
+
+SXE_RETURN
+sxe_sendfile(SXE * this, int in_fd, unsigned total_bytes, SXE_OUT_EVENT_WRITTEN on_complete)
+{
+    SXE_RETURN result = SXE_RETURN_ERROR_WRITE_FAILED;
+    ssize_t    sent;
+
+    SXEE83I("sxe_sendfile(in_fd=%d, total_bytes=%u, on_complete=%p)", in_fd, total_bytes, on_complete);
+    SXEA10I(on_complete != NULL, "sxe_sendfile: on_complete callback function pointer can't be NULL");
+    this->sendfile_in_fd    = in_fd;
+    this->out_event_written = on_complete;
+
+    sent = sendfile(this->socket, in_fd, NULL, total_bytes);
+
+    if (sent < 0) {
+        SXEL22I("sendfile() failed: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+
+        if (this->out_event_written) {
+            (*this->out_event_written)(this, result);
+        }
+
+        goto SXE_EARLY_OUT;
+    }
+
+    if ((sent > 0) && ((unsigned)sent < total_bytes)) {
+        SXEL82I("sendfile() sent %d bytes of %u, filling send buffer", sent, total_bytes);
+        result = SXE_RETURN_IN_PROGRESS;
+        this->sendfile_bytes = total_bytes - sent;
+
+        ev_io_stop(sxe_private_main_loop, &this->io);
+        ev_io_init(&this->io, sxe_io_cb_sendfile, this->socket_as_fd, EV_WRITE);
+        ev_io_start(sxe_private_main_loop, &this->io);
+        goto SXE_EARLY_OUT;
+    }
+
+    if ((unsigned)sent == 0) {
+        SXEL80I("sendfile() sent 0 bytes (EOF)");
+        result = SXE_RETURN_END_OF_FILE;
+    }
+    else {
+        SXEL82I("sendfile() sent %d bytes of %u", sent, total_bytes);
+        result = SXE_RETURN_OK;
+    }
+
+    if (this->out_event_written) {
+        (*this->out_event_written)(this, result);
+    }
+
+    this->sendfile_in_fd    = -1;
+    this->sendfile_bytes    = 0;
+    this->out_event_written = NULL;
+
+    ev_io_stop(sxe_private_main_loop, &this->io);
+    ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
+    ev_io_start(sxe_private_main_loop, &this->io);
+
+SXE_EARLY_OUT:
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
+}
+#endif
+
+/* TODO: Make useful or delete
+ */
 void
 sxe_dump(SXE * this)
 {
@@ -1245,16 +1375,16 @@ sxe_dump(SXE * this)
     SXEL80I("Dumping sxes");
 
     for (i = 0; i < sxe_array_total; i++) {
-        SXEL84I("id=%d id_next=%d tail=%d head=%d", sxe_array[i].id, sxe_array[i].id_next, sxe_free_tail, sxe_free_head);
+        SXEL81I("SXE id=%u", i);
     }
 
     SXER80I("return");
 }
 
 /**
- * @param this    The SXE object to close
- *
  * Close a TCP listener or connection or a UDP port.
+ *
+ * @param this  The SXE object to close
  *
  * @note This should not be called from a TCP close event callback. If a TCP connection is closed by the other end or the TCP
  *       stack, the SXE will be closed before the TCP close event is called back.
@@ -1263,8 +1393,18 @@ SXE_RETURN
 sxe_close(SXE * this)
 {
     SXE_RETURN result = SXE_RETURN_OK;
-    SXEA80I(this != NULL, "connection pointer is NULL");
-    SXEE82I("sxe_close(this=%p) // this->socket=%d", this, this->socket);
+
+    SXEE81I("sxe_close(this=%p)", this);
+    SXEA80I(sxe_array != NULL,                                                "sxe_close: SXE is not initialized");
+    SXEA80I((this >= sxe_array) && (this <= &sxe_array[sxe_array_total - 1]), "sxe_close: connection pointer is not valid");
+
+    /* Close is idempotent with a warning.
+     */
+    if (sxe_pool_index_to_state(sxe_array, this->id) == SXE_STATE_FREE) {
+        SXEL31I("sxe_close: ignoring close of a free connection object %u", this->id);
+        result = SXE_RETURN_WARN_ALREADY_CLOSED;
+        goto SXE_EARLY_OUT;
+    }
 
     /* Close socket if open.
      */
@@ -1288,35 +1428,12 @@ sxe_close(SXE * this)
         this->socket = SXE_SOCKET_INVALID;
     }
 
-    SXEL84I("sxe_free_tail=%d, sxe_free_head=%d, this->id=%d, this->id_next=%d", sxe_free_tail, sxe_free_head, this->id, this->id_next);
-
-    /* Close is idempotent with a warning.
-     */
-    if ((this->id_next != SXE_ID_NEXT_NONE) || (this->id == sxe_free_tail)) {
-        SXEL30I("ignoring close of a free connection object");
-        result = SXE_RETURN_WARN_ALREADY_CLOSED;
-        goto SXE_EARLY_OUT;
-    }
-
-    SXEA80I(sxe_array_used > 0, "closing when no sxes are in use");
-
-    if (sxe_free_head == SXE_ID_NEXT_NONE) {
-        SXEL80I("sxe_free_head == SXE_ID_NEXT_NONE");
-        sxe_free_head = this->id;
-    }
-    else {
-        SXEA80I(sxe_array[sxe_free_tail].id_next == SXE_ID_NEXT_NONE, "Tail sxe has a next sxe");
-        sxe_array[sxe_free_tail].id_next = this->id;
-    }
-
-    this->in_total = 0;
-    sxe_free_tail  = this->id;
-    sxe_array_used--;
-    SXEL84I("sxe_free_tail=%d (me), sxe_free_head=%d, this->id=%d, this->id_next=%d (expect -1)", sxe_free_tail, sxe_free_head,
-            this->id, this->id_next);
+    this->in_total    = 0;
+    this->in_consumed = 0;
+    sxe_pool_set_indexed_element_state(sxe_array, this->id, SXE_STATE_USED, SXE_STATE_FREE);
 
 SXE_EARLY_OUT:
-    SXER82I("return %s // used=%d", sxe_return_to_string(result), sxe_array_used);
+    SXER81I("return %s", sxe_return_to_string(result));
     return result;
 }
 

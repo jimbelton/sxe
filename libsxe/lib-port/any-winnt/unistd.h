@@ -32,6 +32,8 @@
 #include <time.h>
 #include <winsock2.h> /* For MAX_PATH */
 
+#define _CRT_NONSTDC_NO_DEPRECATE 1    /* Don't complain about POSIX functions */
+
 #define PATH_MAX      MAX_PATH
 #define PIPE_BUF      4096
 #define STDERR_FILENO fileno(stderr)

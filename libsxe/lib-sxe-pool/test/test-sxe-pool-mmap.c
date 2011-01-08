@@ -19,13 +19,15 @@
  * THE SOFTWARE.
  */
 
+#include <errno.h>
+#include <fcntl.h>
+#include <process.h>    /* For spawn() */
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
 
 #include "sxe-log.h"
 #include "sxe-mmap.h"
-#include "sxe-spawn.h"
 #include "sxe-spinlock.h"
 #include "sxe-pool.h"
 #include "tap.h"
@@ -44,9 +46,6 @@ enum TEST_STATE {
 int
 main(int argc, char ** argv)
 {
-#ifdef WINDOWS_NT
-    SXEL10("WARNING: Need to implement sxe_spawn() on Windows to run this test file!");
-#else
     int             fd;
     double          start_time;
     unsigned        count;
@@ -55,8 +54,7 @@ main(int argc, char ** argv)
     unsigned      * shared;
     size_t          size;
     SXE_MMAP        memmap;
-    SXE_RETURN      result;
-    SXE_SPAWN       spawn[TEST_CLIENT_INSTANCES];
+    int             child[TEST_CLIENT_INSTANCES];
     SXE_POOL_WALKER walker;
 
     if (argc > 1) {
@@ -93,15 +91,12 @@ main(int argc, char ** argv)
     pool = sxe_pool_construct(shared, "shared-pool", TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES,
                               SXE_POOL_OPTION_LOCKED);
 
-    sxe_register(TEST_CLIENT_INSTANCES + 1, 0);
-    SXEA11((result = sxe_init()) == SXE_RETURN_OK,  "Failed to initialize the SXE package: %s",  sxe_return_to_string(result));
-
-    for (count = 1; count <= TEST_CLIENT_INSTANCES; count++) {
+    for (count = 0; count < TEST_CLIENT_INSTANCES; count++) {
         char buffer[12];
 
-        snprintf(buffer, sizeof(buffer), "%u", count);
-        result = sxe_spawn(NULL, &spawn[count - 1], argv[0], buffer, NULL, NULL, NULL, NULL);
-        SXEA13(result == SXE_RETURN_OK, "Failed to spawn '%s %s': %s", argv[0], buffer, sxe_return_to_string(result));
+        snprintf(buffer, sizeof(buffer), "%u", count + 1);
+        child[count] = spawnl(P_NOWAIT, argv[0], argv[0], buffer, NULL);
+        SXEA13(child[count] != -1, "Failed to spawn '%s %s': %s", argv[0], buffer, strerror(errno));
     }
 
     start_time = sxe_get_time_in_seconds();
@@ -126,7 +121,8 @@ main(int argc, char ** argv)
 
     for (count = 0; (count < TEST_CLIENT_INSTANCES); count++) {
         SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
-        waitpid(spawn[count].pid, NULL, 0);
+        SXEA12(cwait(NULL, child[count], WAIT_CHILD) == child[count], "Unexpected return from cwait for process 0x%08x: %s",
+               child[count], strerror(errno));
     }
 
     sxe_spinlock_take((SXE_SPINLOCK *)sxe_pool_to_base(pool));
@@ -140,5 +136,4 @@ main(int argc, char ** argv)
     sxe_pool_override_locked(pool); /* for coverage */
     sxe_mmap_close(&memmap);
     return exit_status();
-#endif
 }

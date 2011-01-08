@@ -28,6 +28,7 @@
 
 #include "sxe-log.h"
 
+#define SXE_LITERAL_LENGTH(literal) (sizeof(literal "") - 1)    /* The empty string prevents the caller passing a non-literal */
 #define SXE_UNSIGNED_MAXIMUM        (~0U)
 #define SXE_UNUSED_PARAMETER(param) (void)(param)
 #define SXE_BIT_OPTION(number)      (1 << number)

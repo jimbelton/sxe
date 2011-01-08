@@ -171,7 +171,7 @@ main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
-    plan_tests(41);
+    plan_tests(47);
 
     /* Test sxe_return_to_string()
      */
@@ -181,6 +181,7 @@ main(int argc, char *argv[]) {
     TEST_CASE_RETURN_TO_STRING(NO_UNUSED_ELEMENTS);
     TEST_CASE_RETURN_TO_STRING(IN_PROGRESS);
     TEST_CASE_RETURN_TO_STRING(UNCATEGORIZED);
+    TEST_CASE_RETURN_TO_STRING(END_OF_FILE);
     TEST_CASE_RETURN_TO_STRING(WARN_CACHE_DOUBLE_INITIALIZED);
     TEST_CASE_RETURN_TO_STRING(WARN_WOULD_BLOCK);
     TEST_CASE_RETURN_TO_STRING(WARN_ALREADY_CLOSED);
@@ -189,6 +190,7 @@ main(int argc, char *argv[]) {
     TEST_CASE_RETURN_TO_STRING(ERROR_NO_CONNECTION);
     TEST_CASE_RETURN_TO_STRING(ERROR_ALREADY_CONNECTED);
     TEST_CASE_RETURN_TO_STRING(ERROR_INVALID_URI);
+    TEST_CASE_RETURN_TO_STRING(ERROR_BAD_MESSAGE_RECEIVED);
     TEST_CASE_RETURN_TO_STRING(ERROR_ADDRESS_IN_USE);
     TEST_CASE_RETURN_TO_STRING(ERROR_INTERRUPTED);
     TEST_CASE_RETURN_TO_STRING(ERROR_COMMAND_NOT_RUN);
@@ -215,7 +217,12 @@ main(int argc, char *argv[]) {
     SXEL60(hextrunc);
     SXED60(dumpdata, 0);    /* Edge case */
     SXEA80(1, "We should not get this, because level 8 is too low!");
+
     sxe_log_init();         /* For Coverage */
+    is(sxe_log_decrease_level(SXE_LOG_LEVEL_ERROR),       SXE_LOG_LEVEL_TRACE,       "Level decreased to ERROR (2) from TRACE (6)");
+    is(sxe_log_set_level(     SXE_LOG_LEVEL_INFORMATION), SXE_LOG_LEVEL_ERROR,       "Level set to INFO, was ERROR");
+    is(sxe_log_decrease_level(SXE_LOG_LEVEL_TRACE),       SXE_LOG_LEVEL_INFORMATION, "Level was INFO, TRACE is not a decrease");
+    is(sxe_log_level,                                     SXE_LOG_LEVEL_INFORMATION, "Level is is still INFO");
 
 #if defined(_WIN32) && defined(LOCAL_SXE_DEBUG)
     skip(3, "Can't test aborts in a Windows debug build, due to pop up Window stopping the build");

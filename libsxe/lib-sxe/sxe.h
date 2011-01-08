@@ -25,17 +25,24 @@
 #include <stdbool.h>
 
 #include "ev.h"
-#include "sxe-log.h"        /* For SXE_BOOL */
 #include "sxe-socket.h"
+#include "sxe-util.h"
 
 #define SXE_BUF_SIZE    1500
 #define SXE_IP_ADDR_ANY "INADDR_ANY"
 
-struct SXE;
+/* Flags. Currently, only SXE_FLAG_IS_ONESHOT is required in the SXE interface
+ */
+#define SXE_FLAG_IS_STREAM        0x00000001
+#define SXE_FLAG_IS_ONESHOT       0x00000002
+#define SXE_FLAG_IS_CALLER_READS  0x00000004
+#define SXE_FLAG_IS_PAUSED        0x00000008
 
+struct SXE; /* Forward Declaration */
 typedef void (*SXE_IN_EVENT_READ )(    struct SXE *, int length);
 typedef void (*SXE_IN_EVENT_CLOSE)(    struct SXE *            );
 typedef void (*SXE_IN_EVENT_CONNECTED)(struct SXE *            );
+typedef void (*SXE_OUT_EVENT_WRITTEN )(struct SXE *, SXE_RETURN);
 
 /* SXE object. Used for "Accept Sockets", "Connection Sockets", and UDP ports.
  */
@@ -46,17 +53,18 @@ typedef struct SXE {
     const char           * path;                 /* if unix domain socket                                                 */
     unsigned               id_next;              /* to keep free list                                                     */
     unsigned               id;
-    SXE_BOOL               is_tcp;
-    SXE_BOOL               is_unix;
-    SXE_BOOL               is_accept_oneshot;
-    SXE_BOOL               is_caller_reads_udp;  /* is caller to read UDP packets? default is no                          */
+    unsigned               flags;
     int                    socket;               /* is handle on Windows, is fd on Linux                                  */
     int                    socket_as_fd;         /* is fd     on Windows, is fd on Linux                                  */
     unsigned               in_total;
+    unsigned               in_consumed;          /* number of bytes already "consumed" by the callback                    */
     char                   in_buf[SXE_BUF_SIZE];
     SXE_IN_EVENT_CONNECTED in_event_connected;   /* NULL or function to call when peer accepts connection                 */
     SXE_IN_EVENT_READ      in_event_read ;       /*         function to call when peer writes data                        */
     SXE_IN_EVENT_CLOSE     in_event_close;       /* NULL or function to call when peer disconnects                        */
+    SXE_OUT_EVENT_WRITTEN  out_event_written;    /*         function to call when long write completes                    */
+    int                    sendfile_in_fd;
+    unsigned               sendfile_bytes;
     union {
        void            *   as_ptr;
        int                 as_int;
@@ -64,22 +72,25 @@ typedef struct SXE {
     int                    next_socket;          /* Socket to switch to from pipe when all data has been read and cleared */
 } SXE;
 
-#define SXE_BUF_STRNSTR(this,str)      sxe_strnstr    (SXE_BUF(this), str, SXE_BUF_USED(this))
-#define SXE_BUF_STRNCASESTR(this,str)  sxe_strncasestr(SXE_BUF(this), str, SXE_BUF_USED(this))
-#define SXE_BUF_CLEAR(this)            sxe_buf_clear(this)      /* For backward compatibility only - this macro is deprecated */
-#define SXE_BUF(this)                  (     &(this)->in_buf[0])
-#define SXE_BUF_USED(this)             (      (this)->in_total)
-#define SXE_PEER_ADDR(this)            (     &(this)->peer_addr)
-#define SXE_PEER_PORT(this)            (ntohs((this)->peer_addr.sin_port))
-#define SXE_LOCAL_ADDR(this)           (     &(this)->local_addr)
-#define SXE_LOCAL_PORT(this)           (ntohs((this)->local_addr.sin_port))
-#define SXE_USER_DATA(this)            (      (this)->user_data.as_ptr)
-#define SXE_USER_DATA_AS_INT(this)     (      (this)->user_data.as_int)
-#define SXE_EVENT_READ(this)           (      (this)->in_event_read)
-#define SXE_EVENT_CLOSE(this)          (      (this)->in_event_close)
-#define SXE_ID(this)                   (      (this)->id)
+#define SXE_BUF_STRNSTR(this,str)        sxe_strnstr    (SXE_BUF(this), str, SXE_BUF_USED(this))
+#define SXE_BUF_STRNCASESTR(this,str)    sxe_strncasestr(SXE_BUF(this), str, SXE_BUF_USED(this))
+#define SXE_BUF(this)                    (     &(this)->in_buf[0] + (this)->in_consumed)
+#define SXE_BUF_USED(this)               (      (this)->in_total - (this)->in_consumed)
+#define SXE_PEER_ADDR(this)              (     &(this)->peer_addr)
+#define SXE_PEER_PORT(this)              (ntohs((this)->peer_addr.sin_port))
+#define SXE_LOCAL_ADDR(this)             (     &(this)->local_addr)
+#define SXE_LOCAL_PORT(this)             (ntohs((this)->local_addr.sin_port))
+#define SXE_USER_DATA(this)              (      (this)->user_data.as_ptr)
+#define SXE_USER_DATA_AS_INT(this)       (      (this)->user_data.as_int)
+#define SXE_EVENT_READ(this)             (      (this)->in_event_read)
+#define SXE_EVENT_CLOSE(this)            (      (this)->in_event_close)
+#define SXE_ID(this)                     (      (this)->id)
+#define SXE_BUF_CLEAR(this)              sxe_buf_clear(this)    /* For backward compatibility only - this macro is deprecated */
+#define SXE_WRITE_LITERAL(this, literal) sxe_write(this, literal, SXE_LITERAL_LENGTH(literal))
 
-#include "sxe-proto.h"
-#include "sxe-timer-proto.h"
+#include "lib-sxe-proto.h"
+
+static inline SXE_RETURN sxe_listen(SXE * this)         {return sxe_listen_plus(this, 0);                   }
+static inline SXE_RETURN sxe_listen_oneshot(SXE * this) {return sxe_listen_plus(this, SXE_FLAG_IS_ONESHOT); }
 
 #endif /* __SXE_H__ */

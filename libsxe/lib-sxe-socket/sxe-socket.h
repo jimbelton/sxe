@@ -58,6 +58,7 @@
  */
 
 #ifdef WINDOWS_NT
+#define SXE_SOCKET_MSG_NOSIGNAL       0                    /* MSG_NOSIGNAL is the default under Windows     */
 #define SXE_SOCKET_ERROR_OCCURRED     SOCKET_ERROR
 #define SXE_SOCKET_ERROR(error)       WSA##error
 #define SXE_SOCKET_FAR                FAR
@@ -67,6 +68,7 @@
 static inline void sxe_socket_close(int sock) {closesocket(sock);}
 
 #else  /* UNIX */
+#define SXE_SOCKET_MSG_NOSIGNAL       MSG_NOSIGNAL
 #define SXE_SOCKET_ERROR_OCCURRED     (-1)
 #define SXE_SOCKET_ERROR(error)       error
 #define SXE_SOCKET_FAR

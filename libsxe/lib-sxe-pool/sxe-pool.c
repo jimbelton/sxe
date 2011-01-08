@@ -104,8 +104,8 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
 {
     SXE_POOL_IMPL * pool;
     unsigned        i;
-    unsigned        sxe_log_level_saved;
-    SXE_TIME        current_time = 0;       /* Initialize to shut the compiler up */
+    SXE_LOG_LEVEL   log_level_saved;
+    SXE_TIME        current_time = 0;    /* Initialize to shut the compiler up */
 
     SXEE86("sxe_pool_construct(base=%p,name=%s,number=%u,size=%u,states=%u,options=%u)", base, name, number, size, states, options);
 
@@ -135,8 +135,7 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
 
     SXEL80("Construct the free list");
 
-    sxe_log_level_saved = sxe_log_level; /* Shut up logging on every node here - gross */
-    sxe_log_level = 5;
+    log_level_saved = sxe_log_decrease_level(SXE_LOG_LEVEL_DEBUG);    /* Shut up logging on every node */
 
     if (options & SXE_POOL_OPTION_TIMED) {
         current_time  = sxe_time_get();
@@ -156,7 +155,7 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
         sxe_list_push(&SXE_POOL_QUEUE(pool)[0], &SXE_POOL_NODES(pool)[i].list_node);
     }
 
-    sxe_log_level = sxe_log_level_saved;
+    sxe_log_set_level(log_level_saved);
     SXER84("return array=%p // pool=%p, pool->nodes=%p, pool->name=%s", pool + 1, pool, SXE_POOL_NODES(pool), pool->name);
     return pool + 1;
 }
@@ -196,9 +195,16 @@ sxe_pool_to_base(void * array)
 /**
  * Allocate and construct a new pool of <number> objects of size <size> with <states> states
  *
- * @param options = SXE_POOL_LOCKS_ENABLED or SXE_POOL_LOCKS_DISABLED
+ * @param name    Name of pool; pointer to '\0' terminated string
+ * @param number  Number of elements in the pool
+ * @param size    Size of each element in the pool
+ * @param states  Number of states each element can be in
+ * @param options SXE_POOL_OPTION_UNLOCKED for speed or SXE_POOL_OPTION_LOCKED for thread safety, and SXE_POOL_OPTION_TIMED to
+ *                support timed operations; bit mask, combined with | operator
  *
  * @return A pointer to the array of objects
+ *
+ * @exception Aborts on failure to allocate memory
  */
 void *
 sxe_pool_new(const char * name, unsigned number, unsigned size, unsigned states, unsigned options)

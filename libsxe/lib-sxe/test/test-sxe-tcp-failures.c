@@ -30,11 +30,12 @@
 
 #define TEST_PORT 9191
 
-SXE * listener;
-SXE * connectee = NULL;
-SXE * first_connector;
-SXE * second_connector;
-SXE * third_connector;
+static tap_ev_queue client_queue;
+static SXE        * listener;
+static SXE        * connectee = NULL;
+static SXE        * first_connector;
+static SXE        * second_connector;
+static SXE        * third_connector;
 
 static void
 test_event_connected(SXE * this)
@@ -64,7 +65,7 @@ static void
 test_event_client_connected(SXE * this)
 {
     SXEE60I("test_event_client_connected()");
-    tap_ev_push(__func__, 1, "this", this);
+    tap_ev_queue_push(client_queue, __func__, 1, "this", this);
     SXER60I("return");
 }
 
@@ -72,7 +73,7 @@ static void
 test_event_client_read(SXE * this, int length)
 {
     SXEE62I("test_event_client_read(this->socket=%d, length=%d)", this->socket, length);
-    tap_ev_push(__func__, 3, "this", this, "length", length, "buf_used", SXE_BUF_USED(this));
+    tap_ev_queue_push(client_queue, __func__, 3, "this", this, "length", length, "buf_used", SXE_BUF_USED(this));
     SXER60I("return");
 }
 
@@ -80,18 +81,8 @@ static void
 test_event_client_close(SXE * this)
 {
     SXEE61I("test_event_client_close(this->socket=%d)", this->socket);
-    tap_ev_push(__func__, 2, "this", this, "buf_used", SXE_BUF_USED(this));
+    tap_ev_queue_push(client_queue, __func__, 2, "this", this, "buf_used", SXE_BUF_USED(this));
     SXER60I("return");
-}
-
-static void *
-test_mock_calloc(size_t nmemb, size_t size)
-{
-    SXEE62("test_mock_calloc(nmemb=%u, size=%u)", nmemb, size);
-    SXE_UNUSED_PARAMETER(nmemb);
-    SXE_UNUSED_PARAMETER(size);
-    SXER60("return NULL");
-    return NULL;
 }
 
 static int SXE_STDCALL
@@ -185,27 +176,17 @@ test_mock_send(SXE_SOCKET sock, const void *buf, SXE_SOCKET_SSIZE count, int fla
 int
 main(void)
 {
-    SXE_BOOL first_connect_confirmed = SXE_FALSE;
-    tap_ev   event1;
-    tap_ev   event2;
-    tap_ev   event3;
     tap_ev   ev;
 
+    client_queue = tap_ev_queue_new();
     plan_tests(71);
 
-     /* Initialization failure cases.
+     /* Initialization failure case.
      */
+    ok(sxe_fini() == SXE_RETURN_ERROR_INTERNAL,                              "sxe_fini(): Failed as expected - won't work unless init was successful");
     sxe_register(1, 0); /* first plugin registers */
 
-    MOCK_SKIP_START(1);
-    MOCK_SET_HOOK(calloc, test_mock_calloc);
-    ok(sxe_init() == SXE_RETURN_ERROR_ALLOC,                                 "sxe_init(): Failed as expected");
-    MOCK_SET_HOOK(calloc, calloc);
-    MOCK_SKIP_END;
-
-    ok(sxe_fini() == SXE_RETURN_ERROR_INTERNAL,                              "sxe_fini(): Failed as expected - won't work unless init was successful");
-
-    /* Successfully initialize for remaining tests. Add another 2 objects for a total of 3:
+    /* Initialize for remaining tests. Add another 2 objects for a total of 3:
      *  - 1 listener
      *  - 2 connectors
      *  - 1 connectee
@@ -240,74 +221,43 @@ main(void)
 
     MOCK_SET_HOOK(accept, test_mock_accept);
     is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_OK,  "1st connector: Initiated connection on first connector");
+    ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "1st connector: Got first client event");
+    is_eq(tap_ev_identifier(ev),           "test_event_client_connected",    "1st connector: First event is SXE client connected");
 
-    ok((event1 = test_tap_ev_shift_wait(2)),                                 "1st connector: Got first  event // e.g. accept() system call");
-    ok((event2 = test_tap_ev_shift_wait(2)),                                 "1st connector: Got second event // e.g. sxe event connected" );
-
-    if (strcmp(tap_ev_identifier(event1), "test_event_client_connected") == 0) {
-        tap_ev swap = event1;
-        event1      = event2;
-        event2      = swap;
-    }
-
-    is_eq(tap_ev_identifier(event1), "test_mock_accept",                     "1st connector: First  event is accept() system call");
-    is_eq(tap_ev_identifier(event2), "test_event_client_connected",          "1st connector: Second event is SXE client connected" );
-
+    ok((ev = test_tap_ev_shift_wait(2)),                                     "1st connector: Got first server event");
+    is_eq(tap_ev_identifier(ev),           "test_mock_accept",               "1st connector: First server event is accept() system call");
     MOCK_SET_HOOK(accept, accept);
-    ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "1st connector: Got another event"         );
-    is_eq(tap_ev_identifier(ev),     "test_event_connected",                 "1st connector: Third  event is sxe event connected");
+    ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "1st connector: Got another server event");
+    is_eq(tap_ev_identifier(ev),           "test_event_connected",           "1st connector: Second server event is SXE server connected");
 
-    if (tap_ev_arg(ev, "this") == first_connector) {
-        if (first_connect_confirmed) {
-            fail("Extra zero length read on first connector");
-        }
-        else {
-            tap_ev_free(ev);
-            ok((ev = tap_ev_shift()) != NULL,                                "1st connector: Got another event"        );
-            is(tap_ev_identifier(ev), test_event_read,                       "1st connector: Event is sxe event read"  );
-            is(tap_ev_arg(ev, "length"), 0,                                  "1st connector: 0 bytes due to connect"   );
-            is(tap_ev_arg(ev, "buf_used"), 0,                                "1st connector: 0 bytes in receive buffer");
-            first_connect_confirmed = SXE_TRUE;
-        }
-    }
-
-    tap_ev_free(ev);
-    is(tap_ev_length(), 0, "1st connector: No more events for now");
+    is(tap_ev_length(),                   0,                                 "1st connector: No more client events for now");
+    is(tap_ev_queue_length(client_queue), 0,                                 "1st connector: No more client events for now");
 
     second_connector = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_client_connected, test_event_client_read, test_event_client_close);
     ok(second_connector != NULL,                                             "2nd connector: Allocated second connector");
     is(sxe_connect(second_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_OK, "2nd connector: Initiated connection on second connector");
-
-    ok((event1 = test_tap_ev_shift_wait(2)),                                 "2nd connector: Got first  event // e.g. sxe event connected");
-    ok((event2 = test_tap_ev_shift_wait(2)),                                 "2nd connector: Got second event // e.g. sxe event close" );
-
-    if (strcmp(tap_ev_identifier(event1), "test_event_close") == 0) {
-        tap_ev swap = event1;
-        event1      = event2;
-        event2      = swap;
-    }
-
-    is_eq(tap_ev_identifier(event1), "test_event_client_connected",          "2nd connector: First  event is sxe client connected");
-    is_eq(tap_ev_identifier(event2), "test_event_client_close",              "2nd connector: Second event is sxe client close"    );
-    is(tap_ev_arg(event2, "this"), second_connector,                         "2nd connector: Second connector closed"             );
-    is(tap_ev_arg(event2, "buf_used"), 0,                                    "2nd connector: 0 bytes in receive buffer"           );
+    ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "2nd connector: Got first client event");
+    is_eq(tap_ev_identifier(ev),     "test_event_client_connected",          "2nd connector: First event is client connected");
+    ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "2nd connector: Got second client event");
+    is_eq(tap_ev_identifier(ev),     "test_event_client_close",              "2nd connector: Second event is client close");
+    is(tap_ev_arg(ev, "this"),       second_connector,                       "2nd connector: Second connector closed");
+    is(tap_ev_arg(ev, "buf_used"), 0,                                        "2nd connector: 0 bytes in receive buffer");
 
     /* Close and reallocate connections.
      */
     sxe_close(first_connector);
     first_connector = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_client_connected, test_event_client_read, test_event_client_close);
-
     ok(first_connector != NULL,                                              "Reallocate: Reallocated first connector");
-    ok((ev = test_tap_ev_shift_wait(2))   != NULL,                           "Reallocate: Got another event"                );
-    is_eq(tap_ev_identifier(ev), "test_event_close",                         "Reallocate: It's another close event"         );
+    ok((ev = test_tap_ev_shift_wait(2))   != NULL,                           "Reallocate: Got another event");
+    is_eq(tap_ev_identifier(ev), "test_event_close",                         "Reallocate: It's a server close event");
     ok(tap_ev_arg(ev, "this") !=  first_connector,                           "Reallocate: First connection close indication");
-    is(tap_ev_arg(ev, "buf_used"), 0,                                        "Reallocate: 0 bytes in receive buffer"        );
+    is(tap_ev_arg(ev, "buf_used"), 0,                                        "Reallocate: 0 bytes in receive buffer");
 
     third_connector = sxe_new_tcp(NULL, "127.0.0.1", TEST_PORT + 1, test_event_client_connected, test_event_client_read, test_event_client_close);
-    ok(third_connector != NULL,                                              "Reallocate: start third connector");
+    ok(third_connector != NULL,                                              "Reallocate: allocated third connector");
 
-    /* Test connection failures.
-     */
+    /* Test connection failures. */
+
     MOCK_SET_HOOK(socket, test_mock_socket);
     is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_INTERNAL,
                                                                              "Connection failure: Can't connect to listener when socket() fails");
@@ -324,7 +274,6 @@ main(void)
                                                                              "Connection failure: Can't connect to listener when address is in use");
     MOCK_SET_HOOK(bind, bind);
 
-
     MOCK_SET_HOOK(connect, test_mock_connect);
     is(sxe_connect(third_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_ERROR_INTERNAL,
                                                                              "Connection failure: Can't connect to listener when connect() fails");
@@ -332,70 +281,46 @@ main(void)
     sxe_close(listener);
 
     is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_OK,  "Connection failure: Reconnecting to listener when listener is closed");
-    ok((ev = test_tap_ev_shift_wait(2)),                                     "Connection failure: Got another event");
+    ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "Connection failure: Got another event");
     is_eq(tap_ev_identifier(ev), "test_event_client_close",                  "Connection failure: It's a client close event");
     is(tap_ev_arg(ev, "this"), first_connector,                              "Connection failure: third connection close indication" );
     is(tap_ev_arg(ev, "buf_used"), 0,                                        "Connection failure: 0 bytes in receive buffer");
 
+    listener = sxe_new_tcp(NULL, "INADDR_ANY", TEST_PORT, test_event_connected, test_event_read, test_event_close);
     is(sxe_listen(listener), SXE_RETURN_OK,                                  "Reconnect failure: Recreated listener");
-    is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_OK,
-                                                                             "Reconnect failure: Reconnecting to listener to test getsockopt failure");
+    first_connector = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_client_connected, test_event_client_read, test_event_client_close);
+    is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_OK,  "Reconnect failure: Reconnecting to listener to test getsockopt failure");
     MOCK_SET_HOOK(getsockopt, test_mock_getsockopt);
-
-    ok((event1 = test_tap_ev_shift_wait(2)),                                 "Reconnect failure: Got First Event");
-    ok((event2 = test_tap_ev_shift_wait(2)),                                 "Reconnect failure: Got Second Event");
-
-    if (strcmp(tap_ev_identifier(event1), "test_event_client_close") == 0) {
-        tap_ev swap = event1;
-        event1      = event2;
-        event2      = swap;
-    }
-
-    is_eq(tap_ev_identifier(event1), "test_event_connected",                 "Reconnect failure: Got connected event");
-    ok(tap_ev_arg(event1, "this") != first_connector,                        "Reconnect failure: Accepted connection is not the first connector");
-
-    is_eq(tap_ev_identifier(event2), "test_event_client_close",              "Reconnect failure: Got client close event");
-    is(tap_ev_arg(event2, "this"), first_connector,                          "Reconnect failure: It's the first connector");
-    is(tap_ev_arg(event2, "buf_used"), 0,                                    "Reconnect failure: 0 bytes in receive buffer");
-
+    ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "Reconnect failure: Got a client event");
+    is_eq(tap_ev_identifier(ev), "test_event_client_close",                  "Reconnect failure: It's a client close event");
+    is(tap_ev_arg(ev, "this"), first_connector,                              "Reconnect failure: Closed connection is the first connector");
+    ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "Reconnect failure: Got a server event");
+    is_eq(tap_ev_identifier(ev), "test_event_connected",                     "Reconnect failure: It's a connected event");
+    connectee = (SXE *)(unsigned long)tap_ev_arg(ev, "this");
+    ok(connectee != first_connector,                                         "Reconnect failure: It's not the first connector");
+    ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "Reconnect failure: Got another server event");
+    is_eq(tap_ev_identifier(ev), "test_event_close",                         "Reconnect failure: It's a closed event");
+    is(tap_ev_arg(ev, "this"), connectee,                                    "Reconnect failure: It's not the connectee");
     MOCK_SET_HOOK(getsockopt, getsockopt);
 
-    /* Test send failures.
-     */
+    /* Test send failures. */
+
     is(sxe_write(first_connector, "should not get this", 20), SXE_RETURN_ERROR_NO_CONNECTION,
                                                                              "Send failure: Can't write to connector when it is not connected");
 
+    /* Reconnect:
+     * - ubuntu events: connect, read/close, accept
+     * - redhat events: accept , read/close, connect
+     * - win32  events: read/close, connect, accept *sometimes*
+     */
+    first_connector = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_client_connected, test_event_client_read, test_event_client_close);
     is(sxe_connect(first_connector, "127.0.0.1", TEST_PORT), SXE_RETURN_OK,  "Send failure: Reconnecting connector");
-
-    ok((event1 = test_tap_ev_shift_wait(2)),                                 "Send failure: Got First  Event");
-    ok((event2 = test_tap_ev_shift_wait(2)),                                 "Send failure: Got Second Event");
-    ok((event3 = test_tap_ev_shift_wait(2)),                                 "Send failure: Got Third  Event");
-
-    /* ubuntu events: connect, read/close, accept  */
-    /* redhat events: accept , read/close, connect */
-    /* win32  events: read/close, connect, accept   *sometimes* */
-    /* Re-order events to match ubuntu by looking for the connect on the first_connector*/
-    if ((strcmp(tap_ev_identifier(event3), "test_event_client_connected") == 0)
-    &&  (       tap_ev_arg       (event3, "this") == first_connector   )) {
-        tap_ev swap = event1;
-        event1      = event3;
-        event3      = swap;
-    }
-    else if ((strcmp(tap_ev_identifier(event2), "test_event_client_connected") == 0)
-         &&  (       tap_ev_arg       (event2, "this") == first_connector   )) {
-        tap_ev swap = event1;
-        event1      = event2;
-        event2      = swap;
-    }
-
-    is_eq(tap_ev_identifier(event1), "test_event_client_connected",          "Send failure: 1st connected event");
-    is(tap_ev_arg(event1, "this"), first_connector,                          "Send failure: It's on the first connector");
-
-    is_eq(tap_ev_identifier(event2), "test_event_close",                     "Send failure: Close event (sxe=%u)",
-          SXE_ID((const SXE *)tap_ev_arg(ev, "this")));
-
-    is_eq(tap_ev_identifier(event3), "test_event_connected",                 "Send failure: 2nd connected event (connectee)");
-    connectee = (SXE *)(unsigned long)tap_ev_arg(event3, "this");
+    ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "Send failure: Got client event");
+    is_eq(tap_ev_identifier(ev), "test_event_client_connected",              "Send failure: Client connected event");
+    is(tap_ev_arg(ev, "this"), first_connector,                              "Send failure: It's on the first connector");
+    ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "Send failure: Got a server event");
+    is_eq(tap_ev_identifier(ev), "test_event_connected",                     "Send failure: Server connected event (connectee)");
+    connectee = (SXE *)(unsigned long)tap_ev_arg(ev, "this");
     ok(connectee != first_connector,                                         "Send failure: It's not on the first connector");
 
     /* Fake a stale read on the connectee (for code coverage)
@@ -405,7 +330,6 @@ main(void)
 
     MOCK_SET_HOOK(send, test_mock_send);
     test_mock_send_error = SXE_SOCKET_ERROR(ECONNRESET);
-
     is(sxe_write(first_connector, "should not get this", 20), SXE_RETURN_ERROR_NO_CONNECTION,
                                                                              "Fake stale read: Can't write to connectee when connection reset");
 

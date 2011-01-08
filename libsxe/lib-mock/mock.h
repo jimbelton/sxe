@@ -34,6 +34,7 @@
 
 #ifndef WINDOWS_NT
 #include <netdb.h>
+#include <sys/sendfile.h>
 #endif
 
 /* CONVENTION EXCLUSION: system functions mocked using #define */
@@ -65,52 +66,58 @@
 #endif
 
 /* External definitions of the mock function table
- *  - SXE_STDCALL signifies that Windows implements this function in an OS API, not the C runtime
+ *  - MOCK_STDCALL signifies that Windows implements this function in an OS API, not the C runtime
  */
-extern MOCK_SOCKET      (MOCK_STDCALL * mock_accept)       (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *);
-extern int              (MOCK_STDCALL * mock_bind)         (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
-extern void *           (             * mock_calloc)       (size_t, size_t);
-extern int              (             * mock_close)        (int);
-extern int              (MOCK_STDCALL * mock_connect)      (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
-extern FILE *           (             * mock_fopen)        (const char * file, const char * mode);
-extern int              (             * mock_fputs)        (const char * string, FILE * file);
-extern int              (MOCK_STDCALL * mock_getsockopt)   (MOCK_SOCKET, int, int, MOCK_SOCKET_VOID *, MOCK_SOCKLEN_T * __restrict);
-extern int              (             * mock_gettimeofday) (struct timeval * __restrict, __timezone_ptr_t);
-extern int              (MOCK_STDCALL * mock_listen)       (MOCK_SOCKET, int);
-extern off_t            (             * mock_lseek)        (int fd, off_t offset, int whence);
-extern MOCK_SSIZE_T     (MOCK_STDCALL * mock_recvfrom)     (MOCK_SOCKET, void *, MOCK_SOCKET_SSIZE_T, int, struct sockaddr *, MOCK_SOCKLEN_T *);
-extern MOCK_SSIZE_T     (MOCK_STDCALL * mock_send)         (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int);
-extern MOCK_SSIZE_T     (MOCK_STDCALL * mock_sendto)       (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int,
-                                                            const struct sockaddr *, MOCK_SOCKLEN_T);
-extern MOCK_SOCKET      (MOCK_STDCALL * mock_socket)       (int, int, int);
-extern MOCK_SSIZE_T     (             * mock_write)        (int, const void *, MOCK_SIZE_T);
+extern MOCK_SOCKET  (MOCK_STDCALL * mock_accept)      (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *);
+extern int          (MOCK_STDCALL * mock_bind)        (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
+extern void *       (             * mock_calloc)      (size_t, size_t);
+extern int          (             * mock_close)       (int);
+extern int          (MOCK_STDCALL * mock_connect)     (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
+extern FILE *       (             * mock_fopen)       (const char * file, const char * mode);
+extern int          (             * mock_fputs)       (const char * string, FILE * file);
+extern int          (MOCK_STDCALL * mock_getsockopt)  (MOCK_SOCKET, int, int, MOCK_SOCKET_VOID *, MOCK_SOCKLEN_T * __restrict);
+extern int          (             * mock_gettimeofday)(struct timeval * __restrict, __timezone_ptr_t);
+extern int          (MOCK_STDCALL * mock_listen)      (MOCK_SOCKET, int);
+extern off_t        (             * mock_lseek)       (int fd, off_t offset, int whence);
+extern void *       (             * mock_malloc)      (size_t);
+extern MOCK_SSIZE_T (MOCK_STDCALL * mock_recvfrom)    (MOCK_SOCKET, void *, MOCK_SOCKET_SSIZE_T, int, struct sockaddr *, MOCK_SOCKLEN_T *);
+extern MOCK_SSIZE_T (MOCK_STDCALL * mock_send)        (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int);
+extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendfile)    (int, int, off_t *, size_t);
+extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendto)      (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int,
+                                                       const struct sockaddr *, MOCK_SOCKLEN_T);
+extern MOCK_SOCKET  (MOCK_STDCALL * mock_socket)      (int, int, int);
+extern MOCK_SSIZE_T (             * mock_write)       (int, const void *, MOCK_SIZE_T);
 
 #ifndef MOCK_IMPL
 
-#define accept(fd, addr, len)                    (*mock_accept)       ((fd), (addr), (len))
-#define bind(fd, addr, len)                      (*mock_bind)         ((fd), (addr), (len))
-#define calloc(num, size)                        (*mock_calloc)       ((num), (size))
-#define close(fd)                                (*mock_close)        ((fd))
-#define connect(fd, addr, len)                   (*mock_connect)      ((fd), (addr), (len))
-#define fopen(file, mode)                        (*mock_fopen)        ((file), (mode))
-#define fputs(string, file)                      (*mock_fputs)        ((string), (file))
-#define getsockopt(fd, lev, oname, oval, olen)   (*mock_getsockopt)   ((fd), (lev), (oname), (oval), (olen))
-#define gettimeofday(tm,tz)                      (*mock_gettimeofday) ((tm), (tz))
-#define listen(fd, backlog)                      (*mock_listen)       ((fd), (backlog))
-#define lseek(fd, offset, whence)                (*mock_lseek)        ((fd), (offset), (whence))
-#define send(fd, buf, len, flags)                (*mock_send)         ((fd), (buf), (len), (flags))
-#define sendto(fd, buf, len, flags, to, tolen)   (*mock_sendto)       ((fd), (buf), (len), (flags), (to), (tolen))
-#define socket(dom, typ, pro)                    (*mock_socket)       ((dom), (typ), (pro))
-#define recvfrom(fd, buf, len, flags, to, tolen) (*mock_recvfrom)     ((fd), (buf), (len), (flags), (to), (tolen))
-#define write(fd, buf, len)                      (*mock_write)        ((fd), (buf), (len))
+#define accept(fd, addr, len)                    (*mock_accept)      ((fd), (addr), (len))
+#define bind(fd, addr, len)                      (*mock_bind)        ((fd), (addr), (len))
+#define calloc(num, size)                        (*mock_calloc)      ((num), (size))
+#define close(fd)                                (*mock_close)       (fd)
+#define connect(fd, addr, len)                   (*mock_connect)     ((fd), (addr), (len))
+#define fopen(file, mode)                        (*mock_fopen)       ((file), (mode))
+#define fputs(string, file)                      (*mock_fputs)       ((string), (file))
+#define getsockopt(fd, lev, oname, oval, olen)   (*mock_getsockopt)  ((fd), (lev), (oname), (oval), (olen))
+#define gettimeofday(tm,tz)                      (*mock_gettimeofday)((tm), (tz))
+#define listen(fd, backlog)                      (*mock_listen)      ((fd), (backlog))
+#define lseek(fd, offset, whence)                (*mock_lseek)       ((fd), (offset), (whence))
+#define malloc(size)                             (*mock_malloc)      (size)
+#define send(fd, buf, len, flags)                (*mock_send)        ((fd), (buf), (len), (flags))
+#ifndef WINDOWS_NT
+#define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
+#endif
+#define sendto(fd, buf, len, flags, to, tolen)   (*mock_sendto)      ((fd), (buf), (len), (flags), (to), (tolen))
+#define socket(dom, typ, pro)                    (*mock_socket)      ((dom), (typ), (pro))
+#define recvfrom(fd, buf, len, flags, to, tolen) (*mock_recvfrom)    ((fd), (buf), (len), (flags), (to), (tolen))
+#define write(fd, buf, len)                      (*mock_write)       ((fd), (buf), (len))
 
 #endif /* !MOCK_IMPL     */
 
 #else  /* !defined(MOCK) */
 
-#define MOCK_SET_HOOK(func, test)       ((void)test)
-#define MOCK_SKIP_START(num_tests)      skip_start(1, (num_tests), "- this test requires mock functions")
-#define MOCK_SKIP_END                   skip_end
+#define MOCK_SET_HOOK(func, test)  ((void)test)
+#define MOCK_SKIP_START(num_tests) skip_start(1, (num_tests), "- this test requires mock functions")
+#define MOCK_SKIP_END              skip_end
 
 #endif /* !defined(MOCK) */
 
