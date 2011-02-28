@@ -33,6 +33,9 @@
 #include "sxe-test.h"
 #include "tap.h"
 
+#ifdef WINDOWS_NT
+#else
+
 #define NO_TIMEOUT 0.0
 #define WAIT       2.0
 
@@ -300,7 +303,7 @@ test_case_connection_closed_and_reopened(void)
 static void
 test_case_pool_too_big_to_service(void)
 {
-    int                listener;
+    SXE_SOCKET         listener;
     struct sockaddr_in address;
     SXE_SOCKLEN_T      addr_len;
     unsigned short     test_port;
@@ -412,9 +415,15 @@ test_case_max_capacity(void)
     test_case_cleanup();
 }
 
+#endif
+
 int
 main(void)
 {
+#ifdef WINDOWS_NT
+    diag("TODO: sxe-pool-tcp test cases are disabled on Windows (probable lib-ev on Windows bug)\n");
+    return 0;
+#else
     plan_tests(85);
 
     server_queue = tap_ev_queue_new();
@@ -424,5 +433,6 @@ main(void)
     test_case_pool_too_big_to_service();
     test_case_max_capacity();
     return exit_status();
+#endif
 }
 

@@ -27,7 +27,10 @@
 #include "sxe-util.h"
 #include "tap.h"
 
-#define TEST_COMMAND           "../test/command.pl"
+#ifdef WINDOWS_NT
+#else
+
+#define TEST_COMMAND           "./command.pl"
 #define TEST_POOL_SIZE         2
 #define NO_TIMEOUT             0
 #define RESPONSE_SECONDS       2
@@ -118,7 +121,7 @@ test_case_no_initialization(void)
     SXE_POOL_TCP * pool;
     tap_ev         event;
 
-    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "echopool", TEST_COMMAND, NULL, NULL, test_event_ready_to_write, NULL,
+    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "echopool", "perl", TEST_COMMAND, NULL, test_event_ready_to_write, NULL,
                                   test_event_read, NULL, NO_TIMEOUT, RESPONSE_SECONDS, test_event_timeout, caller_info);
     ok(pool != NULL,                                                                     "echopool was initialized");
     test_process_all_libev_events();
@@ -172,7 +175,7 @@ test_case_initialization_hangs(void)
 {
     SXE_POOL_TCP * pool;
 
-    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "deadpool", TEST_COMMAND, NULL, NULL, test_event_ready_to_write,
+    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "deadpool", "perl", TEST_COMMAND, NULL, test_event_ready_to_write,
                                   test_event_connected, test_event_read, NULL, INITIALIZATION_SECONDS,
                                   RESPONSE_SECONDS, test_event_timeout, caller_info);
     ok(pool != NULL,                                                            "deadpool was initialized");
@@ -203,7 +206,7 @@ test_case_initialization_succeeds(void)
     tap_ev         event;
     SXE *          this;
 
-    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "suckpool", TEST_COMMAND, "-n", NULL, test_event_ready_to_write,
+    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "suckpool", "perl", TEST_COMMAND, "-n", test_event_ready_to_write,
                                   NULL, test_event_read, NULL, INITIALIZATION_SECONDS,
                                   RESPONSE_SECONDS, test_event_timeout, caller_info);
     ok(pool != NULL,                                                                 "suckpool was initialized");
@@ -246,7 +249,7 @@ test_case_retries(void)
     unsigned       i;
 
     SXEE61("%s()", __func__);
-    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "retrypool", "test/command-fails.pl", NULL, NULL, test_event_ready_to_write,
+    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "retrypool", "sh", "-c", "perl -e 'sleep 0.1; exit 1;'", test_event_ready_to_write,
                                   NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_event_timeout, NULL);
     ok(pool != NULL,                                                                 "retrypool was initialized");
 
@@ -283,7 +286,7 @@ test_case_single_command_bounces(void)
     unlink("command-lock");
     sxe_log_hook_line_out(test_event_log_line);    /* hook log output */
 
-    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "bouncepool", TEST_COMMAND, "-L", NULL, test_event_ready_to_write,
+    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "bouncepool", "perl", TEST_COMMAND, "-L", test_event_ready_to_write,
                                   NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_event_timeout, NULL);
     ok(pool != NULL,                                                                 "bouncepool was initialized");
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_close",          "Bouncing Betty closed once");
@@ -320,12 +323,68 @@ test_case_out_of_sxes(void)
 
     SXEE61("%s()", __func__);
     SXEA10((hog_one = sxe_new_udp(NULL, "127.0.0.1", 0, test_event_read)) != NULL, "Failed to allocate a SXE to hog");
-    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "failpool", TEST_COMMAND, NULL, NULL, test_event_ready_to_write,
+    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "failpool", "perl", TEST_COMMAND, NULL, test_event_ready_to_write,
                                   NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_event_timeout, NULL);
     ok(pool != NULL,                                                                 "failpool was initialized");
     is(test_tap_ev_length_nowait(),                     0,                           "No events");
     SXER60("return");
 }
+
+static void
+test_write_command_pl_file(void)
+{
+    FILE * command_pl_file;
+
+    command_pl_file = fopen(TEST_COMMAND, "w+");
+    SXEA11(command_pl_file != NULL, "ERROR - failed to open command.pl to create it in the build directory: %s", sxe_socket_get_last_error_as_str());
+
+    fprintf(command_pl_file, "%s",
+        "#!/usr/bin/perl                                                                                    \n"
+        "                                                                                                   \n"
+        "use strict;                                                                                        \n"
+        "use warnings;                                                                                      \n"
+        "use POSIX;                                                                                         \n"
+        "                                                                                                   \n"
+        "my $fd;                                                                                            \n"
+        "                                                                                                   \n"
+        "# Flush output on every line                                                                       \n"
+        "#                                                                                                  \n"
+        "$| = 1;                                                                                            \n"
+        "                                                                                                   \n"
+        "while (my $arg = shift(@ARGV)) {                                                                   \n"
+        "    if ($arg eq '-n') {                                                                            \n"
+        "        print qq[\\n];                                                                             \n"
+        "    }                                                                                              \n"
+        "    elsif ($arg eq '-L') {                                                                         \n"
+        "        if (!($fd = POSIX::open('command-lock', &POSIX::O_CREAT | &POSIX::O_EXCL))) {              \n"
+        "            print STDERR (qq[command.pl -L: Command is locked out\\n]);                            \n"
+        "            exit(1);                                                                               \n"
+        "        }                                                                                          \n"
+        "    }                                                                                              \n"
+        "}                                                                                                  \n"
+        "                                                                                                   \n"
+        "while(my $line = <>) {                                                                             \n"
+        "    if ($line =~ /^abort/) {                                                                       \n"
+        "        abort();                                                                                   \n"
+        "    }                                                                                              \n"
+        "                                                                                                   \n"
+        "    if ($line =~ /^sleep (\\d+)/) {                                                                \n"
+        "        sleep($1);                                                                                 \n"
+        "    }                                                                                              \n"
+        "                                                                                                   \n"
+        "    print $line;                                                                                   \n"
+        "}                                                                                                  \n"
+        "                                                                                                   \n"
+        "if (defined($fd)) {                                                                                \n"
+        "    close($fd);                                                                                    \n"
+        "    unlink('command-lock');                                                                        \n"
+        "}                                                                                                  \n"
+    );
+
+    fclose(command_pl_file);
+}
+
+#endif
 
 int
 main(void)
@@ -334,11 +393,12 @@ main(void)
     plan_tests(1);
     ok(1, "TODO: Disable spawn tests on Windows because this has yet to be implemented");
 #else
+
     plan_tests(49);
     sxe_pool_tcp_register(3 * TEST_POOL_SIZE);
     SXEA10(sxe_init()                == SXE_RETURN_OK, "failed to initialize sxe");
     SXEA10(sxe_spawn_init()          == SXE_RETURN_OK, "failed to initialize sxe-spawn");
-    SXEA12(chmod(TEST_COMMAND, 0744) == 0,             "failed to make %s executable: %s", TEST_COMMAND, strerror(errno));
+    test_write_command_pl_file();
 
     test_case_no_initialization();
     test_case_initialization_hangs();
@@ -346,6 +406,7 @@ main(void)
     test_case_retries();
     test_case_single_command_bounces();
     test_case_out_of_sxes();
+
 #endif
     return exit_status();
 }

@@ -29,7 +29,7 @@
 /* Todo: Should use SXE instead of sockets. Need pools of SXEs. */
 
 static SXE_SYNC_EV *      sxe_sync_ev_pool;
-static int                sxe_sync_ev_sock = SXE_SOCKET_INVALID;
+static SXE_SOCKET         sxe_sync_ev_sock = SXE_SOCKET_INVALID;
 static struct sockaddr_in sxe_sync_ev_addr;
 static struct ev_io       sxe_sync_ev_io;
 static void            (* sxe_sync_generic_event)(void *, void * user_data);
@@ -37,7 +37,7 @@ static void            (* sxe_sync_generic_event)(void *, void * user_data);
 static void
 sxe_sync_ev_read(EV_P_ ev_io * io, int revents)
 {
-    SXE_SYNC_EV   * handle;
+    SXE_SYNC_EV   * handle; /* todo: don't pass pointers around using udp! */
 
     SXEE82("sxe_sync_ev_read(io=%p,revents=%d)", io, revents);
 #if EV_MULTIPLICITY
@@ -46,7 +46,7 @@ sxe_sync_ev_read(EV_P_ ev_io * io, int revents)
     SXE_UNUSED_ARGUMENT(io);
     SXE_UNUSED_ARGUMENT(revents);
 
-    while(recvfrom(sxe_sync_ev_sock, &handle, sizeof(handle), 0, NULL, NULL) == sizeof(handle)) {
+    while(recvfrom(sxe_sync_ev_sock, (void *)&handle, sizeof(handle), 0, NULL, NULL) == sizeof(handle)) {
         (*sxe_sync_generic_event)(handle, handle->user_data);
     }
 
@@ -58,7 +58,7 @@ sxe_sync_ev_read(EV_P_ ev_io * io, int revents)
 static int
 sxe_sync_ev_socket(void)
 {
-    int sock;
+    SXE_SOCKET sock;
 
     SXEE80("sxe_sync_ev_socket()");
     SXEA11((sock = socket(AF_INET, SOCK_DGRAM, 0)) != SXE_SOCKET_INVALID, "Error creating sync socket: %s",

@@ -18,52 +18,52 @@ struct lsxe_timer {
 };
 
 static void
-lsxe_timer_event(EV_P_ ev_timer *timer, int revents)
+lsxe_timer_event(EV_P_ ev_timer *timer, int revents) /* Coverage Exclusion - todo: win32 coverage */
 {
-    struct lsxe_timer *tm = timer->data;
+    struct lsxe_timer *tm = timer->data; /* Coverage Exclusion - todo: win32 coverage */
 
 #ifdef EV_MULTIPLICITY
     SXE_UNUSED_PARAMETER(loop);
 #endif
     SXE_UNUSED_PARAMETER(revents);
 
-    lua_rawgeti(tm->L, LUA_REGISTRYINDEX, tm->l_timer);
+    lua_rawgeti(tm->L, LUA_REGISTRYINDEX, tm->l_timer); /* Coverage Exclusion - todo: win32 coverage */
     lua_call(tm->L, 0, 0);
 }
 
 static int
-lsxe_timer_new(lua_State *L)
+lsxe_timer_new(lua_State *L) /* Coverage Exclusion - todo: win32 coverage */
 {
-    double delay = luaL_checknumber(L, 2);
+    double delay = luaL_checknumber(L, 2); /* Coverage Exclusion - todo: win32 coverage */
     double freq = luaL_checknumber(L, 3);
     struct lsxe_timer *t;
     int ref;
 
-    lsxe_checkfunction(L, 1);
+    lsxe_checkfunction(L, 1); /* Coverage Exclusion - todo: win32 coverage */
     lua_pushvalue(L, 1);
     ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-    t = lua_newuserdata(L, sizeof(struct lsxe_timer));
+    t = lua_newuserdata(L, sizeof(struct lsxe_timer)); /* Coverage Exclusion - todo: win32 coverage */
     sxe_timer_init(&t->tm, lsxe_timer_event, delay, freq);
     t->tm.data = t;
     t->L = L;
     t->l_timer = ref;
 
-    return 1;
+    return 1; /* Coverage Exclusion - todo: win32 coverage */
 }
 
 static int
-lsxe_timer_start(lua_State *L)
+lsxe_timer_start(lua_State *L) /* Coverage Exclusion - todo: win32 coverage */
 {
-    struct lsxe_timer *t = (luaL_checktype(L, 1, LUA_TUSERDATA), lua_touserdata(L, 1));
+    struct lsxe_timer *t = (luaL_checktype(L, 1, LUA_TUSERDATA), lua_touserdata(L, 1)); /* Coverage Exclusion - todo: win32 coverage */
     sxe_timer_start(&t->tm);
     return 0;
 }
 
 static int
-lsxe_timer_stop(lua_State *L)
+lsxe_timer_stop(lua_State *L) /* Coverage Exclusion - todo: win32 coverage */
 {
-    struct lsxe_timer *t = (luaL_checktype(L, 1, LUA_TUSERDATA), lua_touserdata(L, 1));
+    struct lsxe_timer *t = (luaL_checktype(L, 1, LUA_TUSERDATA), lua_touserdata(L, 1)); /* Coverage Exclusion - todo: win32 coverage */
     sxe_timer_stop(&t->tm);
     return 0;
 }

@@ -127,8 +127,8 @@ sub source_scan
                              "ifndef $tmp_mak_macro\n"
                             ."$tmp_mak_macro := 1\n"
                             ."$tmp_target: $source_dir/%.c\n"
-                            ."\t\@\$(MAKE_PERL_ECHO) \"make: building: \$\@\"\n"
-                            ."\tcd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -o $output_dir \$(notdir \$*.c)\n"
+                            ."\t\@\$(MAKE_PERL_ECHO) \"make[\$(MAKELEVEL)]: building: \$\@\"\n"
+                            ."\t\$(MAKE_RUN) cd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -o $output_dir \$(notdir \$*.c)\n"
                             ."endif\n\n";
                     }
                     elsif ($src eq $leaf) {
@@ -141,8 +141,8 @@ sub source_scan
                              "ifndef $tmp_mak_macro\n"
                             ."$tmp_mak_macro := 1\n"
                             ."$tmp_target: \$(wildcard $source_dir/*.h) \$(wildcard $source_dir/*.c)\n"
-                            ."\t\@\$(MAKE_PERL_ECHO) \"make: building: \$\@\"\n"
-                            ."\tcd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -d -o $output_dir\n"
+                            ."\t\@\$(MAKE_PERL_ECHO) \"make[\$(MAKELEVEL)]: building: \$\@\"\n"
+                            ."\t\$(MAKE_RUN) cd $source_dir && \$(PERL) \$(TOP.dir)/mak/bin/genxface.pl -d -o $output_dir\n"
                             ."endif\n\n";
                     }
                     else {
@@ -177,6 +177,9 @@ while ($ARGV[0] && substr($ARGV[0], 0, 1) =~ /[-\/]/) {
     elsif (opt_arg("-I", \@ARGV, \$value)) {
         if (-d $value) {
             push(@includes, $value);
+        }
+        elsif ($value =~ m~dll\-.*/build\-~) {
+            # don't worry if missing include folder is a dll
         }
         elsif ($value ne $os_src_dir) {
             # todo: figure out a way to make make stop on the following error (instead of flowery highlighting workaround)
@@ -219,8 +222,13 @@ my $out_file;
 
 open($out_file, ">$output_dir/$source_file_stripped.d")
     or die("mkdep.pl: Error: Unable to create file $output_dir/$source_file_stripped.d");
-print $out_file $output_proto_rules->{$_} foreach sort keys %$output_proto_rules;
-print $out_file ("$output_dir/$source_file_stripped.$ext_obj $output_dir/$source_file_stripped.d: \\\n");
+#print $out_file $output_proto_rules->{$_} foreach sort keys %$output_proto_rules;
+foreach my $file ( sort keys %{ $output_proto_rules } ) {
+    my $this_output_proto_rule = $output_proto_rules->{$file};
+       $this_output_proto_rule =~ s~replace-with-this-d-file~$output_dir/$source_file_stripped.d~;
+    print $out_file $this_output_proto_rule;
+}
+print $out_file ("$output_dir/$source_file_stripped.$ext_obj: \\\n");
 {
     my $h;
     foreach my $dep ( split ( m~\s+~, $output ) ) {
@@ -232,5 +240,20 @@ print $out_file ("$output_dir/$source_file_stripped.$ext_obj $output_dir/$source
 }
 print $out_file ("    $ARGV[0] \\\n");
 print $out_file ("    GNUmakefile\n");
+print $out_file ("\n");
+
+print $out_file ("$output_dir/$source_file_stripped.d:: \\\n");
+{
+    my $h;
+    foreach my $dep ( split ( m~\s+~, $output ) ) {
+        $h->{$dep} ++;
+    }
+    foreach my $dep ( sort keys %{ $h } ) {
+        print $out_file ("    $dep \\\n");
+    }
+}
+print $out_file ("    $ARGV[0] \\\n");
+print $out_file ("    GNUmakefile\n");
+print $out_file ("\t\$(MAKE_RUN) \$(TOUCH) $output_dir/$source_file_stripped.d\n");
 close($out_file);
 exit(0);

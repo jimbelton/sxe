@@ -21,10 +21,20 @@
 
 # Add GCC flags used on all platforms.
 #
-CFLAGS+=-c -g -O -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wchar-subscripts -Wcomment                   \
+CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wchar-subscripts -Wcomment                   \
 		-Wformat -Wimplicit  -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wparentheses -Wpointer-arith     \
-		-Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch  -Wtrigraphs -Wuninitialized -Wunused         \
+		-Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch  -Wtrigraphs -Wunused         \
 		-Wwrite-strings
+
+# See http://gcc.gnu.org/onlinedocs/gcc-3.0/gcc_8.html#SEC135
+# "...but if you want to prove that every single line in your program
+#  was executed, you should not compile with optimization at the same
+#  time."
+ifneq ($(filter coverage,$(MAKECMDGOALS)),)
+CFLAGS += -O0
+else
+CFLAGS += -O -Wuninitialized
+endif
 
 # FreeBSD platform specific compiler flags.
 # Additional to Tank flags: -O, pedantic, std=gnu99 Waggregate-return Wall Wcomment Wformat Wimplicit Wmissing-declarations
@@ -66,14 +76,13 @@ COPY               = cp -f
 COV_CFLAGS         = -fprofile-arcs -ftest-coverage
 COV_LFLAGS         = -coverage -lgcov
 COV_INIT           = $(DEL) $(DST.dir)/*.gcda $(DST.dir)/*.ok
-COV_REAP           = cd $(DST.dir) ; cp -f ../*.c . ; gcov *.c >/dev/null 2>&1
 CXX                = g++
 LINK               = gcc
 LINK_OUT           = -o
 LINK_FLAGS        += -ldl
 # -lm needed by ev; ceil()
 LINK_FLAGS        += -g -lm
-LIB_CMD            = $(TOP.dir)/mak/bin/lib.pl
+LIB_CMD            = $(MAKE_PERL_LIB)
 LIB_OUT            =
 LIB_FLAGS          =
 OSQUOTE            = '
@@ -81,6 +90,8 @@ OSPC               = %
 OS_class		   = any-unix
 OS_name            = $(if $(findstring el5,$(shell uname -r)),rhes5,$(shell uname -s | tr '[:upper:]' '[:lower:]'))
 OS_bits			   = $(shell uname -a | $(PERL) -lane '$$o.=$$_;sub END{printf qq[%d], $$o =~ m~_64~s ? 64 : 32;}')
+TEST_ENV_VARS      = LIBC_FATAL_STDERR_=1
+
 
 # note: -march=i486 for __sync_val_compare_and_swap gcc builtin used by sxe-mmap
 ifeq ($(OS_bits), 32)
@@ -102,7 +113,8 @@ PROVE              = prove
 #   - --no-target-directory treat DEST as a normal file
 #   - --verbose             explain what is being done
 #   - --preserve=timestamps make copies the same age as the sources
-COPYDIR            = cp --update --recursive --no-target-directory --verbose --preserve=timestamps
+COPYDIR            = cp --update --verbose --preserve=timestamps --recursive --no-target-directory
+COPYFILES2DIR      = cp --update --verbose --preserve=timestamps
 CFLAGS_DEBUG       = -g
 CFLAGS_FOR_CPP     = -lstdc++
 

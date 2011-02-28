@@ -54,6 +54,7 @@ typedef struct SXE_POOL_IMPL {
     SXE_TIME             * state_timeouts;
     SXE_LIST_NODE          timeout_node;
     uint64_t               next_count;
+    const char *        (* state_to_string)(unsigned state);
 } SXE_POOL_IMPL;
 
 static inline SXE_POOL_NODE *

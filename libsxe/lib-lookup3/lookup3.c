@@ -787,7 +787,7 @@ uint32_t hashbig( const void *key, size_t length, uint32_t initval)
  *
  * @return 32 bit hash value
  */
-uint32_t
+unsigned
 lookup3_hash(const void *key, size_t length)
 {
 #if HASH_LITTLE_ENDIAN

@@ -21,7 +21,7 @@
 
 #
 # - Example usage:
-#	- @$(MAKE_PERL_LIST_NON-THIRD-PARTY-FILES)
+#	- @$(MAKE_PERL_LIST_NON_THIRD_PARTY_FILES)
 #	- Notes:
 #	  - The strategy is to list files where:
 #		- The folder already contains a 'GNUmakefile'
@@ -31,11 +31,9 @@
 #
 
 PACKAGES_AND_TESTS := ./GNUmakefile ./test/
-ifneq ($(OS),Windows_NT)
 PACKAGES_AND_TESTS += ./*/GNUmakefile ./*/test/
-endif
 
-define MAKE_PERL_LIST_NON-THIRD-PARTY-FILES
+define MAKE_PERL_LIST_NON_THIRD_PARTY_FILES
 $(PERL) -e $(OSQUOTE) \
 	@dirs=glob(q[$(PACKAGES_AND_TESTS)]); \
 	foreach $$dir (@dirs) { \
@@ -43,16 +41,23 @@ $(PERL) -e $(OSQUOTE) \
 		printf STDERR qq[make: .pl: non-third party folder: $(OSPC)s\n], $$dir if exists $$ENV{MAKE_DEBUG}; \
 		push @files, glob $$dir; \
 	} \
+	$$cool =  q[$(CONVENTION_OPTOUT_LIST) nothing-to-opt-out]; \
+	$$cool =~ s~^\s+~~; \
+	$$cool =~ s~\s+$$~~; \
+	$$cool =~ s~\s+~|~g; \
+	printf STDERR qq[make: .pl: convention optout list: $(OSPC)s\n], $$cool if exists $$ENV{MAKE_DEBUG}; \
 	foreach (@files) { \
+		next if (-d $$_); \
+		if ($$_ =~ m~($$cool)~) { \
+			printf STDERR qq[make: .pl: convention optout file: $(OSPC)s\n], $$_ if exists $$ENV{MAKE_DEBUG}; \
+			next; \
+		} \
 		printf qq[$(OSPC)s ], $$_; \
 	} \
 	$(OSQUOTE)
 endef
 
-NON-THIRD-PARTY-FILES := $(filter-out \
-    $(addsuffix %, $(abspath $(addprefix $(COM.dir)/, $(CONVENTION_OPTOUT_LIST)))), \
-    $(abspath $(shell $(MAKE_PERL_LIST_NON-THIRD-PARTY-FILES))) \
-)
+NON-THIRD-PARTY-FILES := $(shell $(MAKE_PERL_LIST_NON_THIRD_PARTY_FILES))
 
 #
 # - Example usage:
@@ -78,8 +83,12 @@ $(PERL) -e $(OSQUOTE) \
 		next if($$s!~m~$$rs~); \
 		next if(not -f $$s); \
 		open(IN,q[<],$$s); \
-		sysread(IN,$$f,9_999_999); \
+		$$bytes=sysread(IN,$$f,999_999); \
 		close(IN); \
+		if ($$bytes >= 999_999) { \
+			printf qq{make: .pl: warning: skipping: file too large to check: $(OSPC)s\n},$$s if $$ENV{MAKE_DEBUG} ; \
+			next; \
+		} \
 		next if($$e1 eq q{exit1} && $$f=~m~[C]ONVENTION EXCLUSION~); \
 		$$f=~s~(\n\r|\n)~\r\n~gis; \
 		if(0){`echo insert file name & line numbers`} \

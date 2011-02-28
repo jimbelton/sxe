@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <unistd.h>    /* For snprintf on Windows */
+#include <inttypes.h>
 
 #include "sha1.h"
 #include "sxe-hash.h"
@@ -53,7 +54,7 @@ main(int argc, char * argv[])
         sxe_hash_add(hash, id);
     }
 
-    printf("SHA1: times %llu .. %llu = %llu\n", start_time, sxe_time_get(), sxe_time_get() - start_time);
+    printf("SHA1: times %" PRIu64 " .. %" PRIu64 " = %" PRIu64 "\n", start_time, sxe_time_get(), sxe_time_get() - start_time);
     printf("SHA1: hashed %u 8 bytes keys per second\n", (unsigned)(((uint64_t)i << 32) / (sxe_time_get() - start_time)));
 
     hash = sxe_hash_new_plus("testhash", 1 << 16, sizeof(SXE_SHA1), 0, 8, SXE_HASH_OPTION_UNLOCKED | SXE_HASH_OPTION_LOOKUP3_HASH);

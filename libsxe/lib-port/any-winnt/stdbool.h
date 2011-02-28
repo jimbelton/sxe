@@ -30,7 +30,10 @@
 #define false                         0
 #define true                          1
 
+#ifdef MAKE_MINGW
+#else
 typedef int _Bool;
+#endif
 
 #endif /* __cplusplus     */
 

@@ -56,7 +56,7 @@ sxe_mkpath(const char * path)
     command_length = strlen(command) - 1;
 
     if (command[command_length] == '/') {
-        command[command_length] = '\0';
+        command[command_length] = '\0'; /* Coverage Exclusion - todo: win32 coverage */
     }
 
     for (i = command_length - 1; i >= sizeof(MKDIR_COMMAND); i--) {

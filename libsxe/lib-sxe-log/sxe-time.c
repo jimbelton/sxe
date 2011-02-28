@@ -41,7 +41,7 @@ sxe_time_get(void)
     struct timeval tv;
 
     assert(gettimeofday(&tv, NULL) >= 0);
-    return ((SXE_TIME)tv.tv_sec << SXE_TIME_BITS_IN_FRACTION) + (SXE_TIME)tv.tv_usec * (1ULL << 32) / 1000000;
+    return SXE_TIME_FROM_TIMEVAL(&tv);
 }
 
 double

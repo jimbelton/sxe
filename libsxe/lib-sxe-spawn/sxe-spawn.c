@@ -63,6 +63,9 @@ sxe_spawn_init(void)
  * @example result = sxe_spawn(NULL, &child, "sh", "-c", "top -b -d 1 | grep --line-buffered http", event_read_top, event_close);
  */
 
+#ifdef WIN32
+/* TODO: Implement sxe_spawn() on Windows */
+#else
 SXE_RETURN
 sxe_spawn(SXE                    * this,
           SXE_SPAWN              * that,
@@ -82,12 +85,6 @@ sxe_spawn(SXE                    * this,
     SXEE67I("sxe_spawn(that=%p, command=%s, arg1=%s, arg2=%s, in_event_connected=%p, in_event_read=%p, in_event_close=%p)",
                        that,    command,    arg1,    arg2,    in_event_connected,    in_event_read,    in_event_close);
 
-#ifdef WIN32
-    SXE_UNUSED_PARAMETER(command);
-    SXE_UNUSED_PARAMETER(arg1);
-    SXE_UNUSED_PARAMETER(arg2);
-#endif
-
     SXEL60I("creating socket pair");
 
     if ((that->sxe = sxe_new_tcp(NULL, "INADDR_ANY", 0, in_event_connected, in_event_read, in_event_close)) == NULL)
@@ -99,10 +96,6 @@ sxe_spawn(SXE                    * this,
     result = sxe_listen_oneshot(that->sxe);
     SXEA62I(result == SXE_RETURN_OK, "One-shot listen on parent SXE %u failed: %s", SXE_ID(that->sxe), sxe_return_to_string(result));
     SXEL61I("Listening for a one-shot SXE on port %hu", SXE_LOCAL_PORT(that->sxe));
-
-#ifdef WIN32
-    result = SXE_RETURN_ERROR_COMMAND_NOT_RUN;
-#else
 
     switch (that->pid = fork()) {
     case -1:
@@ -143,37 +136,39 @@ sxe_spawn(SXE                    * this,
 
     SXEL63I("Spawned '%s': pid %d (0x%x)", path, that->pid, that->pid);
     SXE_USER_DATA_AS_INT(that->sxe) = that->pid;    /* Give SXE user access to the pid */
-#endif
 
 SXE_EARLY_OR_ERROR_OUT:
     SXER61I("return %s", sxe_return_to_string(result));
     return result;
 } // sxe_spawn()
+#endif
 
+#ifdef WIN32
+/* TODO: Implement sxe_spawn_kill() on Windows */
+#else
 SXE_RETURN
 sxe_spawn_kill(SXE_SPAWN * spawn, int sig)
 {
     SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
     SXE *      this   = SXE_SPAWN_GET_SXE(spawn);
 
-    (void)this;    /* Used only for diagnostics */
+    SXE_UNUSED_PARAMETER(this); /* Used only for diagnostics */
+    SXE_UNUSED_PARAMETER(sig); /* Used only for diagnostics */
+
     SXEE62I("sxe_spawn_kill(spawn->pid=%d,sig=%d)", SXE_SPAWN_GET_PID(spawn), sig);
 
-    /* TODO: Implement kill on Windows */
-
-#ifndef _WIN32
     if (kill(SXE_SPAWN_GET_PID(spawn), sig) < 0) {
         SXEL63I("Couldn't kill process %d with signal %d: %s", SXE_SPAWN_GET_PID(spawn), sig, strerror(errno));
         goto SXE_ERROR_OUT;
     }
-#endif
 
     result = SXE_RETURN_OK;
 
-SXE_ERROR_OUT:
+SXE_EARLY_OR_ERROR_OUT:
     SXER61I("return %s", sxe_return_to_string(result));
     return result;
 }
+#endif
 
 /**
  * Spawn a command on the end of a unidirectional pipe and collect the output

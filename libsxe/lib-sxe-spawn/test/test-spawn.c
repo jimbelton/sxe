@@ -36,12 +36,14 @@
 #define TEST_WAIT 5
 
 #ifdef WIN32
+
 #define TEST_ON_WINDOWS 1
-void kill(pid, sig)              {}
-void pause(void)                 {}
+
+static void pause(void) {}
+
 #else
+
 #define TEST_ON_WINDOWS 0
-#endif
 
 static void
 test_event_connected(SXE * this)
@@ -68,6 +70,8 @@ test_event_close(SXE * this)
     tap_ev_push(__func__, 0);
     SXER80I("return");
 }
+
+#endif
 
 static int
 test_program_reader(void)
@@ -123,12 +127,15 @@ test_program_close(void)
 int
 main(int argc, char ** argv)
 {
+#ifdef WIN32
+#else
     SXE_RETURN result;
     SXE_SPAWN  spawn;
     int        status;
     double     total_seconds_waited;
     tap_ev     event;
     pid_t      pid;
+#endif
 
     if (argc > 1) {
         if (strcmp(argv[1], "-r") == 0) {
@@ -145,21 +152,22 @@ main(int argc, char ** argv)
         return 1;
     }
 
+#ifdef WIN32
+    plan_tests(2);
+#else
     plan_tests(29);
+#endif
+
     sxe_register(1, 0);   /* One SXE object to allow only a single simultaneous spawn in this test */
     is(sxe_init(),                          SXE_RETURN_OK,                    "Initialized: sxe");
     is(sxe_spawn_init(),                    SXE_RETURN_OK,                    "Initialized: sxe-spawn");
 
-
-    /* Tests with a non-existent command */
-
-    result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
-
-#ifdef _WIN32
-    is(result,                              SXE_RETURN_ERROR_COMMAND_NOT_RUN, "Spawn returns an error on a non-existent command");
+#ifdef WIN32
+    /* todo: refactor tests once sxe_spawn() exists on Windows */
 #else
+    /* Tests with a non-existent command */
+    result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
     is(result,                              SXE_RETURN_OK,                    "'Succeeded' in spawning non-existent-command");
-#endif
 
     skip_start(TEST_ON_WINDOWS, 26, "not implemented on Windows yet");
     result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
@@ -256,5 +264,6 @@ main(int argc, char ** argv)
     /* TODO - Spawn test: Test child is killed when ctrl-c used on spawn parent */
 
     skip_end;
+#endif
     return exit_status();
 }

@@ -48,13 +48,24 @@ typedef struct TEST_STATS {
 TEST_ELEMENT_TYPE * test_array;
 TEST_STATS          test_stats[TEST_ELEMENT_NUMBER_OF_STATES];
 
+static const char *
+test_state_to_string(unsigned state)
+{
+    switch (state) {
+    case TEST_STATE_FREE: return "FREE";
+    case TEST_STATE_USED: return "USED";
+    }
+
+    return NULL;
+}
+
 static SXE_THREAD_RETURN SXE_STDCALL
 test_mover_thread(void * state_as_ptr)
 {
     TEST_STATE from_state = (TEST_STATE)state_as_ptr;
     TEST_STATE to_state   = from_state == TEST_STATE_FREE ? TEST_STATE_USED : TEST_STATE_FREE;
 
-    SXEE81("test_mover_thread(from_state=%s)", from_state == TEST_STATE_FREE ? "FREE" : "USED");
+    SXEE81("test_mover_thread(from_state=%s)", test_state_to_string(from_state));
 
     for (;;) {
         switch(sxe_pool_set_oldest_element_state(test_array, from_state, to_state)) {
@@ -75,7 +86,7 @@ test_walker_thread(void * state_as_ptr)
     SXE_POOL_WALKER walker;
     unsigned        node;
 
-    SXEE81("test_mover_thread(state=%s)", state == TEST_STATE_FREE ? "FREE" : "USED");
+    SXEE81("test_mover_thread(state=%s)", test_state_to_string(state));
 
     for (;;) {
         sxe_pool_walker_construct(&walker, test_array, state);
@@ -124,6 +135,7 @@ main(int argc, char * argv[])
     plan_tests(1);
     test_array  = sxe_pool_new("tidalpool", TEST_ELEMENT_NUMBER, sizeof(TEST_ELEMENT_TYPE), TEST_ELEMENT_NUMBER_OF_STATES,
                                SXE_POOL_OPTION_LOCKED);
+    sxe_pool_set_state_to_string(test_array, test_state_to_string);
     SXEA10(sxe_thread_create(&thread, test_mover_thread,  (void *)TEST_STATE_FREE, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
            "Unable to create thread");
     SXEA10(sxe_thread_create(&thread, test_walker_thread, (void *)TEST_STATE_FREE, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,

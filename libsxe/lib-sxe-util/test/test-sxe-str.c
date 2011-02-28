@@ -24,11 +24,15 @@
 
 char foobar[] = "foobarino";
 char FOObar[] = "FOObar";
+char abc   [] = "abcabcdabcdeabcdef";
 
 int
 main(void)
 {
-    plan_tests(14);
+    const char * needle;
+    int length;
+
+    plan_tests(20);
     is(    sxe_strnchr(foobar, 'b',     6), &foobar[3], "Found 'b' in 'foobarino':6");
     is(    sxe_strnchr(foobar, 'b',     2), NULL,       "Did not find 'b' in 'foobarino':2");
     is(    sxe_strnchr(foobar, 'x',    10), NULL,       "Did not find 'x' in 'foobarino':10");
@@ -43,6 +47,21 @@ main(void)
     is(   sxe_strncspn(foobar, "=& ",  10), NULL,       "Did not find '=', '&' or ' ' in 'foobarino'");
     is(   sxe_strncspn(foobar, "ni",   10), &foobar[6], "Found 'n' or 'i' in 'foobarino':10 at character 6");
     is(   sxe_strncspn(foobar, "ni",    6), NULL,       "Didn't find 'n' or 'i' in 'foobarino':6");
+    
+    needle = "abc";
+    length = 3;
+    is(sxe_rstrnstr(abc, needle, length), &abc[0],      "Found the last occurrence of '%s' in '%s' :%d", needle, abc, length);
+    length = 7;
+    is(sxe_rstrnstr(abc, needle, length), &abc[3],      "Found the last occurrence of '%s' in '%s' :%d", needle, abc, length);
+    length = 12;
+    is(sxe_rstrnstr(abc, needle, length), &abc[7],      "Found the last occurrence of '%s' in '%s' :%d", needle, abc, length);
+    length = 18;
+    is(sxe_rstrnstr(abc, needle, length), &abc[12],     "Found the last occurrence of '%s' in '%s' :%d", needle, abc, length);
+    needle = "foo";
+    is(sxe_rstrnstr(abc, needle, length), NULL,         "Didn't find '%s' in '%s' :%d",                  needle, abc, length);
+    needle = "";
+    is(sxe_rstrnstr(abc, needle, length), &abc[length], "Found the empty string at the end of the haystack");
+
     return exit_status();
 }
 

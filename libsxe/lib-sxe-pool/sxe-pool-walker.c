@@ -35,7 +35,7 @@ sxe_pool_walker_construct(SXE_POOL_WALKER * walker, void * array, unsigned state
 {
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
 
-    SXEE83("sxe_pool_walker_construct(walker=%p,pool->name=%s,state=%u)", walker, pool->name, state);
+    SXEE83("sxe_pool_walker_construct(walker=%p,pool=%s,state=%s)", walker, pool->name, (*pool->state_to_string)(state));
     SXEA11(!((pool->options & SXE_POOL_OPTION_LOCKED) && (pool->options & SXE_POOL_OPTION_TIMED)),
            "sxe_pool_walker_construct: Can't walk thread safe timed pool %s safely", pool->name);
     sxe_list_walker_construct(&walker->list_walker, &SXE_POOL_QUEUE(pool)[state]);
@@ -82,8 +82,8 @@ sxe_pool_walker_step(SXE_POOL_WALKER * walker)
      && (SXE_LIST_NODE_GET_ID(&node->list_node) != walker->state))
      /* TODO: Check for touching */
     {
-        SXEL83("sxe_pool_walker_step: node %u moved from state %u to state %u by another thread", node - SXE_POOL_NODES(pool),
-               walker->state, SXE_LIST_NODE_GET_ID(&node->list_node));
+        SXEL83("sxe_pool_walker_step: node %u moved from state %s to state %s by another thread", node - SXE_POOL_NODES(pool),
+               (*pool->state_to_string)(walker->state), (*pool->state_to_string)(SXE_LIST_NODE_GET_ID(&node->list_node)));
 
         /* If there is a previous object and it has not been moved, get the new next one.
          */

@@ -1,4 +1,5 @@
-/* Copyright (c) 2010 Sophos Group.
+/* Copyright (c) 2010 Sophos G
+ * roup.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,14 +20,44 @@
  * THE SOFTWARE.
  */
 
+#include <stdio.h>
+#include <string.h>
 #include <unistd.h>
+
+#undef  SXE_DEBUG      /* Since we are testing diagnostic functions, the test program forces debug mode */
+#define SXE_DEBUG 1
 
 #include "sxe-spinlock.h"
 #include "sxe-thread.h"
 #include "tap.h"
 
-SXE_SPINLOCK ping;
-SXE_SPINLOCK pong;
+#define TEST_YIELD_MAX 1000000
+
+SXE_LOG_LEVEL     test_log_level;
+SXE_SPINLOCK      ping;
+SXE_SPINLOCK      pong;
+volatile unsigned thread_indent = 0;
+volatile unsigned main_indent   = 0;
+
+static void
+test_log_line(SXE_LOG_LEVEL level, char * line)
+{
+    char * tag;
+
+    if      ((tag = strstr(line, "thread:")) != NULL) {
+        thread_indent = tag - line;
+    }
+    else if ((tag = strstr(line, "main:"  )) != NULL) {
+        main_indent   = tag - line;
+    }
+
+    /* Stuff unwanted diagnostics
+     */
+    if (level >= test_log_level) {
+        fputs(line, stderr);
+        fflush(stderr);
+    }
+}
 
 static SXE_THREAD_RETURN SXE_STDCALL
 test_thread_main(void * lock)
@@ -36,6 +67,7 @@ test_thread_main(void * lock)
     SXEA10(lock                     == &ping,                     "Ping lock not passed to the thread");
     SXEA10(sxe_spinlock_take(&pong) == SXE_SPINLOCK_STATUS_TAKEN, "Pong lock not taken by thread");
     SXEA10(sxe_spinlock_take(&ping) == SXE_SPINLOCK_STATUS_TAKEN, "Ping lock not taken by thread");
+    SXEL10("thread: about to pong the main thread");
     sxe_spinlock_give(&pong);
 
     for (;;) {
@@ -51,18 +83,29 @@ main(void)
 {
     SXE_THREAD thread;
     SXE_RETURN result;
+    unsigned   i;
 
-    plan_tests(3);
-
+    plan_tests(6);
+    sxe_log_hook_line_out(test_log_line);
+    test_log_level = sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);    /* Required to do indentation test */
     sxe_spinlock_construct(&ping);
     sxe_spinlock_construct(&pong);
     is(sxe_spinlock_take(&ping), SXE_SPINLOCK_STATUS_TAKEN, "Ping lock taken by main");
 
     is((result = sxe_thread_create(&thread, test_thread_main, &ping, SXE_THREAD_OPTION_DEFAULTS)), SXE_RETURN_OK,
                                                             "Created SXE thread");
+    sxe_spinlock_give(&ping);    /* Allow thread to proceed */
 
-    sxe_spinlock_give(&ping);
+    /* Wait for thread_indent to be set.
+     */
+    for (i = 0; thread_indent == 0 && i < TEST_YIELD_MAX; i++) {
+        SXE_YIELD();
+    }
+
+    ok(i < TEST_YIELD_MAX,                                  "Thread log indent set to %u after %u yeilds", thread_indent, i);
+    SXEL10("main: about to confirm the pong from the thread");
     is(sxe_spinlock_take(&pong), SXE_SPINLOCK_STATUS_TAKEN, "Pong lock taken by main");
-
+    ok(main_indent > 0,                                     "Main log indent set to %u", main_indent);
+    ok(thread_indent > main_indent,                         "Thread indent is greater than main indent");
     return exit_status();
 }

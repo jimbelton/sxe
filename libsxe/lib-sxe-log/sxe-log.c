@@ -22,17 +22,16 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <time.h>
-#include <stdlib.h> /* for exit() & getenv() */
-#include <stdarg.h> /* for va_list */
+#include <stdlib.h>          /* for exit() & getenv() */
+#include <stdarg.h>          /* for va_list */
 #include <string.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
-#include <windows.h>  /* for GetCurrentThreadId() */
-#include <stdio.h>    /* for fopen() */
+#include <windows.h>         /* for GetCurrentThreadId() */
 #else
-#include <sys/time.h> /* for gettimeofday() */
-#include <unistd.h>   /* for getpid() */
+#include <sys/time.h>        /* for gettimeofday() */
+#include <unistd.h>          /* for getpid() */
 #endif
 
 #include "sxe-log.h"
@@ -50,56 +49,58 @@
 #define SXE_LOG_LEVEL_DEFAULT       SXE_LOG_LEVEL_MAXIMUM
 #endif
 
+#define SXE_CHECK_LOG_INITIALIZE()             {if (sxe_log_is_first_call) { sxe_log_init(); }}
+#define SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE() {if (level > sxe_log_level) { return;         }}
+
 typedef union SXE_PTR_UNION
 {
-    char           * as_chr_ptr       ;
-    unsigned char  * as_u08_ptr       ;
-    signed   char  * as_s08_ptr       ;
-    SXE_U32        * as_u32_ptr       ;
-    SXE_S32        * as_s32_ptr       ;
-    SXE_U32          as_u32           ; /* Useful for debug build only */
-    void           * as_void_ptr      ;
-    void const     * as_void_ptr_const; /* Useful for debug build only */
+    char          * as_chr_ptr       ;
+    unsigned char * as_u08_ptr       ;
+    signed   char * as_s08_ptr       ;
+    SXE_U32       * as_u32_ptr       ;
+    SXE_S32       * as_s32_ptr       ;
+    SXE_U32         as_u32           ;    /* Useful for debug build only */
+    void          * as_void_ptr      ;
+    void const    * as_void_ptr_const;    /* Useful for debug build only */
 } SXE_PTR_UNION;
+
+SXE_LOG_LEVEL   sxe_log_level = SXE_LOG_LEVEL_DEFAULT;
 
 static unsigned sxe_log_is_first_call = 1;
 
 #ifdef _WIN32
-    static DWORD    sxe_log_tls_slot;
-#   define SXE_LOG_INDENT             (sxe_log_get_indent_windows())
-#   define SXE_LOG_SET_INDENT(indent) (sxe_log_set_indent_windows(indent))
+static DWORD    sxe_log_tls_slot;
 #else
-    static unsigned sxe_log_indent;
-#   define SXE_LOG_INDENT             sxe_log_indent
-#   define SXE_LOG_SET_INDENT(indent) (sxe_log_indent = (indent))
+static __thread unsigned sxe_log_indent;
 #endif
 
-#define SXE_CHECK_LOG_INITIALIZE()                 {if (sxe_log_is_first_call) { sxe_log_init(); }}
-#define SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE() {if (level > sxe_log_level) { return; }}
-
-SXE_LOG_LEVEL sxe_log_level = SXE_LOG_LEVEL_DEFAULT;
-
-#ifdef _WIN32
 static unsigned
-sxe_log_get_indent_windows(void)
+sxe_log_get_indent(void)
 {
     unsigned indent;
-
+#ifdef _WIN32
     DWORD error = GetLastError();
+
     indent = (unsigned)TlsGetValue(sxe_log_tls_slot);
     SetLastError(error);
+#else
+    indent = sxe_log_indent;
+#endif
     return indent;
 }
 
 static void
-sxe_log_set_indent_windows(unsigned indent)
+sxe_log_set_indent(unsigned indent)
 {
+#ifdef _WIN32
     DWORD error = GetLastError();
 
     (void)TlsSetValue(sxe_log_tls_slot, (void *)indent);
     SetLastError(error);
-}
+#else
+    sxe_log_indent = indent;
 #endif
+}
 
 #define SXE_RETURN_CASE(ret) case SXE_RETURN_ ## ret: return #ret
 
@@ -110,20 +111,21 @@ sxe_return_to_string(SXE_RETURN ret)
      */
     switch (ret) {
     SXE_RETURN_CASE(OK);
+    SXE_RETURN_CASE(EXPIRED_VALUE);
     SXE_RETURN_CASE(NO_UNUSED_ELEMENTS);
     SXE_RETURN_CASE(IN_PROGRESS);
     SXE_RETURN_CASE(UNCATEGORIZED);
     SXE_RETURN_CASE(END_OF_FILE);
-    SXE_RETURN_CASE(WARN_CACHE_DOUBLE_INITIALIZED);
+    SXE_RETURN_CASE(WARN_ALREADY_INITIALIZED);
     SXE_RETURN_CASE(WARN_WOULD_BLOCK);
     SXE_RETURN_CASE(WARN_ALREADY_CLOSED);
-    SXE_RETURN_CASE(ERROR_CACHE_UNINITIALIZED);
+    SXE_RETURN_CASE(ERROR_NOT_INITIALIZED);
     SXE_RETURN_CASE(ERROR_ALLOC);
     SXE_RETURN_CASE(ERROR_INTERNAL);
     SXE_RETURN_CASE(ERROR_NO_CONNECTION);
     SXE_RETURN_CASE(ERROR_ALREADY_CONNECTED);
     SXE_RETURN_CASE(ERROR_INVALID_URI);
-    SXE_RETURN_CASE(ERROR_BAD_MESSAGE_RECEIVED);
+    SXE_RETURN_CASE(ERROR_BAD_MESSAGE);
     SXE_RETURN_CASE(ERROR_ADDRESS_IN_USE);
     SXE_RETURN_CASE(ERROR_INTERRUPTED);
     SXE_RETURN_CASE(ERROR_COMMAND_NOT_RUN);
@@ -290,12 +292,14 @@ sxe_log_init(void)
 
 #ifdef _WIN32
     if ((sxe_log_tls_slot = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
-        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, "sxe_log_init: Unable to allocate thread local storage\n");
-        abort();
+        /* todo: use thread local storage on linux (so able to debug multi-threaded code) */
+        /* todo: consider changing sxe_log_line_out() to take const char * so that (char *)(long) unnecessary */
+        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, (char *)(long)"sxe_log_init: Unable to allocate thread local storage\n");
+        abort(); /* Coverage Exclusion - todo: win32 coverage: TLS */
     }
 #endif
 
-    SXE_LOG_SET_INDENT(0);    /* Not needed under Windows, where TLS is initialized to 0 by the OS */
+    sxe_log_set_indent(0);    /* Not needed under Windows, where TLS is initialized to 0 by the OS */
     sxe_log_is_first_call = 0;
 
     if (NULL != getenv("SXE_LOG_LEVEL")) {
@@ -355,7 +359,7 @@ sxe_log(unsigned id, SXE_LOG_LEVEL level, const char *fmt, ...)
     i = sxe_log_buffer_set_prefix(log_buffer, id, level);
     va_start(ap, fmt);
 
-    if (!sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s%s", SXE_LOG_INDENT * 2, "", (id == ~0U - 1) ? "" : "- ")) ||
+    if (!sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s%s", sxe_log_get_indent() * 2, "", (id == ~0U - 1) ? "" : "- ")) ||
         !sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, fmt    , ap                          )))
     {
         goto SXE_EARLY_OUT;
@@ -382,7 +386,7 @@ sxe_log_entry(unsigned id, SXE_LOG_LEVEL level, const char * file, int line, con
     i               = prefix_length;
     va_start(ap, fmt);
 
-    if (sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s+ ", SXE_LOG_INDENT * 2, ""))
+    if (sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s+ ", sxe_log_get_indent() * 2, ""))
     &&  sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, fmt, ap))) {
         sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
     }
@@ -390,9 +394,9 @@ sxe_log_entry(unsigned id, SXE_LOG_LEVEL level, const char * file, int line, con
     sxe_log_line_out_escaped(level, log_buffer);
     i = prefix_length;
     sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s  { // %s:%d\n",
-                        SXE_LOG_INDENT * 2, "", file, line));
+                        sxe_log_get_indent() * 2, "", file, line));
     sxe_log_line_out_escaped(level, log_buffer);
-    SXE_LOG_SET_INDENT(SXE_LOG_INDENT + 1);
+    sxe_log_set_indent(sxe_log_get_indent() + 1);
 }
 
 void
@@ -403,12 +407,12 @@ sxe_log_return(unsigned id, SXE_LOG_LEVEL level, const char * file, int line )
 
     SXE_CHECK_LOG_INITIALIZE();
     SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
-    SXEA61(SXE_LOG_INDENT > 0, "Indentation level %d must be greater than zero!\n", SXE_LOG_INDENT);
+    SXEA61(sxe_log_get_indent() > 0, "Indentation level %d must be greater than zero!\n", sxe_log_get_indent());
 
     i = sxe_log_buffer_set_prefix(log_buffer, id, level);
     sxe_log_safe_append( log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s} // %s:%d\n",
-                                  SXE_LOG_INDENT * 2, "", file, line));
-    SXE_LOG_SET_INDENT(SXE_LOG_INDENT - 1);
+                                  sxe_log_get_indent() * 2, "", file, line));
+    sxe_log_set_indent(sxe_log_get_indent() - 1);
 
 SXE_EARLY_OR_ERROR_OUT:
     sxe_log_line_out_escaped(level, log_buffer);
@@ -463,7 +467,7 @@ sxe_log_dump_memory(unsigned id, SXE_LOG_LEVEL level, const void * pointer, unsi
         i = prefix_length;
 
         if (!sxe_log_safe_append( log_buffer, &i, SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s- ",
-                                  SXE_LOG_INDENT * 2, ""))
+                                  sxe_log_get_indent() * 2, ""))
          || !sxe_log_safe_append( log_buffer, &i, SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i,
                                   sizeof(unsigned long) > 4 ? "%016lx" : "%08lx",
                                   (unsigned long)(memory.as_u08_ptr + (k * 16)))))

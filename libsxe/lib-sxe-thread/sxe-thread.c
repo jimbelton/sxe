@@ -42,7 +42,7 @@ sxe_thread_create(SXE_THREAD * thread, SXE_THREAD_RETURN (SXE_STDCALL * thread_m
         goto SXE_EARLY_OUT;
     }
 
-    switch (error = sxe_socket_get_last_error()) {
+    switch (error = sxe_socket_get_last_error()) { /* Coverage Exclusion - todo: win32 coverage */
     default: SXEL21("sxe_thread_create: Failed to create a thread: %s", sxe_socket_error_as_str(error)); break;
     }
 

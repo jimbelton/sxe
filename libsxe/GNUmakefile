@@ -19,8 +19,6 @@
 # THE SOFTWARE.
 #
 
-$(info make: TODO: fix so that "make clean ; make debug test" works; not make debug ; make debug test)
-
 # Extra stuff to build external libraries
 
 DST.lib    += $(DST.dir)/libsxe$(EXT.lib)
@@ -38,9 +36,14 @@ endif
 
 DST.obj    += $(wildcard $(COM.dir)/lib-lua/$(DST.dir)/lua/*$(EXT.obj))
 
-libheaders  = $(wildcard $(1)/*.h) $(wildcard $(1)/$(DST.dir)/*.h) $(wildcard $(1)/$(OS_class)/*.h) $(wildcard $(1)/$(OS_class)/sys/*.h)
-SRC.inc     = $(filter-out %-private.h,$(foreach PACKAGE,$(ALL_LIBRARIES),$(call libheaders,$(COM.dir)/lib-$(PACKAGE))))
-DST.inc     = $(filter-out %-private.h,$(foreach PACKAGE,$(ALL_LIBRARIES),$(subst /$(OS_class),,$(subst ./lib-$(PACKAGE),$(DST.dir)/include,$(call libheaders,$(COM.dir)/lib-$(PACKAGE))))))
+libheaders  = $(wildcard $(1)/*.h) $(wildcard $(1)/$(DST.dir)/*.h) $(wildcard $(1)/$(OS_class)/*.h)
+sysheaders  = $(wildcard $(1)/$(OS_class)/sys/*.h)
+SRC.inc.lib = $(filter-out %-private.h,$(foreach PACKAGE,$(ALL_LIBRARIES),$(call libheaders,$(COM.dir)/lib-$(PACKAGE))))
+DST.inc.lib = $(filter-out %-private.h,$(foreach PACKAGE,$(ALL_LIBRARIES),$(subst /$(OS_class),,$(subst ./lib-$(PACKAGE),$(DST.dir)/include,$(call libheaders,$(COM.dir)/lib-$(PACKAGE))))))
+SRC.inc.sys = $(filter-out %-private.h,$(foreach PACKAGE,$(ALL_LIBRARIES),$(call sysheaders,$(COM.dir)/lib-$(PACKAGE))))
+DST.inc.sys = $(filter-out %-private.h,$(foreach PACKAGE,$(ALL_LIBRARIES),$(subst /$(OS_class),,$(subst ./lib-$(PACKAGE),$(DST.dir)/include,$(call sysheaders,$(COM.dir)/lib-$(PACKAGE))))))
+SRC.inc     = $(SRC.inc.lib) $(SRC.inc.sys)
+DST.inc     = $(DST.inc.lib) $(DST.inc.sys)
 
 include dependencies.mak
 
@@ -48,11 +51,14 @@ ifdef MAKE_DEBUG
 $(info make: debug: SRC.inc           : $(SRC.inc))
 endif
 
-$(DST.dir)/include/%.h:	$(SRC.inc)
-	-@$(MKDIR) $(call OSPATH,$(DST.dir)/include/sys) $(TO_NUL) $(FAKE_PASS)
-	$(COPY) $(call OSPATH,$(wildcard */$*.h) $(wildcard */$(OS_class)/$*.h) $(wildcard */$(OS_class)/sys/$*.h)) $(call OSPATH,$(subst /$(DST.dir),,$@))
-
-include:       $(DST.inc)
+include:
+	@$(MAKE_PERL_ECHO_BOLD) "make[$(MAKELEVEL)]: updating: $(DST.dir)/include"
+	-$(MAKE_RUN)$(MKDIR) $(call OSPATH,$(DST.dir)/include) $(TO_NUL) $(FAKE_PASS)
+	$(MAKE_RUN) $(COPYFILES2DIR) $(SRC.inc.lib) $(DST.dir)/include
+ifneq ($(SRC.inc.sys),)
+	-$(MAKE_RUN)$(MKDIR) $(call OSPATH,$(DST.dir)/include/sys) $(TO_NUL) $(FAKE_PASS)
+	$(MAKE_RUN) $(COPYFILES2DIR) $(SRC.inc.sys) $(DST.dir)/include/sys
+endif
 
 clean::        $(DEP.dirs)
 

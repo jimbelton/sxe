@@ -21,10 +21,10 @@ getinfo(lua_State *L, lua_Debug *ar, const char **func,
     *line = -1;
     *code = "????";
     if (!lua_getstack(L, 1, ar))
-        luaL_error(L, "error getting stack frame");    /* COVERAGE EXCLUSION: have no idea when this happens */
+        luaL_error(L, "error getting stack frame"); /* COVERAGE EXCLUSION: have no idea when this happens */
     lua_getinfo(L, "Snl", ar);
     if (*ar->namewhat)
-        *func = ar->name;                              /* COVERAGE EXCLUSION: have no idea when this happens */
+        *func = ar->name; /* COVERAGE EXCLUSION: have no idea when this happens */
     if (ar->currentline > 0) {
         *file = ar->short_src;
         *line = ar->currentline;
@@ -40,7 +40,7 @@ lsxe_tap_plan_tests(lua_State *L)
 }
 
 static int
-lsxe_tap_plan_no_plan(lua_State *L)      /* COVERAGE EXCLUSION: we already planned some tests! */
+lsxe_tap_plan_no_plan(lua_State *L) /* Coverage Exclusion - todo: win32 coverage */
 {                                        /* COVERAGE EXCLUSION: we already planned some tests! */
     SXE_UNUSED_PARAMETER(L);             /* COVERAGE EXCLUSION: we already planned some tests! */
     plan_no_plan();                      /* COVERAGE EXCLUSION: we already planned some tests! */
@@ -66,23 +66,24 @@ lsxe_tap_pass(lua_State *L)
 }
 
 static int
-lsxe_tap_fail(lua_State *L)                                         /* COVERAGE EXCLUSION: don't test failures */
-{                                                                   /* COVERAGE EXCLUSION: don't test failures */
-    dINFO;                                                          /* COVERAGE EXCLUSION: don't test failures */
-    const char *msg = luaL_checkstring(L, 1);                       /* COVERAGE EXCLUSION: don't test failures */
-    getinfo(L,&ar,&func,&file,&line,&code);                         /* COVERAGE EXCLUSION: don't test failures */
-    _gen_result(0,(const void*)0,0,0,0,func,file,line,"%s",msg);    /* COVERAGE EXCLUSION: don't test failures */
-    return 0;                                                       /* COVERAGE EXCLUSION: don't test failures */
+lsxe_tap_fail(lua_State *L) /* Coverage Exclusion - todo: win32 coverage */
+{                                                                /* COVERAGE EXCLUSION: hard to test fail() */
+    dINFO;                                                       /* COVERAGE EXCLUSION: have no test fail() */
+    const char *msg = luaL_checkstring(L, 1);                    /* COVERAGE EXCLUSION: have no test fail() */
+    getinfo(L,&ar,&func,&file,&line,&code);                      /* COVERAGE EXCLUSION: have no test fail() */
+    _gen_result(0,(const void*)0,0,0,0,func,file,line,"%s",msg); /* COVERAGE EXCLUSION: have no test fail() */
+    return 0;                                                    /* COVERAGE EXCLUSION: have no test fail() */
 }
 
 static int
 lsxe_tap_ok1(lua_State *L)
 {
     dINFO;
-    int test = lua_toboolean(L, 1) ? 1 : 0;
-
+    int test = lua_toboolean(L, 1);
     getinfo(L,&ar,&func,&file,&line,&code);
-    _gen_result(0,(const void*)test,0,0,0,func,file,line,"%s",code);
+    (test) ?
+        _gen_result(0,(const void*)1,0,0,0,func,file,line,"%s",code) :
+        _gen_result(0,(const void*)0,0,0,0,func,file,line,"%s",code); /* Coverage Exclusion - todo: win32 coverage */
     return 0;
 }
 
@@ -90,11 +91,12 @@ static int
 lsxe_tap_ok(lua_State *L)
 {
     dINFO;
-    int          test = lua_toboolean(L, 1) ? 1 : 0;
-    const char * msg  = luaL_checkstring(L, 2);
-
+    int test = lua_toboolean(L, 1);
+    const char *msg = luaL_checkstring(L, 2);
     getinfo(L,&ar,&func,&file,&line,&code);
-    _gen_result(0,(const void*)test,0,0,0,func,file,line,"%s",msg);
+    (test) ?
+        _gen_result(0,(const void*)1,0,0,0,func,file,line,"%s",msg) :
+        _gen_result(0,(const void*)0,0,0,0,func,file,line,"%s",msg); /* Coverage Exclusion - todo: win32 coverage */
     return 0;
 }
 
@@ -102,11 +104,12 @@ static int
 lsxe_tap_is(lua_State *L)
 {
     dINFO;
-    int          test = lua_equal(L, 1, 2) ? 1 : 0;
-    const char * msg  = lua_gettop(L) == 3 ? luaL_checkstring(L, 3) : "unknown test";
-
+    int test = lua_equal(L, 1, 2);
+    const char *msg = lua_gettop(L) == 3 ? luaL_checkstring(L, 3) : "unknown test";
     getinfo(L,&ar,&func,&file,&line,&code);
-    _gen_result(0,(const void*)test,0,0,0,func,file,line,"%s",msg);
+    (test) ?
+        _gen_result(0,(const void*)1,0,0,0,func,file,line,"%s",msg) :
+        _gen_result(0,(const void*)0,0,0,0,func,file,line,"%s",msg); /* Coverage Exclusion - todo: win32 coverage */
     return 0;
 }
 

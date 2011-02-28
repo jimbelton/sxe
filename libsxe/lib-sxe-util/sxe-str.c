@@ -77,6 +77,21 @@ sxe_strnstr(const char * buf, const char * str, unsigned n)
 }
 
 char *
+sxe_rstrnstr(const char * haystack, const char * needle, unsigned haystack_len)
+{
+    unsigned needle_len = strlen(needle);
+    const char * ptr;
+
+    for (ptr = haystack + haystack_len - needle_len; ptr >= haystack; ptr--) {
+        if (memcmp(ptr, needle, needle_len) == 0) {
+            return (char *)(unsigned long)ptr;
+        }
+    }
+
+    return NULL;
+}
+
+char *
 sxe_strncasestr(const char * buf, const char * str, unsigned n)
 {
     unsigned     length = strlen(str);

@@ -34,10 +34,14 @@
 
 #define _CRT_NONSTDC_NO_DEPRECATE 1    /* Don't complain about POSIX functions */
 
-#define PATH_MAX      MAX_PATH
 #define PIPE_BUF      4096
+
+#ifdef MAKE_MINGW
+#else
+#define PATH_MAX      MAX_PATH
 #define STDERR_FILENO fileno(stderr)
 #define STDOUT_FILENO fileno(stdout)
+#endif
 
 #define ftruncate(fd, size)     _chsize((fd), (size))
 #define sleep(t)                Sleep((t) * 1000)

@@ -37,27 +37,74 @@
 #define TEST_PIPE_NAME_PREFIX "/tmp/pipe."
 #define TEST_PID_MAX_DIGITS   10
 
-static char  pipe_name[] = "/tmp/pipe.##########";    /* Must be in /tmp due to use of Samba on SXL pairing stations */
-static SXE * pipe_listener;                           /* HTTP server, listening on a pipe                            */
-static SXE * pipe_client;                             /* Apache -- the pipe client                                   */
-static SXE * tcp_listener;                            /* Apache -- listening on TCP                                  */
-static SXE * tcp_client;                              /* The remote HTTP client                                      */
-
 #ifdef WINDOWS_NT
+
 int
 main(void)
 {
     plan_skip_all("Pipes are not yet supported on windows");
     return exit_status();
 }
+
 #else
 
+static char  pipe_name[] = "/tmp/pipe.##########";    /* Must be in /tmp due to use of Samba on SXL pairing stations */
+static SXE * pipe_listener;                           /* HTTP server, listening on a pipe                            */
+static SXE * pipe_client;                             /* Apache -- the pipe client                                   */
+static SXE * tcp_listener;                            /* Apache -- listening on TCP                                  */
+static SXE * tcp_client;                              /* The remote HTTP client                                      */
+
 static void
-test_event_httpd(SXE_HTTP_REQUEST * request, SXE_HTTPD_CONN_STATE state, char * chunk, size_t chunk_len, void * user)
+evhttp_connect(SXE_HTTPD_REQUEST *request)
 {
-    SXEE65("test_event_httpd(request=%p,state=%u,chunk=%p,chunk_len=%u,user=%p)", request, state, chunk, chunk_len, user);
-    tap_ev_push("test_event_httpd", 5, "request", request, "state", state, "chunk", chunk, "chunk_len", chunk_len, "user", user);
-    SXER60("return");
+    SXE * this = request->sxe;
+    SXE_UNUSED_PARAMETER(this);
+    SXEE92I("%s(request=%p)", __func__, request);
+    tap_ev_push("evhttp_connect", 1, "request", request);
+    SXER90I("return");
+}
+
+static void
+evhttp_request(SXE_HTTPD_REQUEST *request,
+               const char *method, unsigned method_len,
+               const char *url, unsigned url_len,
+               const char *version, unsigned version_len)
+{
+    SXE * this = request->sxe;
+    SXE_UNUSED_PARAMETER(this);
+    SXE_UNUSED_PARAMETER(method);
+    SXE_UNUSED_PARAMETER(method_len);
+    SXE_UNUSED_PARAMETER(version);
+    SXE_UNUSED_PARAMETER(version_len);
+    SXEE98I("%s(request=%p,method=[%.*s],url=[%.*s],version=[%.*s])", __func__, request,
+            method_len, method, url_len, url, version_len, version);
+    tap_ev_push("evhttp_request", 3,
+                "request", request,
+                "url", tap_dup(url, url_len),
+                "url_len", url_len);
+    SXER90I("return");
+}
+
+static void
+evhttp_respond(SXE_HTTPD_REQUEST *request)
+{
+    SXE * this = request->sxe;
+    SXE_UNUSED_PARAMETER(this);
+    SXE_UNUSED_PARAMETER(request);
+    SXEE92I("%s(request=%p)", __func__, request);
+    tap_ev_push("evhttp_respond", 1, "request", request);
+    SXER90I("return");
+}
+
+static void
+evhttp_close(SXE_HTTPD_REQUEST *request)
+{
+    SXE * this = request->sxe;
+    SXE_UNUSED_PARAMETER(this);
+    SXE_UNUSED_PARAMETER(request);
+    SXEE92I("%s(request=%p)", __func__, request);
+    tap_ev_push("evhttp_close", 1, "request", request);
+    SXER90I("return");
 }
 
 static void
@@ -115,7 +162,7 @@ test_event_client_read(SXE * this, int length)
     SXE_UNUSED_PARAMETER(length);
 
     if (SXE_BUF_USED(this) < SXE_LITERAL_LENGTH(TEST_HTTP_RESPONSE)) {
-        SXEL23I("test_event_proxy_tcp_read: Received %u bytes of %u, need %u; keep waiting...", length, SXE_BUF_USED(this),
+        SXEL23I("test_event_client_read: Received %u bytes of %u, need %u; keep waiting...", length, SXE_BUF_USED(this),
                 SXE_LITERAL_LENGTH(TEST_HTTP_RESPONSE));
         goto SXE_EARLY_OUT;
     }
@@ -130,7 +177,7 @@ int
 main(void)
 {
     SXE_HTTPD          httpd;
-    SXE_HTTP_REQUEST * request;
+    SXE_HTTPD_REQUEST * request;
     tap_ev             ev;
 
     plan_tests(8);
@@ -144,7 +191,13 @@ main(void)
      */
     snprintf(&pipe_name[sizeof(TEST_PIPE_NAME_PREFIX) - 1], TEST_PID_MAX_DIGITS + 1, "%d", getpid());
     (void)unlink(pipe_name);
-    sxe_httpd_construct(&httpd, 1, test_event_httpd, 0);
+
+    sxe_httpd_construct(&httpd, 1, 0);
+    SXE_HTTPD_SET_HANDLER(&httpd, connect, evhttp_connect);
+    SXE_HTTPD_SET_HANDLER(&httpd, request, evhttp_request);
+    SXE_HTTPD_SET_HANDLER(&httpd, respond, evhttp_respond);
+    SXE_HTTPD_SET_HANDLER(&httpd, close,   evhttp_close);
+
     ok((pipe_listener = sxe_httpd_listen_pipe(&httpd, pipe_name)) != NULL,                 "Listened on pipe %s", pipe_name);
     httpd.user_data   = pipe_listener;
 
@@ -160,20 +213,20 @@ main(void)
            "Couldn't allocate a SXE for the client");
     SXEA10(sxe_connect(tcp_client, "127.0.0.1", SXE_LOCAL_PORT(tcp_listener)) == SXE_RETURN_OK, "Failed to connect from client");
 
-    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_httpd",                 "HTTPD got the 1st event");
-    is(tap_ev_arg(ev, "state"), SXE_HTTPD_CONN_IDLE,                                       "It's a client connected");
-    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_httpd",                 "HTTPD got the 2nd event");
-    is(tap_ev_arg(ev, "state"), SXE_HTTPD_CONN_REQ_RESPONSE,                               "It's a ready for response event");
-    request = (SXE_HTTP_REQUEST *)(long)tap_ev_arg(ev, "request");
-    is_strncmp(TEST_URL, SXE_HTTP_REQUEST_URL(request), SXE_HTTP_REQUEST_URL_LEN(request), "Got URL '" TEST_URL "'");
-    sxe_httpd_response_simple(request, 200, "OK", "Pong!\r\n");
-    sxe_httpd_response_close(request);
-
-    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",           "Client got a read event");
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_connect",                   "HTTPD got connection");
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_request",                   "HTTPD got request event");
+    is_strncmp(TEST_URL, (const char *)tap_ev_arg(ev, "url"), tap_ev_arg(ev, "url_len"),   "Got URL '" TEST_URL "'");
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_respond",                   "HTTPD ready for response");
+    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    sxe_httpd_response_simple(request, 200, "OK", "Pong!\r\n", 0);
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",           "Client got read event");
     is_strncmp(tap_ev_arg(ev, "buf"), TEST_HTTP_RESPONSE, tap_ev_arg(ev, "used"),          "Got response '" TEST_HTTP_RESPONSE "'");
+    sxe_close(tcp_client);
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_close",                     "HTTPD got close event");
 
     sxe_close(pipe_listener);
     (void)unlink(pipe_name);
     return exit_status();
 }
+
 #endif

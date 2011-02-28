@@ -80,13 +80,17 @@ extern int          (             * mock_gettimeofday)(struct timeval * __restri
 extern int          (MOCK_STDCALL * mock_listen)      (MOCK_SOCKET, int);
 extern off_t        (             * mock_lseek)       (int fd, off_t offset, int whence);
 extern void *       (             * mock_malloc)      (size_t);
-extern MOCK_SSIZE_T (MOCK_STDCALL * mock_recvfrom)    (MOCK_SOCKET, void *, MOCK_SOCKET_SSIZE_T, int, struct sockaddr *, MOCK_SOCKLEN_T *);
+extern MOCK_SSIZE_T (MOCK_STDCALL * mock_recvfrom)    (MOCK_SOCKET, MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int, struct sockaddr *, MOCK_SOCKLEN_T *);
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_send)        (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int);
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendfile)    (int, int, off_t *, size_t);
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendto)      (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int,
                                                        const struct sockaddr *, MOCK_SOCKLEN_T);
 extern MOCK_SOCKET  (MOCK_STDCALL * mock_socket)      (int, int, int);
 extern MOCK_SSIZE_T (             * mock_write)       (int, const void *, MOCK_SIZE_T);
+
+#ifdef WINDOWS_NT
+extern DWORD        (MOCK_STDCALL * mock_timeGetTime) (void);
+#endif
 
 #ifndef MOCK_IMPL
 
@@ -103,7 +107,9 @@ extern MOCK_SSIZE_T (             * mock_write)       (int, const void *, MOCK_S
 #define lseek(fd, offset, whence)                (*mock_lseek)       ((fd), (offset), (whence))
 #define malloc(size)                             (*mock_malloc)      (size)
 #define send(fd, buf, len, flags)                (*mock_send)        ((fd), (buf), (len), (flags))
-#ifndef WINDOWS_NT
+#ifdef WINDOWS_NT
+#define timeGetTime()                            (*mock_timeGetTime) ()
+#else
 #define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
 #endif
 #define sendto(fd, buf, len, flags, to, tolen)   (*mock_sendto)      ((fd), (buf), (len), (flags), (to), (tolen))

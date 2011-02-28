@@ -28,8 +28,8 @@ TOP.dir = $(COM.dir)/..
 # This is used by both the package GNUmakefiles and the top level GNUmakefile
 #
 remove_to = $(if $(filter $(1),$(2)),$(call remove_to,$(1),$(wordlist 2,$(words $(2)),$(2))),$(2))
-ALL_LIBRARIES    = sxe-lua sxe-httpd sxe-http sxe-sync-ev sxe-pool-tcp sxe-hash lookup3 sha1 sxe-spawn sxe sxe-pool sxe-thread \
-				   sxe-mmap sxe-list sxe-socket sxe-test ev lua sxe-cstr sxe-util sxe-log mock port tap
+ALL_LIBRARIES    = sxe-ring-buffer sxe-lua sxe-httpd sxe-http sxe-sync-ev sxe-pool-tcp sxe-hash lookup3 sha1 sxe-spawn sxe sxe-pool \
+				   sxe-thread sxe-mmap sxe-list sxe-socket sxe-test ev lua sxe-cstr sxe-util sxe-log mock port tap
 LIB_DEPENDENCIES = $(call remove_to,$(LIBRARIES),$(ALL_LIBRARIES))
 
 # Convention opt-out list
@@ -41,3 +41,11 @@ COVERAGE_OPTOUT_LIST   = lib-lookup3 lib-mock lib-port lib-sha1 lib-tap
 include $(TOP.dir)/mak/mak-common.mak
 
 IFLAGS += $(if $(findstring port,$(LIB_DEPENDENCIES)),$(CC_INC)$(COM.dir)/lib-port/$(OS_class),)
+
+ifeq ($(OS),Windows_NT)
+ifdef MAKE_MINGW
+    LINK_FLAGS += -lWinmm
+else
+    LINK_FLAGS += /DEFAULTLIB:Winmm.lib
+endif
+endif

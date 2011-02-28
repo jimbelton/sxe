@@ -26,27 +26,6 @@
 #include "sxe-util.h"
 #include "sxe-httpd.h"
 
-static void
-http_handler(SXE_HTTP_REQUEST *request, SXE_HTTPD_CONN_STATE state, char *chunk, size_t chunk_len, void *user)
-{
-    SXE *this = request->sxe;
-
-    SXE_UNUSED_PARAMETER(this);
-    SXE_UNUSED_PARAMETER(state);
-    SXE_UNUSED_PARAMETER(chunk);
-    SXE_UNUSED_PARAMETER(chunk_len);
-    SXE_UNUSED_PARAMETER(user);
-
-    SXEE65I("http_handler(request=%p,state=%u,chunk=%p,chunk_len=%u,user=%p)", request, state, chunk, chunk_len, user);
-
-    if (state == SXE_HTTPD_CONN_REQ_RESPONSE) {
-        SXEL62I("URL: [%.*s]", SXE_HTTP_REQUEST_URL_LEN(request), SXE_HTTP_REQUEST_URL(request));
-        sxe_httpd_response_simple(request, 404, "Not found", "<nope/>\r\n");
-    }
-
-    SXER60I("return");
-}
-
 static int connections;
 
 static void
@@ -101,7 +80,7 @@ main(void)
     sxe_register(1000, 0);
     sxe_init();
 
-    sxe_httpd_construct(&httpd, 1, http_handler, 0);
+    sxe_httpd_construct(&httpd, 1, 0);
     listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
     httpd.user_data = listener;
 

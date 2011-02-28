@@ -22,102 +22,73 @@
 
 #include <string.h>
 
-#include "tap.h"
-#include "sxe-util.h"
 #include "sxe-httpd.h"
+#include "sxe-test.h"
+#include "sxe-util.h"
+#include "tap.h"
 
-static void
-http_handler(SXE_HTTP_REQUEST *request, SXE_HTTPD_CONN_STATE state, char *chunk, size_t chunk_len, void *user)
-{
-    SXE *this = request->sxe;
-    int done = 0;
+#define TEST_WAIT               5.0
+#define TEST_200_RESPONSE       "HTTP/1.1 200 OK\r\n\r\n"
+#define TEST_200_CLOSE_RESPONSE "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n"
 
-    SXE_UNUSED_PARAMETER(this);
-    SXE_UNUSED_PARAMETER(state);
-    SXE_UNUSED_PARAMETER(chunk);
-    SXE_UNUSED_PARAMETER(chunk_len);
-    SXE_UNUSED_PARAMETER(user);
+tap_ev_queue q_httpd;
 
-    SXEE65I("http_handler(request=%p,state=%u,chunk=%p,chunk_len=%u,user=%p)", request, state, chunk, chunk_len, user);
-
-    if (chunk_len != 0) {
-        SXEL61I("ignoring callback; chunk_len is %u", chunk_len);
-        SXEL63I("Data: %d:[%.*s]", chunk_len, chunk_len, chunk);
-        goto SXE_EARLY_OUT;
-    }
-
-    if (state != SXE_HTTPD_CONN_REQ_RESPONSE) {
-        SXEL61I("ignoring callback; state is %u", state);
-        goto SXE_EARLY_OUT;
-    }
-
-    SXEL63I("URL: %d:[%.*s]", SXE_HTTP_REQUEST_URL_LEN(request), SXE_HTTP_REQUEST_URL_LEN(request), SXE_HTTP_REQUEST_URL(request));
-    if (1 == SXE_HTTP_REQUEST_URL_LEN(request))
-        done = 1;
-
-    sxe_httpd_response_simple(request, 200, "OK", "");
-
-    if (done) {
-        sxe_httpd_response_close(request);
-        SXEL11I("sxe_close()ing listen socket %p", request->server->user_data);
-        sxe_close(request->server->user_data);
-    }
-
-SXE_EARLY_OUT:
-    SXER60I("return");
-}
-
-static void
-handle_sendfile(SXE * this, SXE_RETURN final)
-{
-    SXE_UNUSED_PARAMETER(final);
-    SXEL41I("closing fd %d", this->sendfile_in_fd);
-    close(this->sendfile_in_fd);
-    SXE_WRITE_LITERAL(this,
-                      "GET / HTTP/1.1\r\n"
-                      "Host: foobar\r\n"
-                      "Connection: close\r\n\r\n");
-}
-
-static void
-handle_connect(SXE * this)
-{
-    int fd = open("../sxe-httpd.c", O_RDONLY);
-    struct stat st;
-    char buf[1024];
-    size_t len;
-
-    fstat(fd, &st);
-    len = snprintf(buf, sizeof buf,
-            "POST /sxe-httpd.c HTTP/1.1\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: %lu\r\n\r\n", st.st_size);
-
-    sxe_write(this, buf, len);
 #ifndef WINDOWS_NT
-    sxe_sendfile(this, fd, (unsigned)st.st_size, handle_sendfile);
-#endif
+
+static void
+test_event_httpd_request(SXE_HTTPD_REQUEST *request, const char * method, unsigned method_length, const char * url,
+                         unsigned url_length, const char * version, unsigned version_length)
+{
+    SXEE68("%s(request=%p, method='%.*s', url='%.*s', version='%*.s'", __func__, request, method_length, method,
+           url_length, url, version_length, version);
+    tap_ev_queue_push(q_httpd, __func__, 7, "request", request, "method_length", method_length, "method", method,
+                     "url_length", url_length, "url", url, "version_length", version_length, "version", version);
+    SXER60("return");
 }
 
 static void
-handle_read(SXE * this, int length)
+test_event_httpd_respond(SXE_HTTPD_REQUEST *request)
 {
-    SXE_UNUSED_PARAMETER(this);
+    SXEE62("%s(request=%p)", __func__, request);
+    tap_ev_queue_push(q_httpd, __func__, 1, "request", request);
+    SXER60("return");
+}
+
+static void
+test_event_client_file_sent(SXE * this, SXE_RETURN final)
+{
+    SXEE63I("%s(this=%p, final=%s)", __func__, this, sxe_return_to_string(final));
+    tap_ev_push(__func__, 2, "this", this, "final", final);
+    SXER60("return");
+}
+
+static void
+test_event_client_connected(SXE * this)
+{
+    SXEE62I("%s(this=%p)", __func__, this);
+    tap_ev_push(__func__, 1, "this", this);
+    SXER60("return");
+}
+
+static void
+test_event_client_read(SXE * this, int length)
+{
     SXE_UNUSED_PARAMETER(length);
-    ok(SXE_BUF_USED(this) >= 38, "post response >= 38: %d", SXE_BUF_USED(this));
-    is_strncmp(SXE_BUF(this), "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", 38, "post response 200 OK");
-    sxe_buf_consume(this, 38);
-    ok(SXE_BUF_USED(this) >= 38, "post response >= 38: %d", SXE_BUF_USED(this));
-    is_strncmp(SXE_BUF(this), "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", 38, "post response 200 OK");
-    sxe_buf_consume(this, 38);
-    sxe_close(this);
+    SXEE64I("%s(this=%p, buf='%.*s')", __func__, this, SXE_BUF_USED(this), SXE_BUF(this));
+    tap_ev_push(__func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
+    sxe_buf_clear(this);
+    SXER60("return");
 }
 
 static void
-handle_close(SXE * this)
+test_event_client_close(SXE * this)
 {
-    SXE_UNUSED_PARAMETER(this);
+    SXEE62I("%s(this=%p)", __func__, this);
+    tap_ev_push(__func__, 1, "this", this);
+    SXER60("return");
 }
+
+#endif
 
 int
 main(void)
@@ -125,24 +96,73 @@ main(void)
 #ifdef WINDOWS_NT
     plan_skip_all("No sendfile on windows");
 #else
-    SXE_HTTPD httpd;
-    SXE *listener;
-    SXE *c;
+    SXE_HTTPD           httpd;
+    SXE               * listener;
+    SXE               * client;
+    tap_ev              ev;
+    char                buffer[1024];
+    size_t              length;
+    SXE_RETURN          result;
+    int                 fd;
+    struct stat         file_status;
+    SXE_HTTPD_REQUEST * request;
 
-    plan_tests(4);
+    q_httpd = tap_ev_queue_new();
+    tap_plan(18, TAP_FLAG_ON_FAILURE_EXIT | TAP_FLAG_DEBUG, NULL);
 
     sxe_register(4, 0);        /* http listener and connections */
     sxe_register(8, 0);        /* http clients */
     sxe_init();
 
-    sxe_httpd_construct(&httpd, 3, http_handler, 0);
-    listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
+    sxe_httpd_construct(  &httpd, 3, 0);
+    SXE_HTTPD_SET_HANDLER(&httpd, request, test_event_httpd_request);
+    SXE_HTTPD_SET_HANDLER(&httpd, respond, test_event_httpd_respond);
+
+    listener        = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
     httpd.user_data = listener;
+    client          = sxe_new_tcp(NULL, "0.0.0.0", 0, test_event_client_connected, test_event_client_read, test_event_client_close);
+    sxe_connect(client, "127.0.0.1", SXE_LOCAL_PORT(listener));
 
-    c = sxe_new_tcp(NULL, "0.0.0.0", 0, handle_connect, handle_read, handle_close);
-    sxe_connect(c, "127.0.0.1", SXE_LOCAL_PORT(listener));
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_connected", "Got a connected event");
+    is(tap_ev_arg(ev, "this"), client,                                                "On the client");
+    SXEA11((fd = open("../sxe-httpd.c", O_RDONLY)) >= 0,                              "Failed to open '../sxe-httpd.c': %s", strerror(errno));
+    SXEA11(fstat(fd, &file_status)                          >= 0,                              "fstat failed: %s", strerror(errno));
+    length = snprintf(buffer, sizeof(buffer), "POST /sxe-httpd.c HTTP/1.1\r\nContent-Type: text/plain\r\n"
+                                              "Content-Length: %lu\r\n\r\n", file_status.st_size);
+    SXEA11((result = sxe_write(client, buffer, length)) == SXE_RETURN_OK,             "sxe_write failed: %s", sxe_return_to_string(result));
+    sxe_sendfile(client, fd, (unsigned)file_status.st_size, test_event_client_file_sent);
 
-    ev_loop(ev_default_loop(EVFLAG_AUTO), 0);
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_request", "Got a request event");
+    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    is(tap_ev_arg(ev, "url_length"), strlen("/sxe-httpd.c"),                          "Request URL has the expected length");
+    is_strncmp(tap_ev_arg(ev, "url"), "/sxe-httpd.c", strlen("/sxe-httpd.c"),         "Request is for URL '/sxe-httpd.c'");
+
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_file_sent", "Got a file-sent event");
+
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, 30, &ev), "test_event_httpd_respond", "Got a respond event");
+    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    sxe_httpd_response_simple(request, 200, "OK", NULL, NULL);
+
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");
+    is((unsigned)tap_ev_arg(ev, "used"), strlen(TEST_200_RESPONSE),                   "POST response has expected length");
+    is_strncmp(tap_ev_arg(ev, "buf"), TEST_200_RESPONSE, strlen(TEST_200_RESPONSE),   "POST response is a 200 OK");
+    SXE_WRITE_LITERAL(client, "GET / HTTP/1.1\r\nHost: foobar\r\nConnection: close\r\n\r\n");
+
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_request", "Got a request event");
+    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    is(tap_ev_arg(ev, "url_length"), strlen("/"),                                     "Request URL has the expected length");
+    is_strncmp(tap_ev_arg(ev, "url"), "/", strlen("/"),                               "Request is for URL '/'");
+
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_respond", "Got a respond event");
+    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    sxe_httpd_response_simple(request, 200, "OK", NULL, "Connection", "close", NULL);
+    sxe_close(request->sxe);
+
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");
+    is((unsigned)tap_ev_arg(ev, "used"), strlen(TEST_200_CLOSE_RESPONSE),             "GET response has expected length");
+    is_strncmp(tap_ev_arg(ev, "buf"), TEST_200_CLOSE_RESPONSE, strlen(TEST_200_CLOSE_RESPONSE),
+                                                                                      "GET response is a 200 OK with close");
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_close",     "Got a close event");
 #endif
 
     return exit_status();

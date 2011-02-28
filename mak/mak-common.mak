@@ -26,68 +26,31 @@
 #   CONVENTION_OPTOUT_LIST = List of the packages to opt out of convention checks (e.g: lib-mock lib-port)
 #   COVERAGE_OPTOUT_LIST   = List of the packages to opt out of coverage   checks (e.g: lib-mock lib-port)
 
+# See http://www.electric-cloud.com/blog/2009/08/19/makefile-performance-built-in-rules/
+# No builtin implicit rules:
+.SUFFIXES:
+MAKEFLAGS = --no-builtin-rules
+
 ifeq ($(OS),Windows_NT)
+    ifdef MAKE_DEBUG
+        $(info make[$(MAKELEVEL)]: debug: include $(TOP.dir)/mak/mak-winnt.mak)
+    endif
     include $(TOP.dir)/mak/mak-winnt.mak
 else
+    ifdef MAKE_DEBUG
+        $(info make[$(MAKELEVEL)]: debug: include $(TOP.dir)/mak/mak-unix.mak)
+    endif
     include $(TOP.dir)/mak/mak-unix.mak
 endif
+
+ifdef MAKE_DEBUG
+    $(info make[$(MAKELEVEL)]: debug: include $(TOP.dir)/mak/mak-common-defines.mak)
+endif
+include $(TOP.dir)/mak/mak-common-defines.mak
 
 # Preserve intermediate files.
 #
 .SECONDARY:
-
-#
-# - Example usage:
-#   - @$(MAKE_PERL_ECHO) "make: building: $@"
-#
-
-define MAKE_PERL_ECHO_BOLD
-$(PERL) -e $(OSQUOTE) \
-	$$text  = shift @ARGV; \
-    $$text .= qq[ ]; \
-    $$text .= qq[=] x ( 128 - length ($$text) ); \
-    printf qq[$(OSPC)s $(OSPC)s\n], $$text, scalar localtime; \
-	exit 0; \
-	$(OSQUOTE)
-endef
-
-define MAKE_PERL_ECHO
-$(PERL) -e $(OSQUOTE) \
-	$$text  = shift @ARGV; \
-    $$text .= qq[ ]; \
-    $$text .= qq[-] x ( 128 - length ($$text) ); \
-    printf qq[$(OSPC)s $(OSPC)s\n], $$text, scalar localtime; \
-	exit 0; \
-	$(OSQUOTE)
-endef
-
-define MAKE_PERL_COVERAGE_CHECK
-$(PERL) -e $(OSQUOTE) \
-	for $$g ( @ARGV ) { \
-		next if $$g =~ /debug/; \
-		$$f =  `$(CAT) $$g`; \
-		if ( $$f =~ m~(/\* FILE COVERAGE EXCLUSION.*?\*/)~is ) { \
-			push @x, sprintf q{%s: %s}, $$g, $$1; \
-			next; \
-		} \
-		$$g =~ s~^(.*)/$(DST.dir)/(.*)\.gcov$$~$$1/$$2~; \
-		$$f =~ s~^[^\#:]+:.*$$~~gm; \
-		$$f =~ s~^\n+~~s; \
-		foreach ( split(m~\n{2,}~s,$$f) ) { \
-			$$c = sprintf q{%s:%d}, $$g, m~:\s*(\d+)~; \
-			if ( m~(/\* COVERAGE EXCLUSION.*?\*/)~is ) { \
-				push @x, sprintf q{%s: %s}, $$c, $$1; \
-				next; \
-			} \
-			$$r  = 1; \
-			$$o .= sprintf qq{%s: Error: Insufficient coverage: \n$$_\n}, $$c; \
-		} \
-	} \
-	print join(qq{\n},@x) . qq{\n} if @x; \
-	printf qq{%sCoverage is %s\n}, $$o, $$r ? q{insufficient} : q{acceptable}; \
-	exit $$r; \
-	$(OSQUOTE)
-endef
 
 ifneq ($(filter release,$(MAKECMDGOALS)),)
     DEBUG    := 0
@@ -135,18 +98,25 @@ ifdef DST.dir
         COVERAGE_LIBS    := $(COV_LFLAGS)
         COVERAGE_CFLAGS  := $(COV_CFLAGS)
         COVERAGE_INIT    := $(COV_INIT)
-        COVERAGE_REAP    := $(COV_REAP)
-        COVERAGE_CHECK   := $(MAKE_PERL_COVERAGE_CHECK) $(DST.dir)/*.c.gcov
+        COVERAGE_CHECK   := $(MAKE_PERL_COVERAGE_CHECK) $(call OSPATH,$(DST.dir) $(OS_class))
     endif
 
-    $(info make: ensure folder exists: $(DST.dir))
-    DUMMY := $(shell $(MKDIR) $(DST.dir) $(REDIRECT))
-    ifdef THIRD_PARTY.dir
-        $(info make: replicating 3rd party: $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir)))
-        DUMMY := $(shell $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir)))
-		ifdef THIRD_PARTY.del
-			DUMMY := $(shell $(DEL) $(DST.dir)$(DIR_SEP)$(THIRD_PARTY.dir)$(DIR_SEP)$(THIRD_PARTY.del))
-		endif
+    ifndef MAKE_PEER_DEPENDENTS
+        # come here if       making peer dependents
+    else
+        # come here if *not* making peer dependents
+        ifdef MAKE_DEBUG
+        $(info make[$(MAKELEVEL)]: ensure folder exists: $(DST.dir))
+        endif
+        DUMMY := $(shell $(MKDIR) $(DST.dir) $(REDIRECT))
+        ifdef THIRD_PARTY.dir
+            DUMMY := $(shell $(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: 3rdparty: replicating: $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir))")
+            $(info $(DUMMY))
+            DUMMY := $(shell $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir)))
+            ifdef THIRD_PARTY.del
+               DUMMY := $(shell $(DEL) $(DST.dir)$(DIR_SEP)$(THIRD_PARTY.dir)$(DIR_SEP)$(THIRD_PARTY.del))
+            endif
+        endif
     endif
 else
     ifneq ($(filter test,$(MAKECMDGOALS)),)
@@ -162,11 +132,19 @@ ifneq ($(filter test,$(MAKECMDGOALS)),)
 endif
 
 all : convention_usage
-	@echo $(ECHOQUOTE)usage: make realclean$(ECHOESCAPE)|clean$(ECHOESCAPE)|(release$(ECHOESCAPE)|debug$(ECHOESCAPE)|coverage [test])$(ECHOQUOTE)
-	@echo $(ECHOQUOTE)usage: note: use MAKE_DEBUG=1 for make file instrumentation$(ECHOQUOTE)
-	@echo $(ECHOQUOTE)usage: note: use MAKE_PEER_DEPENDENTS=0 for no recursive make$(ECHOQUOTE)
-	@echo $(ECHOQUOTE)usage: note: use SXE_LOG_LEVEL=7 to filter lib-sxe-* logging$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: make realclean$(ECHOESCAPE)|clean$(ECHOESCAPE)|(release$(ECHOESCAPE)|debug$(ECHOESCAPE)|coverage [test])$(ECHOESCAPE)|check$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: check:          winnt   winnt mingw $(ECHOESCAPE)<- winnt: gcc $(ECHOESCAPE)& cl$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: check:          mingw   mingw mingw $(ECHOESCAPE)<- winnt: gcc$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: check:          linux   linux linux $(ECHOESCAPE)<- linux: gcc$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: check:          rhes5   rhes5 rhes5 $(ECHOESCAPE)<- rhes5: gcc$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set MAKE_DEBUG=1 for make file instrumentation$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set MAKE_PEER_DEPENDENTS=0 for no recursive make$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set SXE_LOG_LEVEL=7 to filter lib-sxe-* logging$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: add path to mingw32-gcc.exe to enable mingw build$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: add __debugbreak(); to breakpoint into MSVC debugger$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: hudson url: http://ci-controller-ubuntu-32.gw.catest.sophos:8080/$(ECHOQUOTE)
+
+#http://tdm-gcc.tdragon.net/download
 
 include $(TOP.dir)/mak/mak-convention.mak
 
@@ -176,20 +154,23 @@ reverse  = $(if $(1),$(call reverse,$(wordlist  2,$(words $(1)),$(1)))) $(firstw
 
 #CFLAGS   +=-DEV_MULTIPLICITY=0 # Do we need this?
 
-DEP.lib_pkgs := $(notdir $(wildcard $(foreach PACKAGE, $(LIB_DEPENDENCIES), $(COM.dir)/lib-$(PACKAGE))))
-DEP.dll_pkgs := $(notdir $(wildcard $(foreach PACKAGE, $(DLL_DEPENDENCIES), $(COM.dir)/dll-$(PACKAGE))))
+DEP.lib_pkgs := $(notdir $(wildcard $(foreach PACKAGE, $(LIBRARIES) $(LIB_DEPENDENCIES), $(COM.dir)/lib-$(PACKAGE))))
+DEP.dll_pkgs := $(notdir $(wildcard $(foreach PACKAGE,              $(DLL_DEPENDENCIES), $(COM.dir)/dll-$(PACKAGE))))
 ifeq ($(COM.dir),.)
-DEP.exe_pkgs := $(notdir $(wildcard $(foreach PACKAGE, $(EXE_DEPENDENCIES), $(COM.dir)/exe-$(PACKAGE))))
+DEP.exe_pkgs := $(notdir $(wildcard $(foreach PACKAGE,              $(EXE_DEPENDENCIES), $(COM.dir)/exe-$(PACKAGE))))
 endif
 
 DEP.includes := $(foreach PACKAGE, $(DEP.lib_pkgs) $(DEP.dll_pkgs), $(COM.dir)/$(PACKAGE))
 
-IFLAGS      = $(CC_INC). $(CC_INC)$(OS_class) $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR))
-#IFLAGS     += $(if $(findstring port,$(LIB_DEPENDENCIES)),$(CC_INC)$(COM.dir)/lib-port/$(OS_class),)
-#IFLAGS     += $(if $(findstring tap,$(LIB_DEPENDENCIES)),$(CC_INC)$(COM.dir)/lib-tap/$(DST.dir),)
-IFLAGS_TEST = $(CC_INC)$(COM.dir)/../libsxe/lib-tap/$(DST.dir) $(CC_INC)./test
-CFLAGS     += -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir) $(foreach DIR, $(DEP.includes), $(CC_INC)$(DIR)/$(DST.dir))
-CFLAGS_TEST = $(IFLAGS_TEST)
+IFLAGS      = $(CC_INC). \
+              $(CC_INC)$(OS_class) \
+              $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR)) \
+              $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR)/$(DST.dir))
+# TODO: Export lib-tap headers with libsxe.a or have a way of automatically adding lib-tap (below)
+IFLAGS_TEST = $(CC_INC)./test \
+              $(CC_INC)$(COM.dir)/../libsxe/lib-tap/$(DST.dir)
+CFLAGS     += -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir)
+CFLAGS_TEST+= $(IFLAGS_TEST)
 SRC.c      := $(wildcard *.c) $(subst $(OS_class)/,,$(wildcard $(OS_class)/*.c))
 DST.d      += $(SRC.c:%.c=$(DST.dir)/%.d) $(patsubst %,$(DST.dir)/%,$(subst .c,.d,$(wildcard test/*.c)))
 DST.lib    ?= $(foreach LIBRARY,$(LIBRARIES),$(DST.dir)/$(LIBRARY)$(EXT.lib))
@@ -205,8 +186,10 @@ DEP.dirs    = $(call reverse, $(foreach PACKAGE, $(DEP.exe_pkgs) $(DEP.dll_pkgs)
 
 # Only do coverage analysis if doing a coverage build and not in the opt-out list
 #
+ifneq ($(COVERAGE),0)
 ifneq ($(filter-out $(abspath $(addprefix $(COM.dir)/, $(COVERAGE_OPTOUT_LIST))), $(shell $(PWD))),)
-DO_COVERAGE = $(COVERAGE)
+DO_COVERAGE = coverage_clean
+endif
 endif
 
 ALL_TEST.srcs    := $(wildcard test/*.c)
@@ -217,114 +200,198 @@ COMMON_TEST.objs := $(patsubst test/%.c,$(DST.dir)/test/%$(EXT.obj),$(COMMON_TES
 
 # Walk sideways if there is no MAKE_PEER_DEPENDENTS defined
 #
-.PHONY:				$(DEP.dirs)
+.PHONY:		$(DEP.dirs)
 
 $(DEP.dirs):
 ifndef MAKE_PEER_DEPENDENTS
-	@$(MAKE_PERL_ECHO_BOLD) "make: building: peer dependent: $@"
-ifeq ($(COM.dir),.)
-	$(MAKE) -C $@ MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
+    # come here if       making peer dependents
+	@$(MAKE_PERL_ECHO_BOLD) "make[$(MAKELEVEL)]: checking: $(DST.dir): peer dependent: $@"
+	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) -C $@ MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
 else
-	$(MAKE) -C $@ MAKE_PEER_DEPENDENTS=1 $(filter-out test,$(MAKECMDGOALS))
-endif
+    # come here if *not* making peer dependents
 endif
 
 ifdef MAKE_DEBUG
-$(info make: debug: RELEASE_TYPE      : $(RELEASE_TYPE))
-$(info make: debug: TOP.dir           : $(TOP.dir))
-$(info make: debug: COM.dir           : $(COM.dir))
-$(info make: debug: SRC.c             : $(SRC.c))
-$(info make: debug: OS_class          : $(OS_class))
-$(info make: debug: OS_name           : $(OS_name))
-$(info make: debug: OS_bits           : $(OS_bits))
-$(info make: debug: MAKECMDGOALS      : $(MAKECMDGOALS))
-$(info make: debug: LIB_DEPENDENCIES  : $(LIB_DEPENDENCIES))
-$(info make: debug: DLL_DEPENDENCIES  : $(DLL_DEPENDENCIES))
-$(info make: debug: EXE_DEPENDENCIES  : $(EXE_DEPENDENCIES))
-$(info make: debug: ADDITIONAL_EXECUTABLES : $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)))
-$(info make: debug: CFLAGS            : $(CFLAGS))
-$(info make: debug: IFLAGS            : $(IFLAGS))
-$(info make: debug: THIRD_PARTY.dir   : $(THIRD_PARTY.dir))
-$(info make: debug: DEP.dirs          : $(DEP.dirs))
-$(info make: debug: DEP.includes      : $(DEP.includes))
-$(info make: debug: DEP.libs          : $(DEP.libs))
-$(info make: debug: DST.d             : $(DST.d))
-$(info make: debug: DST.inc           : $(DST.inc))
-$(info make: debug: DST.lib           : $(DST.lib))
-$(info make: debug: DST.exe           : $(DST.exe))
-$(info make: debug: DST.obj           : $(DST.obj))
-$(info make: debug: DST.oks           : $(DST.oks))
-$(info make: debug: SRC.lib           : $(SRC.lib))
-$(info make: debug: COMMON_TEST.objs  : $(COMMON_TEST.objs))
-$(info make: debug: build test objects: $(DST.dir)/test-%$(EXT.obj) : test/test-%.c)
-$(info make: debug: build test exes   : $(DST.dir)/test-%.t: $(DST.dir)/test-%$(EXT.obj) $(DST.lib) $(DEP.libs))
-$(info make: debug: run   test exes   : $(DST.dir)/%.ok: $(DST.dir)/%.t)
+$(info make[$(MAKELEVEL)]: debug: MAKECMDGOALS...........: $(MAKECMDGOALS))
+$(info make[$(MAKELEVEL)]: debug: MAKE_PEER_DEPENDENTS...: $(MAKE_PEER_DEPENDENTS))
+$(info make[$(MAKELEVEL)]: debug: MAKE_MINGW.............: $(MAKE_MINGW))
+$(info make[$(MAKELEVEL)]: debug: DEBUG..................: $(DEBUG))
+$(info make[$(MAKELEVEL)]: debug: COVERAGE...............: $(COVERAGE))
+$(info make[$(MAKELEVEL)]: debug: RELEASE_TYPE...........: $(RELEASE_TYPE))
+$(info make[$(MAKELEVEL)]: debug: TOP.dir................: $(TOP.dir))
+$(info make[$(MAKELEVEL)]: debug: COM.dir................: $(COM.dir))
+$(info make[$(MAKELEVEL)]: debug: SRC.c..................: $(SRC.c))
+$(info make[$(MAKELEVEL)]: debug: OS_class...............: $(OS_class))
+$(info make[$(MAKELEVEL)]: debug: OS_name................: $(OS_name))
+$(info make[$(MAKELEVEL)]: debug: OS_bits................: $(OS_bits))
+$(info make[$(MAKELEVEL)]: debug: LIBRARIES..............: $(LIBRARIES))
+$(info make[$(MAKELEVEL)]: debug: ALL_LIBRARIES..........: $(ALL_LIBRARIES))
+$(info make[$(MAKELEVEL)]: debug: LIB_DEPENDENCIES.......: $(LIB_DEPENDENCIES))
+$(info make[$(MAKELEVEL)]: debug: DLL_DEPENDENCIES.......: $(DLL_DEPENDENCIES))
+$(info make[$(MAKELEVEL)]: debug: EXE_DEPENDENCIES.......: $(EXE_DEPENDENCIES))
+$(info make[$(MAKELEVEL)]: debug: ADDITIONAL_EXECUTABLES.: $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)))
+$(info make[$(MAKELEVEL)]: debug: IFLAGS.................: $(IFLAGS))
+$(info make[$(MAKELEVEL)]: debug: IFLAGS_TEST............: $(IFLAGS_TEST))
+$(info make[$(MAKELEVEL)]: debug: THIRD_PARTY.dir........: $(THIRD_PARTY.dir))
+$(info make[$(MAKELEVEL)]: debug: DEP.dir................: $(DEP.dir))
+$(info make[$(MAKELEVEL)]: debug: DEP.dirs...............: $(DEP.dirs))
+$(info make[$(MAKELEVEL)]: debug: DEP.includes...........: $(DEP.includes))
+$(info make[$(MAKELEVEL)]: debug: DEP.libs...............: $(DEP.libs))
+$(info make[$(MAKELEVEL)]: debug: DST.d..................: $(DST.d))
+$(info make[$(MAKELEVEL)]: debug: DST.inc................: $(DST.inc))
+$(info make[$(MAKELEVEL)]: debug: DST.lib................: $(DST.lib))
+$(info make[$(MAKELEVEL)]: debug: DST.exe................: $(DST.exe))
+$(info make[$(MAKELEVEL)]: debug: DST.obj................: $(DST.obj))
+$(info make[$(MAKELEVEL)]: debug: DST.oks................: $(DST.oks))
+$(info make[$(MAKELEVEL)]: debug: SRC.lib................: $(SRC.lib))
+$(info make[$(MAKELEVEL)]: debug: COMMON_TEST.objs.......: $(COMMON_TEST.objs))
+$(info make[$(MAKELEVEL)]: debug: COVERAGE_OPTOUT_LIST...: $(COVERAGE_OPTOUT_LIST))
+$(info make[$(MAKELEVEL)]: debug: DO_COVERAGE............: $(DO_COVERAGE))
+$(info make[$(MAKELEVEL)]: debug: build.test.objects.....: $(DST.dir)/test-%$(EXT.obj) : test/test-%.c)
+$(info make[$(MAKELEVEL)]: debug: build.test.exes........: $(DST.dir)/test-%.t: $(DST.dir)/test-%$(EXT.obj) $(DST.lib) $(DEP.libs))
+$(info make[$(MAKELEVEL)]: debug: run...test.exes........: $(DST.dir)/%.ok: $(DST.dir)/%.t)
+$(info make[$(MAKELEVEL)]: debug: CFLAGS.................: $(CFLAGS))
+$(info make[$(MAKELEVEL)]: debug: CFLAGS_TEST............: $(CFLAGS_TEST))
+else
+MAKE_RUN=@                                   # Shut things up unless MAKE_DEBUG is set
+MAKE_DEBUG_SUB_MAKE_DIR=--no-print-directory # Shut things up unless MAKE_DEBUG is set
 endif
 
-release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DEP.dirs) $(DST.lib) $(DST.exe)
-ifneq ($(DST.inc),)
-	make DST.dir=$(DST.dir) include
+ifndef MAKE_PEER_DEPENDENTS
+    # come here if       making peer dependents
+else
+    # come here if *not* making peer dependents
+    DST.all = $(DST.inc) $(DST.lib) $(DST.exe)
 endif
-	@echo make: building: $(DST.lib)$(DST.exe) is up-to-date
+
+release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DEP.dirs) $(DST.all) $(DST.lib)
+ifneq ($(DST.inc),)
+    # come here if need to collect all include files for high level library; recurse for make wildcards
+	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) DST.dir=$(DST.dir) include
+endif
+ifndef MAKE_PEER_DEPENDENTS
+    # come here if       making peer dependents
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: built:    $(DST.lib)$(DST.exe) & all dependents $(DST.all)"
+else
+    # come here if *not* making peer dependents
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: built:    $(DST.lib)$(DST.exe)"
+endif
 
 .PHONY: coverage_clean run_tests release debug coverage
 
 coverage_clean:
-	@echo ===== coverage_clean
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: coverage: clean"
 	$(COVERAGE_INIT)
 
-run_tests : $(DST.oks)
+run_tests: $(DST.oks)
 
-test:				coverage_clean run_tests
-	@$(MAKE_PERL_ECHO) "make: tests complete"
+ifndef MAKE_PEER_DEPENDENTS
+    # come here if       making peer dependents
+.PHONY: test
+test:
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: ran:      $(DST.dir): tests complete for all dependents"
+else
+    # come here if *not* making peer dependents
+test:				$(DO_COVERAGE) run_tests
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: ran:      $(DST.dir): tests complete"
 ifdef DO_COVERAGE
 ifneq ($(strip $(DST.oks)),)
-	@$(MAKE_PERL_ECHO) "make: coverage: reap"
-	@$(COVERAGE_REAP)
-	@$(MAKE_PERL_ECHO) "make: coverage: check"
-	@$(COVERAGE_CHECK)
-	@$(DEL) $(DST.dir)$(DIR_SEP)*.c
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: coverage: check"
+	$(MAKE_RUN) $(COVERAGE_CHECK)
+	$(MAKE_RUN) $(DEL) $(DST.dir)$(DIR_SEP)*.c
+endif
 endif
 endif
 
 check :
-	@$(MAKE_PERL_ECHO) "make: pre-submit check"
-	$(MAKE) clean
-	$(MAKE) convention
-	$(MAKE) release test
-	$(MAKE) debug test
-ifneq ($(OS),Windows_NT)
-	$(MAKE) coverage test
-endif
-	@echo
-	@echo All pre-submit automated tests completed successfully!
-	@echo Please have your source code changes reviewed before submit!
-	@echo
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: pre-submit check"
+	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) clean
+	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) convention
+	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) release test
+	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) debug test
+	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) coverage test
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]:"
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: All pre-submit automated tests completed successfully!"
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: Please have your source code changes reviewed before submit!"
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]:"
 
 .SECONDARY:
 
-$(DST.dir)/test/%.d:
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(MKDIR) $(call OSPATH,$(DST.dir)/test) $(TO_NUL) $(FAKE_PASS)
-	$(PERL) $(TOP.dir)/mak/bin/mkdeps.pl -d $(OS_class) -o $(DST.dir) $(IFLAGS) $(IFLAGS_TEST) test/$*.c
+clean::
+ifdef THIRD_PARTY.dir
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: cleaning; ignore third party module (did you want make realclean?)"
+else
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: cleaning"
+	$(RMDIR) $(wildcard build-$(OS_name)-$(OS_bits)-*) $(TO_NUL) $(FAKE_PASS)
+endif
 
-$(DST.dir)/%.d:
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(PERL) $(TOP.dir)/mak/bin/mkdeps.pl -d $(OS_class) -o $(DST.dir) $(IFLAGS) $*.c
+realclean::
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: real cleaning"
+	$(RMDIR) $(wildcard build-$(OS_name)-$(OS_bits)-*) $(TO_NUL) $(FAKE_PASS)
 
 # If we are making, not cleaning, include dependency files, silently ignoring failure to include them.
 #
-ifdef DST.dir
-sinclude $(DST.d)
+ifndef MAKE_PEER_DEPENDENTS
+    # come here if       making peer dependents
+else
+    # come here if *not* making peer dependents
+    ifdef DST.dir
+        ifdef MAKE_DEBUG
+            $(info make[$(MAKELEVEL)]: debug: sinclude $(DST.d))
+        endif
+        sinclude $(DST.d)
+    endif
 endif
+
+$(DST.dir)/test/%.d:
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	$(MAKE_RUN) $(MKDIR) $(call OSPATH,$(DST.dir)/test) $(TO_NUL) $(FAKE_PASS)
+	$(MAKE_RUN) $(PERL) $(TOP.dir)/mak/bin/mkdeps.pl -d $(OS_class) -o $(DST.dir) $(IFLAGS) $(IFLAGS_TEST) test/$*.c
+
+$(DST.dir)/%.d:
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	$(MAKE_RUN) $(PERL) $(TOP.dir)/mak/bin/mkdeps.pl -d $(OS_class) -o $(DST.dir) $(IFLAGS) $*.c
+
+$(DST.dir)/test/%$(EXT.obj) : test/%.c
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	@echo       $(CC) $(CFLAGS) $(CFLAGS_TEST) $< $(CC_OUT)$@ >  $(call OSPATH,$@.out) 2>&1
+	$(MAKE_RUN) $(CC) $(CFLAGS) $(CFLAGS_TEST) $< $(CC_OUT)$@ >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
+
+# Pattern rule to make OS dependent variants of a module.
+$(DST.dir)/%$(EXT.obj):	$(OS_class)/%.c
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	@echo       $(CC) $(CFLAGS) $(CFLAGS_PROD) $(RELEASE_CFLAGS) $(COVERAGE_CFLAGS) $< $(CC_OUT)$@ >  $(call OSPATH,$@.out) 2>&1
+	$(MAKE_RUN) $(CC) $(CFLAGS) $(CFLAGS_PROD) $(RELEASE_CFLAGS) $(COVERAGE_CFLAGS) $< $(CC_OUT)$@ >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
+
+$(DST.dir)/%$(EXT.obj):	%.c
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	@echo       $(CC) $(CFLAGS) $(CFLAGS_PROD) $(RELEASE_CFLAGS) $(COVERAGE_CFLAGS) $< $(CC_OUT)$@ >  $(call OSPATH,$@.out) 2>&1
+	$(MAKE_RUN) $(CC) $(CFLAGS) $(CFLAGS_PROD) $(RELEASE_CFLAGS) $(COVERAGE_CFLAGS) $< $(CC_OUT)$@ >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
+
+# Flags must be last on Windows
+$(DST.dir)/test-%.t:	$(DST.dir)/test/test-%$(EXT.obj) $(COMMON_TEST.objs) $(DST.lib)
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	@echo                     $(LINK) $(LINK_OUT)$@ $^ $(DEP.libs) $(TEST_LIBS) $(COVERAGE_LIBS) $(LINK_FLAGS) >  $(call OSPATH,$@.out) 2>&1
+	$(MAKE_RUN) $(LINK_CHECK) $(LINK) $(LINK_OUT)$@ $^ $(DEP.libs) $(TEST_LIBS) $(COVERAGE_LIBS) $(LINK_FLAGS) >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
+
+$(DST.dir)/%.ok:		$(DST.dir)/%.t
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: running:  $^"
+	$(MAKE_RUN) cd $(call OSPATH,$(dir $<)) && $(TEST_ENV_VARS) $(call OSPATH,./$(notdir $<)) $(TEST_OUT_ON_ERROR)
+	@$(TOUCH) $@
+
+$(DST.dir)/%.ok:		./test/%.pl $(DST.exe)  $(DST.lib)
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: running:  $^"
+	$(MAKE_RUN) cd $(DST.dir) && $(PERL) ../test/$(call OSPATH,$(notdir $<)) $(TEST_OUT_ON_ERROR)
+	@$(TOUCH) $@
 
 # Third party wrapper makefiles must define their own rules.
 #
 ifndef THIRD_PARTY.dir
 
 $(DST.lib) : $(DST.obj) $(SRC.lib)
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(LIB_CMD) $(LIB_FLAGS) $(LIB_OUT)$@ $(DST.obj) $(call OSPATH,$(SRC.lib))
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	-$(MAKE_RUN)$(MKDIR) $(call OSPATH,$(DST.dir)) $(TO_NUL) $(FAKE_PASS)
+	$(MAKE_RUN) $(LIB_CMD) $(LIB_FLAGS) $(LIB_OUT)$@ $(DST.obj) $(call OSPATH,$(SRC.lib))
 
 # dump lib contents hint:
 # winnt: lib.exe /list foo.lib
@@ -332,58 +399,8 @@ $(DST.lib) : $(DST.obj) $(SRC.lib)
 
 # Flags must be last on Windows
 $(DST.exe) : $(DST.obj) $(DEP.libs)
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(LINK) $(LINK_OUT)$@ $^ $(COVERAGE_LIBS) $(LINK_FLAGS)
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+	@echo                     $(LINK) $(LINK_OUT)$@ $(call OSPATH,$^) $(COVERAGE_LIBS) $(LINK_FLAGS) >  $(call OSPATH,$@.out) 2>&1
+	$(MAKE_RUN) $(LINK_CHECK) $(LINK) $(LINK_OUT)$@ $(call OSPATH,$^) $(COVERAGE_LIBS) $(LINK_FLAGS) >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
 
 endif
-
-# Pattern rule to make OS dependent variants of a module.
-$(DST.dir)/%$(EXT.obj):	$(OS_class)/%.c
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(CC) $(CFLAGS) $(CFLAGS_PROD) $(RELEASE_CFLAGS) $(COVERAGE_CFLAGS) $< $(CC_OUT)$@
-
-$(DST.dir)/%$(EXT.obj):	%.c
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(CC) $(CFLAGS) $(CFLAGS_PROD) $(RELEASE_CFLAGS) $(COVERAGE_CFLAGS) $< $(CC_OUT)$@
-
-# NOTE: when above the more generic DST.dir/%.c rule == checked 1st
-#$(DST.dir)/test-%$(EXT.obj) : test/test-%.c
-#	@$(MAKE_PERL_ECHO) "make: building: $@"
-#	$(CC) $(CFLAGS) $(CFLAGS_TEST) $< $(CC_OUT)$@
-
-$(DST.dir)/test/%$(EXT.obj) : test/%.c
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(CC) $(CFLAGS) $(CFLAGS_TEST) $< $(CC_OUT)$@
-
-# Flags must be last on Windows
-$(DST.dir)/test-%.t:	$(DST.dir)/test/test-%$(EXT.obj) $(COMMON_TEST.objs) $(DST.lib) $(DEP.libs)
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(LINK) $(LINK_OUT)$@ $^ $(TEST_LIBS) $(COVERAGE_LIBS) $(LINK_FLAGS)
-
-$(DST.dir)/%.ok:		$(DST.dir)/%.t
-	@echo ===== $(DST.dir)/$*.ok
-	@$(MAKE_PERL_ECHO) "make: running: $^"
-	cd $(call OSPATH,$(dir $<)) && $(call OSPATH,./$(notdir $<))
-	@$(TOUCH) $@
-
-$(DST.dir)/%.ok:		./test/%.pl $(DST.exe)  $(DST.lib)
-	@echo ===== $(DST.dir)/$*.ok
-	@$(MAKE_PERL_ECHO) "make: running: $^"
-	cd $(DST.dir) && $(PERL) ../test/$(call OSPATH,$(notdir $<))
-	@$(TOUCH) $@
-
-$(DST.dir)/%-proto.h:   %.c
-	@$(MAKE_PERL_ECHO) "make: building: $@"
-	$(PERL) $(TOP.dir)/mak/bin/genxface.pl -d -o $(DST.dir) $*.c
-
-clean::
-ifdef THIRD_PARTY.dir
-	@$(MAKE_PERL_ECHO) "make: cleaning; ignore third party module (did you want make realclean?)"
-else
-	@$(MAKE_PERL_ECHO) "make: cleaning"
-	$(RMDIR) $(wildcard build-$(OS_name)-$(OS_bits)-*) $(TO_NUL) $(FAKE_PASS)
-endif
-
-realclean::
-	@$(MAKE_PERL_ECHO) "make: real cleaning"
-	$(RMDIR) $(wildcard build-$(OS_name)-$(OS_bits)-*) $(TO_NUL) $(FAKE_PASS)

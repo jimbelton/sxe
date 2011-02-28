@@ -21,8 +21,11 @@
 #define false          0
 #define true           1
 #define PIPE_BUF       4096
+#ifdef MAKE_MINGW
+#else
 #define STDERR_FILENO  fileno(stderr)
 #define STDOUT_FILENO  fileno(stdout)
+#endif
 #define err(eval, ...) {fprintf(stderr, "run.t: " __VA_ARGS__); fprintf(stderr, ": %s", strerror(errno)); exit(eval);}
 #define pipe(phandles) _pipe((phandles), PIPE_BUF, _O_BINARY)
 #define snprintf       _snprintf
@@ -37,7 +40,7 @@ typedef SSIZE_T        ssize_t;
 #include <unistd.h>
 #endif
 
-static int stderrfd;	/* We dup stderr to here. */
+static int stderrfd;    /* We dup stderr to here. */
 
 /* Emulate Unix functions under Windows.
  */
@@ -46,28 +49,30 @@ static int stderrfd;	/* We dup stderr to here. */
 static int
 fnmatch(const char * pattern, const char * buffer, int unused)
 {
-	char * star;
-	int    len;
+    char * star;
+    int    len;
 
-	/* If there is a leading subpattern.
-	 */
-	if ((star = strchr(pattern, '*')) != NULL) {
-		len = star - pattern;
-		if (strncmp(pattern, buffer, len) != 0) {
-			return 1;
-		}
+    (void)unused;
 
-		pattern += len + 1;
-		buffer  += len;
-	}
+    /* If there is a leading subpattern.
+     */
+    if ((star = strchr(pattern, '*')) != NULL) {
+        len = star - pattern;
+        if (strncmp(pattern, buffer, len) != 0) {
+            return 1;
+        }
 
-	/* If the star matches anything, skip it.
-	 */
-	if ((len = strlen(buffer) - strlen(pattern)) > 0) {
-		buffer += len;
-	}
+        pattern += len + 1;
+        buffer  += len;
+    }
 
-	return strcmp(buffer, pattern);
+    /* If the star matches anything, skip it.
+     */
+    if ((len = strlen(buffer) - strlen(pattern)) > 0) {
+        buffer += len;
+    }
+
+    return strcmp(buffer, pattern);
 }
 
 #endif
@@ -75,46 +80,46 @@ fnmatch(const char * pattern, const char * buffer, int unused)
 /* write_all inlined here to avoid circular dependency. */
 static void write_all(int fd, const void *data, size_t size)
 {
-	while (size) {
-		ssize_t done;
+    while (size) {
+        ssize_t done;
 
-		done = write(fd, data, size);
-		if (done <= 0)
-			_exit(1);
-		data  = (const char *)data + done;
-		size -= done;
-	}
+        done = write(fd, data, size);
+        if (done <= 0)
+            _exit(1);
+        data  = (const char *)data + done;
+        size -= done;
+    }
 }
 
 /* Simple replacement for err() */
 static void failmsg(const char *fmt, ...)
 {
- 	char buf[1024];
-	va_list ap;
+    char buf[1024];
+    va_list ap;
 
-	/* Write into buffer. */
-	va_start(ap, fmt);
-	vsprintf(buf, fmt, ap);
-	va_end(ap);
+    /* Write into buffer. */
+    va_start(ap, fmt);
+    vsprintf(buf, fmt, ap);
+    va_end(ap);
 
-	write_all(stderrfd, "# ", 2);
-	write_all(stderrfd, buf, strlen(buf));
-	write_all(stderrfd, "\n", 1);
-	_exit(1);
+    write_all(stderrfd, "# ", 2);
+    write_all(stderrfd, buf, strlen(buf));
+    write_all(stderrfd, "\n", 1);
+    _exit(1);
 }
 
 static void expect(int fd, const char *pattern)
 {
- 	char buffer[PIPE_BUF+1];
-	int r;
+    char buffer[PIPE_BUF+1];
+    int r;
 
-	r = read(fd, buffer, sizeof(buffer)-1);
-	if (r < 0)
-		failmsg("reading from pipe");
-	buffer[r] = '\0';
+    r = read(fd, buffer, sizeof(buffer)-1);
+    if (r < 0)
+        failmsg("reading from pipe");
+    buffer[r] = '\0';
 
-	if (fnmatch(pattern, buffer, 0) != 0)
-		failmsg("Expected '%s' got '%s'", pattern, buffer);
+    if (fnmatch(pattern, buffer, 0) != 0)
+        failmsg("Expected '%s' got '%s'", pattern, buffer);
 }
 
 static int
@@ -160,103 +165,110 @@ obj_to_str(const void * obj)
 
 int main(int argc, char *argv[])
 {
-	int        p[2];
-	int        stdoutfd;
+    int        p[2];
+    int        stdoutfd;
         struct obj exp;
 
         (void)argc;
         (void)argv;
 
-	printf("1..1\n");
-	fflush(stdout);
-	stderrfd = dup(STDERR_FILENO);
+    printf("1..1\n");
+    fflush(stdout);
+    stderrfd = dup(STDERR_FILENO);
 
-	if (stderrfd < 0)
-		err(1, "dup of stderr failed");
+    if (stderrfd < 0)
+        err(1, "dup of stderr failed");
 
-	stdoutfd = dup(STDOUT_FILENO);
+    stdoutfd = dup(STDOUT_FILENO);
 
-	if (stdoutfd < 0)
-		err(1, "dup of stdout failed");
+    if (stdoutfd < 0)
+        err(1, "dup of stdout failed");
 
-	if (pipe(p) != 0)
-		failmsg("pipe failed");
+    if (pipe(p) != 0)
+        failmsg("pipe failed");
 
-	if (dup2(p[1], STDERR_FILENO) < 0 || dup2(p[1], STDOUT_FILENO) < 0)
-		failmsg("Duplicating file descriptor");
+    if (dup2(p[1], STDERR_FILENO) < 0 || dup2(p[1], STDOUT_FILENO) < 0)
+        failmsg("Duplicating file descriptor");
 
-	plan_tests(10);
-	expect(p[0], "1..10\n");
+    plan_tests(10);
+    expect(p[0], "1..10\n");
 
-	ok(1, "msg1");
-	expect(p[0], "ok 1 - msg1\n");
+    ok(1, "msg1");
+    expect(p[0], "ok 1 - msg1\n");
 
-	ok(0, "msg2");
-	expect(p[0], "not ok 2 - msg2\n"
-	       "#     Failed test (*tap/test/run.c:main() at line 194)\n");
+    ok(0, "msg2");
+    expect(p[0], "not ok 2 - msg2\n"
+           "#     Failed test (*tap/test/run.c:main() at line 199)\n");
 
-	ok1(true);
-	expect(p[0], "ok 3 - true\n");
+    ok1(true);
+    expect(p[0], "ok 3 - true\n");
 
-	ok1(false);
- 	expect(p[0], "not ok 4 - false\n"
-	       "#     Failed test (*tap/test/run.c:main() at line 201)\n");
+    ok1(false);
+    expect(p[0], "not ok 4 - false\n"
+           "#     Failed test (*tap/test/run.c:main() at line 206)\n");
 
-	pass("passed");
- 	expect(p[0], "ok 5 - passed\n");
+    pass("passed");
+    expect(p[0], "ok 5 - passed\n");
 
-	fail("failed");
- 	expect(p[0], "not ok 6 - failed\n"
-	       "#     Failed test (*tap/test/run.c:main() at line 208)\n");
+    fail("failed");
+    expect(p[0], "not ok 6 - failed\n"
+           "#     Failed test (*tap/test/run.c:main() at line 213)\n");
 
-	skip(2, "skipping %s", "test");
- 	expect(p[0], "ok 7 # skip skipping test\n"
-	       "ok 8 # skip skipping test\n");
+    skip(2, "skipping %s", "test");
+    expect(p[0], "ok 7 # skip skipping test\n"
+           "ok 8 # skip skipping test\n");
 
-	todo_start("todo");
-	ok1(false);
-	expect(p[0], "not ok 9 - false # TODO todo\n"
-	       "#     Failed (TODO) test (*tap/test/run.c:main() at line 217)\n");
-	ok1(true);
-	expect(p[0], "ok 10 - true # TODO todo\n");
-	todo_end();
+    todo_start("todo");
+    ok1(false);
+    expect(p[0], "not ok 9 - false # TODO todo\n"
+                 "#     Failed (TODO) test (*tap/test/run.c:main() at line 222)\n");
+    ok1(true);
+    expect(p[0], "ok 10 - true # TODO todo\n");
+    todo_end();
 
-	if (exit_status() != 3)
-		failmsg("Expected exit status 3, not %i", exit_status());
+    if (exit_status() != 3)
+        failmsg("Expected exit status 3, not %i", exit_status());
 
         is(one_int(), 1, "one_int() returns 1");
-	expect(p[0], "ok 11 - one_int() returns 1\n");
+        expect(p[0], "ok 11 - one_int() returns 1\n");
         is(one_int(), 2, "one_int() returns 2");
-	expect(p[0], "not ok 12 - one_int() returns 2\n"
-	       "#     Failed test (*tap/test/run.c:main() at line 229)\n"
+        expect(p[0], "not ok 12 - one_int() returns 2\n"
+               "#     Failed test (*tap/test/run.c:main() at line 234)\n"
                "#          got: 1\n"
                "#     expected: 2\n");
 
         is_eq(one_str(), "one", "one_str() returns 'one'");
-	expect(p[0], "ok 13 - one_str() returns 'one'\n");
+        expect(p[0], "ok 13 - one_str() returns 'one'\n");
         is_eq(one_str(), "two", "one_str() returns 'two'");
         expect(p[0], "not ok 14 - one_str() returns 'two'\n"
-               "#     Failed test (*tap/test/run.c:main() at line 237)\n"
+               "#     Failed test (*tap/test/run.c:main() at line 242)\n"
                "#          got: \"one\"\n"
                "#     expected: \"two\"\n");
 
         exp.id = 1;
         is_cmp(one_obj(), &exp, obj_cmp, obj_to_str, "one_obj() has id 1");
-	expect(p[0], "ok 15 - one_obj() has id 1\n");
+        expect(p[0], "ok 15 - one_obj() has id 1\n");
         exp.id = 2;
         is_cmp(one_obj(), &exp, obj_cmp, obj_to_str, "one_obj() has id 2");
         expect(p[0], "not ok 16 - one_obj() has id 2\n"
-               "#     Failed test (*tap/test/run.c:main() at line 247)\n"
+               "#     Failed test (*tap/test/run.c:main() at line 252)\n"
                "#          got: {id=1}\n"
                "#     expected: {id=2}\n");
 
+        is_strstr(one_str(), "n", "one_str() contains 'n'");
+        expect(p[0], "ok 17 - one_str() contains 'n'\n");
+        is_strstr(one_str(), "w", "one_str() contains 'w'");
+        expect(p[0], "not ok 18 - one_str() contains 'w'\n"
+               "#     Failed test (*tap/test/run.c:main() at line 260)\n"
+               "#                     got: \"one\"\n"
+               "#     expected to contain: \"w\"\n");
 #if 0
-	/* Manually run the atexit command. */
-	_cleanup();
-	expect(p[0], "# Looks like you failed 2 tests of 9.\n");
+    /* Manually run the atexit command. */
+    _cleanup();
+    expect(p[0], "# Looks like you failed 2 tests of 9.\n");
 #endif
 
-	write_all(stdoutfd, "ok 1 - All passed\n",
-		  strlen("ok 1 - All passed\n"));
-	_exit(0);
+    write_all(stdoutfd, "ok 1 - All passed\n",
+          strlen("ok 1 - All passed\n"));
+    _exit(0);
 }

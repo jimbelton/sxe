@@ -35,12 +35,15 @@
 #   error "Message size must be changed (SXE_BUF_SIZE < 1024 or >= 2048)"
 #endif
 
+#ifdef _WIN32
+#else
 static char  message_2k[2048];
-static SXE * tcp_connector;           /* Emulates the endpoint      */
 static SXE * tcp_listener;            /* Emulates Apache            */
+static SXE * pipe_listener;           /* Emulates the WDX service   */
+#endif
+static SXE * tcp_connector;           /* Emulates the endpoint      */
 static SXE * tcp_accepted  = NULL;    /* Emulates Apache            */
 static SXE * pipe_connector;          /* Emulates our Apache module */
-static SXE * pipe_listener;           /* Emulates the WDX service   */
 static SXE * pipe_accepted = NULL;    /* Emulates the WDX service   */
 
 static void

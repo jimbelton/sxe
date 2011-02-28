@@ -64,6 +64,8 @@ main(int argc, char ** argv)
     double                  time_after;
 #endif
 
+    sxe_log_decrease_level(SXE_LOG_LEVEL_WARNING); /* A lot of stuff going on here, don't want logging to slow us down */
+
     if (argc > 1) {
         instance = atoi(argv[1]);
         sxe_mmap_open(&memmap, "memmap");

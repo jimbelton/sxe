@@ -40,16 +40,17 @@ EXT.obj    = .obj
 EXT.dll    = .dll
 EXT.exe    = .exe
 CC         = cl.exe
-CC_DEF     = /D
-CC_OUT     = /Fo
-CC_INC     = /I
+CC_DEF     = -D
+CC_OUT     = -Fo
+CC_INC     = -I
 
 # For /DFD_SETSIZE=2048 see http://msdn.microsoft.com/en-us/library/6e3b887c.aspx
-CFLAGS     = /c /WX /nologo /Z7 /DWINDOWS_NT=1 /DWIN32 /DFD_SETSIZE=2048 /Dinline=__inline
+CFLAGS.base  = -c -DWINDOWS_NT=1 -DWIN32 -DFD_SETSIZE=2048 -Dinline=__inline
+CFLAGS.more  = -WX -nologo -Z7
 ifneq ($(filter debug,$(MAKECMDGOALS)),)
-CFLAGS    += /MTd
+CFLAGS.more += -MTd
 else
-CFLAGS    += /MT
+CFLAGS.more += -MT
 endif
 CFLAGS_DEBUG =
 COPY       = copy /y
@@ -64,35 +65,45 @@ COPY       = copy /y
 #   - /F           Displays full source and destination file names while copying.
 #   - /Y           Suppresses prompting to confirm you want to overwrite an
 #                  existing destination file.
-COPYDIR    	= xcopy /I /S /D /F /Y
+COPYDIR       = xcopy /D /F /Y /I /S
+
+define COPYFILES2DIR
+$(PERL) -e $(OSQUOTE) \
+	exit copyfiles2dir_sub ( @ARGV ); \
+	$(COPYFILES2DIR_SUB) \
+	$(OSQUOTE)
+endef
 
 COV_CFLAGS 	=
 COV_LFLAGS 	=
 COV_INIT   	=
-COV_REAP   	=
 CXX         = cl.exe
-LINK       	= cl.exe
-LINK_OUT   	= /Fe
-LINK_FLAGS += /nologo /link /DEFAULTLIB:Ws2_32.lib /NODEFAULTLIB:libc.lib /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:msvcrtd.lib
+LINK       	= link.exe
+LINK_CHECK 	= $(LINK) --version | $(PERL) -lane "$$lines .= $$_; sub END{die qq[make[$(MAKELEVEL)]: ERROR: link.exe in path is not from Microsoft; need to delete your GNU win32 link.exe? ($$lines)] if($$lines !~ m~microsoft~is);}" &&
+LINK_OUT   	= /OUT:
+LINK_FLAGS += /nologo /DEBUG /PDB:$@.pdb /DEFAULTLIB:Ws2_32.lib /NODEFAULTLIB:libc.lib /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:msvcrtd.lib
 ifneq ($(filter debug,$(MAKECMDGOALS)),)
 LINK_FLAGS += /NODEFAULTLIB:libcmt.lib  /DEFAULTLIB:LIBCMTD.lib
+# See http://zeuxcg.org/2010/11/22/z7-everything-old-is-new-again/
+LINK_FLAGS += /DEBUG /PDB:$@.pdb
 else
 LINK_FLAGS += /NODEFAULTLIB:libcmtd.lib /DEFAULTLIB:LIBCMT.lib
 endif
 # The following attempt to use static linking doesn't quite work
 # LINK_FLAGS += /nologo /link /DEFAULTLIB:Ws2_32.lib /NODEFAULTLIB:MSVCRT.lib /DEFAULTLIB:LIBCMT.lib
-LIB_CMD    	= lib.exe
+LIB_CMD    	= $(MAKE_PERL_LIB)
 LIB_OUT    	= /OUT:
 LIB_FLAGS  	= /nologo
 OS_class   	= any-winnt
 OS_name	   	= winnt
 OS_bits     = $(shell echo %PROCESSOR_ARCHITEW6432% | $(PERL) -lane "$$o.=$$_;sub END{printf qq[%%d], $$o =~ m~64~s ? 64 : 32;}")
+TEST_ENV_VARS   =
 
 OSQUOTE    	= "
 OSPC       	= %%
 ECHOQUOTE  	=
 ECHOESCAPE 	= ^
-CAT        	= more
+CAT        	= type
 TRUE       	= dir > NUL:
 PROVE      	= prove
 
@@ -106,8 +117,89 @@ OSPATH      = $(subst /,\,$(1))
 #   - e.g. $(call COPY_TO_DIR,$source_files,$dest_dir)
 COPY_TO_DIR = $(TOP.dir)/mak/bin/cp.pl -f $(1) $(2)
 
-ifndef VCINSTALLDIR
-ifndef MSVCDir
-$(error make: please run vcvars32.bat)
+ifneq "$(VCINSTALLDIR)$(MSVCDir)" ""
+# come here if    ms visual c installed / vcvars32.bat     run
+MAKE_MSVC   = inpath
+else
+# come here if no ms visual c installed / vcvars32.bat not run
+endif
+
+ifneq ($(filter coverage,$(MAKECMDGOALS)),)
+ifeq "$(MAKE_MSVC)" "inpath"
+# come here if    ms visual c installed / vcvars32.bat     run
+ifeq "$(MAKELEVEL)" "0"
+$(info make[$(MAKELEVEL)]: note:     special case: winnt coverage build: fake that MSVC is uninstalled in order to default to MinGW)
+endif
+MAKE_MSVC   = specialcase
 endif
 endif
+
+ifeq "$(MAKE_MSVC)" "inpath"
+# come here if    ms visual c installed / vcvars32.bat     run
+else
+# come here if no ms visual c installed / vcvars32.bat not run
+MINGW_DETECTED := $(shell mingw32-gcc.exe --version 2>&1 | $(PERL) -lane "$$lines .= $$_; sub END{ printf qq[%%d], $$lines =~ m~mingw32-gcc~is; })
+ifneq ($(filter 1,$(MINGW_DETECTED)),)
+# come here if mingw32-gcc.exe found
+MAKE_MINGW = 1
+else
+# come here if no compiler found
+$(info make[$(MAKELEVEL)]: note:     install 32bit MinGW bundle from http://tdm-gcc.tdragon.net/download)
+$(info make[$(MAKELEVEL)]: error:    neither mingw32-gcc.exe nor cl.exe found; please add MinGW to path or run vcvars32.bat)
+$(error make[$(MAKELEVEL)]: error: see above)
+endif
+endif
+
+ifdef MAKE_MINGW
+ifdef MAKE_DEBUG
+$(info make[$(MAKELEVEL)]: want mingw build, remapping compiler options)
+endif
+ifeq "$(MAKE_MSVC)" "specialcase"
+# come here if using MinGW to do the coverage build instead of cl.exe
+else
+OS_name     = mingw
+endif
+EXT.lib     = .a
+CXX         = mingw32-gcc.exe
+CC          = mingw32-gcc.exe
+CC_OUT      = -o
+CFLAGS_PROD = -std=gnu99
+CFLAGS_TEST = -std=gnu99
+
+# See http://gcc.gnu.org/onlinedocs/gcc-3.0/gcc_8.html#SEC135
+# "...but if you want to prove that every single line in your program
+#  was executed, you should not compile with optimization at the same
+#  time."
+CFLAGS.more = -DMAKE_MINGW -g \
+              -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wchar-subscripts -Wcomment \
+              -Wformat -Wimplicit  -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wparentheses \
+              -Wpointer-arith -Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch \
+              -Wtrigraphs -Wunused -Wwrite-strings
+
+# See http://gcc.gnu.org/onlinedocs/gcc-3.0/gcc_8.html#SEC135
+# "...but if you want to prove that every single line in your program
+#  was executed, you should not compile with optimization at the same
+#  time."
+ifneq ($(filter coverage,$(MAKECMDGOALS)),)
+CFLAGS.more += -O0
+else
+CFLAGS.more +=  -O -Wuninitialized
+endif
+
+LINK        = mingw32-gcc.exe
+LINK_CHECK  =
+LINK_OUT    = -o
+LINK_FLAGS  = -g -lm -lWs2_32
+COV_CFLAGS  = -fprofile-arcs -ftest-coverage
+COV_LFLAGS  = -coverage -lgcov
+COV_INIT    = $(DEL) $(call OSPATH,$(DST.dir)/*.gcda $(DST.dir)/*.ok)
+LIB_OUT     =
+LIB_FLAGS   =
+
+else # VS/CL
+
+CFLAGS.more += -D__func__=__FUNCTION__
+
+endif
+
+CFLAGS += $(CFLAGS.base) $(CFLAGS.more)

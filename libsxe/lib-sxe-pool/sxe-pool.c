@@ -33,15 +33,31 @@
 
 #define SXE_POOL_ON_INCORRECT_STATE_RETURN_FALSE 0
 #define SXE_POOL_ON_INCORRECT_STATE_ABORT        1
+#define SXE_POOL_ASSERT_ARRAY_INITIALIZED(array) SXEA81((array) != NULL, "%s(array=NULL): Uninitialized pool?", __func__)
 
 static SXE_LIST sxe_pool_timeout_list;
 static unsigned sxe_pool_timeout_count = 0;
+
+/* Diagnostic function to convert state to string if none is supplied by the user
+ */
+static const char *
+sxe_pool_state_to_string(unsigned state)                                /* Coverage Exclusion: Only called in debug mode */
+{                                                                       /* Coverage Exclusion: Only called in debug mode */
+    static char     string[2][12];
+    static unsigned which = 0;
+    char *          result;
+
+    result = string[which];
+    which  = (which + 1) % (sizeof(string) / sizeof(string[which]));    /* Coverage Exclusion: Only called in debug mode */
+    snprintf(result, sizeof(string[which]), "%u", state);               /* Coverage Exclusion: Only called in debug mode */
+    return result;                                                      /* Coverage Exclusion: Only called in debug mode */
+}
 
 const char *
 sxe_pool_get_name(void * array)
 {
     /* No diagnostics, thanks, since this is only used for diagnostics */
-
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
     return SXE_POOL_ARRAY_TO_IMPL(array)->name;
 }
 
@@ -51,7 +67,8 @@ sxe_pool_get_number_in_state(void * array, unsigned state)
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
     unsigned        count;
 
-    SXEE82("sxe_pool_get_number_in_state(array=%p,state=%u)", array, state);
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE82("sxe_pool_get_number_in_state(pool=%s,state=%s)", pool->name, (*pool->state_to_string)(state));
     count = SXE_LIST_GET_LENGTH(&SXE_POOL_QUEUE(pool)[state]);
     SXER81("return %u", count);
     return count;
@@ -63,9 +80,9 @@ sxe_pool_index_to_state(void * array, unsigned id)
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
     unsigned        state;
 
-    SXEE82("sxe_pool_index_to_state(array=%p,id=%u)", array, id);
+    SXEE82("sxe_pool_index_to_state(name=%s,id=%u)", pool->name, id);
     state = SXE_LIST_NODE_GET_ID(&SXE_POOL_NODES(pool)[id].list_node);
-    SXER81("return %u", state);
+    SXER81("return %s", (*pool->state_to_string)(state));
     return state;
 }
 
@@ -109,13 +126,14 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
 
     SXEE86("sxe_pool_construct(base=%p,name=%s,number=%u,size=%u,states=%u,options=%u)", base, name, number, size, states, options);
 
-    pool         = (SXE_POOL_IMPL *)base;
-    pool->queue  = (SXE_LIST      *)(sizeof(SXE_POOL_IMPL) + number * size);
-    pool->nodes  = (SXE_POOL_NODE *)(sizeof(SXE_POOL_IMPL) + number * size + states * sizeof(SXE_LIST));
-    pool->number = number;
-    pool->size   = size;
-    pool->states = states;
-    pool->options  = options;
+    pool                  = (SXE_POOL_IMPL *)base;
+    pool->queue           = (SXE_LIST      *)(sizeof(SXE_POOL_IMPL) + number * size);
+    pool->nodes           = (SXE_POOL_NODE *)(sizeof(SXE_POOL_IMPL) + number * size + states * sizeof(SXE_LIST));
+    pool->number          = number;
+    pool->size            = size;
+    pool->states          = states;
+    pool->options         = options;
+    pool->state_to_string = &sxe_pool_state_to_string;    /* Default to just printing the number */
 
     if (options & SXE_POOL_OPTION_LOCKED) {
         sxe_spinlock_construct(&pool->spinlock);
@@ -280,6 +298,17 @@ sxe_pool_new_with_timeouts(
 }
 
 void
+sxe_pool_set_state_to_string(void * array, const char * (*state_to_string)(unsigned state))
+{
+    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
+
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE82("sxe_pool_set_state_to_string(pool=%s,state_to_string=%p)", pool->name, state_to_string);
+    pool->state_to_string = state_to_string;
+    SXER80("return");
+}
+
+void
 sxe_pool_check_timeouts(void)
 {
     SXE_LIST_WALKER walker;
@@ -301,7 +330,7 @@ sxe_pool_check_timeouts(void)
             timeout_for_this_state = pool->state_timeouts[state];
 
             if (timeout_for_this_state == 0) {
-                SXEL81("state %d timeout is infinite; ignoring", state);
+                SXEL81("state %s timeout is infinite; ignoring", (*pool->state_to_string)(state));
                 continue;
             }
 
@@ -312,7 +341,7 @@ sxe_pool_check_timeouts(void)
                 index_oldest_for_this_state = sxe_pool_get_oldest_element_index(SXE_POOL_IMPL_TO_ARRAY(pool), state);
 
                 if (SXE_POOL_NO_INDEX == index_oldest_for_this_state) {
-                    SXEL82("state %d timeout %f has no elements", state, timeout_for_this_state);
+                    SXEL82("state %s timeout %f has no elements", (*pool->state_to_string)(state), timeout_for_this_state);
                     break;
                 }
 
@@ -323,13 +352,13 @@ sxe_pool_check_timeouts(void)
                        "Internal: callback failed to update state on pool element with timed out");
 
                 if ((time_now - time_oldest_for_this_state) < timeout_for_this_state) {
-                    SXEL83("state %d timeout %f has not been reached for oldest index %u", state, timeout_for_this_state,
-                           index_oldest_for_this_state);
+                    SXEL83("state %s timeout %f has not been reached for oldest index %u", (*pool->state_to_string)(state),
+                           timeout_for_this_state, index_oldest_for_this_state);
                     break;
                 }
 
-                SXEL83("state %d timeout %f has been reached for oldest index %u", state, timeout_for_this_state,
-                       index_oldest_for_this_state);
+                SXEL83("state %s timeout %f has been reached for oldest index %u", (*pool->state_to_string)(state),
+                       timeout_for_this_state, index_oldest_for_this_state);
                 (*pool->event_timeout)(SXE_POOL_IMPL_TO_ARRAY(pool), index_oldest_for_this_state, pool->caller_info);
                 index_oldest_for_this_state_last = index_oldest_for_this_state;
                 time_oldest_for_this_state_last  = time_oldest_for_this_state;
@@ -351,16 +380,18 @@ sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned 
     SXE_POOL_IMPL * pool    = SXE_POOL_ARRAY_TO_IMPL(array);
     SXE_POOL_NODE * node;
 
-    SXEE85("sxe_pool_set_indexed_element_state_unlocked(pool=%s,id=%u,old_state=%u,new_state=%u,on_incorrect_state=%s)",
-           pool->name, id, old_state, new_state,
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE85("sxe_pool_set_indexed_element_state_unlocked(pool=%s,id=%u,old_state=%s,new_state=%s,on_incorrect_state=%s)",
+           pool->name, id, (*pool->state_to_string)(old_state), (*pool->state_to_string)(new_state),
            on_incorrect_state == SXE_POOL_ON_INCORRECT_STATE_ABORT ? "ABORT" : "RETURN_FALSE");
 
     node = &SXE_POOL_NODES(pool)[id];
 
     if (SXE_LIST_NODE_GET_ID(&node->list_node) != old_state) {
         SXEA15(on_incorrect_state != SXE_POOL_ON_INCORRECT_STATE_ABORT,
-               "sxe_pool_set_indexed_element_state_unlocked(pool=%s,id=%u,old_state=%u,new_state=%u): Object is in state %u",
-               pool->name, node - SXE_POOL_NODES(pool), old_state, new_state, SXE_LIST_NODE_GET_ID(&node->list_node));
+               "sxe_pool_set_indexed_element_state_unlocked(pool=%s,id=%u,old_state=%s,new_state=%s): Object is in state %s",
+               pool->name, node - SXE_POOL_NODES(pool), (*pool->state_to_string)(old_state),
+               (*pool->state_to_string)(new_state), (*pool->state_to_string)(SXE_LIST_NODE_GET_ID(&node->list_node)));
         goto SXE_EARLY_OUT;
     }
 
@@ -390,10 +421,11 @@ sxe_pool_set_indexed_element_state(void * array, unsigned id, unsigned old_state
     SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
     unsigned        result = SXE_POOL_LOCK_TAKEN;
 
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
     SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
-    SXEE84("sxe_pool_set_indexed_element_state(pool->name=%s,id=%u,old_state=%u,new_state=%u)",
-           pool->name, id, old_state, new_state);
-    SXEA83(id < pool->number, "sxe_pool_set_indexed_element_state(pool->name=%s,id=%u): Index is too big (number=%u)",
+    SXEE84("sxe_pool_set_indexed_element_state(pool=%s,id=%u,old_state=%s,new_state=%s)",
+           pool->name, id, (*pool->state_to_string)(old_state), (*pool->state_to_string)(new_state));
+    SXEA83(id < pool->number, "sxe_pool_set_indexed_element_state(pool=%s,id=%u): Index is too big (number=%u)",
            pool->name, id, pool->number);
     SXEA83(old_state <= pool->states, "state %u is greater than maximum state %u for pool %s", old_state, pool->states, pool->name);
     SXEA83(new_state <= pool->states, "state %u is greater than maximum state %u for pool %s", new_state, pool->states, pool->name);
@@ -430,9 +462,10 @@ sxe_pool_try_to_set_indexed_element_state(void * array, unsigned id, unsigned ol
     unsigned        result = SXE_POOL_INCORRECT_STATE;
 
     SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
-    SXEE84("sxe_pool_set_indexed_element_state(pool->name=%s,id=%u,old_state=%u,new_state=%u)",
-           pool->name, id, old_state, *new_state_inout);
-    SXEA83(id < pool->number, "sxe_pool_set_indexed_element_state(pool->name=%s,id=%u): Index is too big (number=%u)",
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE84("sxe_pool_set_indexed_element_state(pool=%s,id=%u,old_state=%s,new_state=%s)",
+           pool->name, id, (*pool->state_to_string)(old_state), (*pool->state_to_string)(*new_state_inout));
+    SXEA83(id < pool->number, "sxe_pool_set_indexed_element_state(pool=%s,id=%u): Index is too big (number=%u)",
            pool->name, id, pool->number);
     SXEA83(old_state <= pool->states, "state %u is greater than maximum state %u for pool %s", old_state, pool->states, pool->name);
     SXEA83(*new_state_inout <= pool->states, "state %u is greater than maximum state %u for pool %s", *new_state_inout, pool->states, pool->name);
@@ -471,9 +504,12 @@ sxe_pool_set_oldest_element_state(void * array, unsigned old_state, unsigned new
     SXE_POOL_NODE * node;
     unsigned        result = SXE_POOL_LOCK_TAKEN;
 
-    SXEE84("sxe_pool_set_oldest_element_state(array=%p, old_state=%u, new_state=%u) // pool=%s", array, old_state, new_state,
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE83("sxe_pool_set_oldest_element_state(pool=%s, old_state=%s, new_state=%s)",
+           pool->name, (*pool->state_to_string)(old_state), (*pool->state_to_string)(new_state));
+    SXEA83(old_state <= pool->states, "old state %u is greater than maximum state %u for pool %s", old_state, pool->states,
            pool->name);
-    SXEA83(old_state <= pool->states, "state %u is greater than maximum state %u for pool %s", old_state, pool->states,
+    SXEA83(new_state <= pool->states, "new state %u is greater than maximum state %u for pool %s", new_state, pool->states,
            pool->name);
 
     if ((result = sxe_pool_lock(pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
@@ -481,8 +517,8 @@ sxe_pool_set_oldest_element_state(void * array, unsigned old_state, unsigned new
     }
 
     if ((node = sxe_list_peek_head(&SXE_POOL_QUEUE(pool)[old_state])) == NULL) {
-        SXEL82("sxe_pool_set_oldest_element_state(pool->name=%s): No objects in state %u; returning SXE_POOL_NO_INDEX",
-               pool->name, old_state);
+        SXEL82("sxe_pool_set_oldest_element_state(pool=%s): No objects in state %s; returning SXE_POOL_NO_INDEX",
+               pool->name, (*pool->state_to_string)(old_state));
         result = SXE_POOL_NO_INDEX;
         goto SXE_EARLY_OUT;
     }
@@ -510,7 +546,8 @@ sxe_pool_touch_indexed_element(void * array, unsigned id)
     SXE_POOL_NODE * node;
     unsigned        state;
 
-    SXEE82("sxe_pool_touch_indexed_element(pool->name=%s,id=%u)", pool->name, id);
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE82("sxe_pool_touch_indexed_element(pool=%s,id=%u)", pool->name, id);
 
     if ((result = sxe_pool_lock(pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
         goto SXE_ERROR_OUT;
@@ -537,17 +574,25 @@ sxe_pool_get_oldest_element_index(void * array, unsigned state)
     SXE_POOL_NODE * node;
     unsigned        id = SXE_POOL_NO_INDEX;
 
-    SXEE82("sxe_pool_get_oldest_element_index(pool->name=%s, state=%u)", pool->name, state);
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE82("sxe_pool_get_oldest_element_index(pool=%s, state=%s)", pool->name, (*pool->state_to_string)(state));
     SXEA83(state <= pool->states, "state %u is greater than maximum state %u for pool %s", state, pool->states, pool->name);
 
+    if (sxe_pool_lock(pool) == SXE_POOL_LOCK_NOT_TAKEN) {
+        goto SXE_ERROR_OUT;  /* Coverage exclusion: Add tests before using in multiprocess code */
+    }
+
     if ((node = sxe_list_peek_head(&SXE_POOL_QUEUE(pool)[state])) == NULL) {
-        SXEL81("No objects in state %u, returning SXE_POOL_NO_INDEX", state);
+        SXEL81("No objects in state %s, returning SXE_POOL_NO_INDEX", (*pool->state_to_string)(state));
         goto SXE_EARLY_OUT;
     }
 
     id = node - SXE_POOL_NODES(pool);
 
-SXE_EARLY_OR_ERROR_OUT:
+SXE_EARLY_OUT:
+    sxe_pool_unlock(pool);
+
+SXE_ERROR_OUT:
     SXER81("return %s", sxe_pool_return_to_string(id));
     return id;
 }
@@ -567,18 +612,26 @@ sxe_pool_get_oldest_element_time(void * array, unsigned state)
     SXE_POOL_NODE * node;
     SXE_TIME        last_time = 0;
 
-    SXEE82("sxe_pool_get_oldest_element_time(pool->name=%s, state=%u)", pool->name, state);
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE82("sxe_pool_get_oldest_element_time(pool=%s, state=%s)", pool->name, (*pool->state_to_string)(state));
     SXEA11(pool->options & SXE_POOL_OPTION_TIMED, "sxe_pool_get_oldest_element_time: pool %s is not a timed pool", pool->name);
     SXEA83(state <= pool->states, "state %u is greater than maximum state %u for pool %s", state, pool->states, pool->name);
 
+    if (sxe_pool_lock(pool) == SXE_POOL_LOCK_NOT_TAKEN) {
+        goto SXE_ERROR_OUT;  /* Coverage exclusion: Add tests before using in multiprocess code */
+    }
+
     if ((node = sxe_list_peek_head(&SXE_POOL_QUEUE(pool)[state])) == NULL) {
-        SXEL82("sxe_pool_get_oldest_element_time(pool->name=%s): No objects in state %u", pool->name, state);
+        SXEL82("sxe_pool_get_oldest_element_time(pool=%s): No objects in state %s", pool->name, (*pool->state_to_string)(state));
         goto SXE_EARLY_OUT;
     }
 
     last_time = node->last.time;
 
-SXE_EARLY_OR_ERROR_OUT:
+SXE_EARLY_OUT:
+    sxe_pool_unlock(pool);
+
+SXE_ERROR_OUT:
     SXER81("return %f", sxe_time_to_double_seconds(last_time));
     return last_time;
 }
@@ -597,7 +650,8 @@ sxe_pool_get_element_time_by_index(void * array, unsigned element)
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
     SXE_POOL_NODE * node;
 
-    SXEE82("sxe_pool_get_element_time_by_index(pool->name=%s, index=%u)", pool->name, element);
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE82("sxe_pool_get_element_time_by_index(pool=%s, index=%u)", pool->name, element);
     SXEA11(pool->options & SXE_POOL_OPTION_TIMED, "sxe_pool_get_element_time_by_index: pool %s is not a timed pool", pool->name);
     SXEA83(element < pool->number, "index %u is greater than maximum index %u for pool %s", element, pool->number, pool->name);
 
@@ -614,7 +668,8 @@ sxe_pool_delete(void * array)
 {
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
 
-    SXEE82("sxe_pool_delete(array=%p) pool->name='%s'", array, pool->name);
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE81("sxe_pool_delete(pool=%s)", pool->name);
 
     if (pool->event_timeout != NULL) {
         SXEA10(sxe_list_remove(&sxe_pool_timeout_list, pool) == pool, "Remove always returns the object removed");
@@ -634,7 +689,8 @@ sxe_pool_override_locked(void * array)
 {
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
 
-    SXEE81("sxe_pool_override_locked(pool->name=%s)", pool->name);
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEE81("sxe_pool_override_locked(pool=%s)", pool->name);
 
     if (pool->options & SXE_POOL_OPTION_LOCKED) {
         sxe_spinlock_force(&pool->spinlock, 0);

@@ -37,6 +37,7 @@ typedef enum SXE_LOG_LEVEL {
     SXE_LOG_LEVEL_WARNING,
     SXE_LOG_LEVEL_INFORMATION,    /* e.g. SXLd transactions                                  */
     SXE_LOG_LEVEL_DEBUG,          /* e.g. External function entry/return                     */
+                                  /* --- only compiled into debug build below -------------- */
     SXE_LOG_LEVEL_TRACE,          /* e.g. Internal function entry/return and further logging */
     SXE_LOG_LEVEL_DUMP,           /* e.g. Packet/structure dumps, periodic idle behaviour    */
     SXE_LOG_LEVEL_LIBRARY_TRACE,  /* Trace for generic library functions                     */
@@ -59,20 +60,21 @@ typedef bool      SXE_BOOL;
 
 typedef enum SXE_RETURN {
     SXE_RETURN_OK = 0,
+    SXE_RETURN_EXPIRED_VALUE,
     SXE_RETURN_NO_UNUSED_ELEMENTS,
     SXE_RETURN_IN_PROGRESS,
     SXE_RETURN_UNCATEGORIZED,
     SXE_RETURN_END_OF_FILE,
-    SXE_RETURN_WARN_CACHE_DOUBLE_INITIALIZED,
+    SXE_RETURN_WARN_ALREADY_INITIALIZED,
     SXE_RETURN_WARN_WOULD_BLOCK,
     SXE_RETURN_WARN_ALREADY_CLOSED,
-    SXE_RETURN_ERROR_CACHE_UNINITIALIZED,
+    SXE_RETURN_ERROR_NOT_INITIALIZED,
     SXE_RETURN_ERROR_ALLOC,
     SXE_RETURN_ERROR_INTERNAL,
     SXE_RETURN_ERROR_NO_CONNECTION,
     SXE_RETURN_ERROR_ALREADY_CONNECTED,
     SXE_RETURN_ERROR_INVALID_URI,
-    SXE_RETURN_ERROR_BAD_MESSAGE_RECEIVED,
+    SXE_RETURN_ERROR_BAD_MESSAGE,
     SXE_RETURN_ERROR_ADDRESS_IN_USE,
     SXE_RETURN_ERROR_INTERRUPTED,
     SXE_RETURN_ERROR_COMMAND_NOT_RUN,
@@ -82,6 +84,12 @@ typedef enum SXE_RETURN {
     SXE_RETURN_ERROR_WRITE_FAILED,
     SXE_RETURN_INVALID_VALUE    /* This must be the last value. */
 } SXE_RETURN;
+
+/* Aliases for backward compatibility
+ */
+#define SXE_RETURN_WARN_CACHE_DOUBLE_INITIALIZED SXE_RETURN_WARN_ALREADY_INITIALIZED
+#define SXE_RETURN_ERROR_BAD_MESSAGE_RECEIVED    SXE_RETURN_ERROR_BAD_MESSAGE
+#define SXE_RETURN_ERROR_CACHE_UNINITIALIZED     SXE_RETURN_ERROR_NOT_INITIALIZED
 
 extern SXE_LOG_LEVEL sxe_log_level;
 

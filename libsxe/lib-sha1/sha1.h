@@ -6,6 +6,8 @@
 
 #include "sxe-log.h"
 
+#define SHA1_IN_HEX_LENGTH (sizeof(SOPHOS_SHA1) * 2)
+
 typedef struct SOPHOS_SHA1_STRUCT {
     uint32_t word[5];
 } SOPHOS_SHA1;

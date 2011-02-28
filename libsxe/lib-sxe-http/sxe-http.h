@@ -25,6 +25,13 @@
 
 #include "sxe-log.h"
 
+#define SXE_HTTP_VERB_LENGTH_MAXIMUM 8
+
+typedef enum SXE_HTTP_LINE_ELEMENT_TYPE {
+    SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN,
+    SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE
+} SXE_HTTP_LINE_ELEMENT_TYPE;
+
 typedef struct SXE_HTTP_URL {
     const char * scheme;
     unsigned     scheme_length;
@@ -35,6 +42,54 @@ typedef struct SXE_HTTP_URL {
     const char * path;
     unsigned     path_length;
 } SXE_HTTP_URL;
+
+typedef struct SXE_HTTP_MESSAGE {
+    const char * buffer;
+    unsigned     buffer_length;
+    unsigned     consumed;
+    unsigned     element_length;
+    unsigned     name_length;
+    unsigned     value_offset;
+    unsigned     value_length;
+    unsigned     next_field;
+} SXE_HTTP_MESSAGE;
+
+static inline const char *
+sxe_http_message_get_line_element(SXE_HTTP_MESSAGE * message)
+{
+    SXEA11(message->element_length > 0, "%s: called when no line element parsed", __func__);
+    return &message->buffer[message->consumed];
+}
+
+static inline unsigned
+sxe_http_message_get_line_element_length(SXE_HTTP_MESSAGE * message)
+{
+    return message->element_length;
+}
+
+static inline const char *
+sxe_http_message_get_header_name(SXE_HTTP_MESSAGE * message)
+{
+    SXEA11(message->name_length > 0, "%s: called when no header parsed", __func__);
+    return &message->buffer[message->consumed];
+}
+
+static inline unsigned
+sxe_http_message_get_header_name_length(SXE_HTTP_MESSAGE * message)
+{
+    return message->name_length;
+}
+
+static inline const char *
+sxe_http_message_get_header_value(SXE_HTTP_MESSAGE * message)
+{
+    return &message->buffer[message->value_offset];
+}
+
+static inline unsigned
+sxe_http_message_get_header_value_length(SXE_HTTP_MESSAGE * message) {
+    return message->value_length;
+}
 
 #include "lib-sxe-http-proto.h"
 

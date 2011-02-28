@@ -29,6 +29,27 @@
  */
 #define SXE_TIMESTAMP_LENGTH(fractional_digits) (16 + (fractional_digits))
 #define SXE_TIME_BITS_IN_FRACTION               (sizeof(SXE_TIME_FRACTION) * 8)
+#define SXE_TIME_FROM_TIMEVAL(tv)               (((SXE_TIME)(tv)->tv_sec  << SXE_TIME_BITS_IN_FRACTION) \
+                                                + ((SXE_TIME)(tv)->tv_usec * (1ULL << 32) / 1000000))
+
+#define SXE_TIME_FROM_MSEC(msec)                (((SXE_TIME)(msec / 1000) << SXE_TIME_BITS_IN_FRACTION) \
+                                                + ((SXE_TIME)(msec * 1000) * (1ULL << 32) / 1000000))
+
+#define SXE_TIME_TO_TIMEVAL(sxe_time, tv)       do { \
+                                                    uint64_t sxe_time_lo32 = (unsigned)sxe_time; \
+                                                    (tv)->tv_sec  = (unsigned)((sxe_time) >> SXE_TIME_BITS_IN_FRACTION); \
+                                                    (tv)->tv_usec = (unsigned)(sxe_time_lo32 * 1000000 / (1ULL << 32) ); \
+                                                } while (0)
+
+#define SXE_TIME_FROM_DOUBLE_SECONDS(seconds)   ((uint64_t)( \
+       ((uint64_t)(((uint64_t)( seconds                               )) << (SXE_TIME_BITS_IN_FRACTION))) \
+     + ((uint64_t)((  (double)((seconds) - (double)(uint64_t)(seconds))) *  ((double)(1ULL << 32)     ))) \
+    ))
+
+#define SXE_TIME_TO_DOUBLE_SECONDS(sxe_time)    ((double)  ( \
+       (  (double)((          (uint64_t)(sxe_time)                     ) >> (SXE_TIME_BITS_IN_FRACTION))) \
+     + (  (double)((  (double)(uint32_t)(sxe_time)                     ) /  ((double)(1ULL << 32)     ))) \
+    ))
 
 typedef uint64_t SXE_TIME;
 typedef uint32_t SXE_TIME_FRACTION;
@@ -48,13 +69,13 @@ sxe_time_from_unix_time(time_t unix_time)
 static inline SXE_TIME
 sxe_time_from_double_seconds(double seconds)
 {
-    return ((uint64_t)seconds << SXE_TIME_BITS_IN_FRACTION) + (seconds - (double)(uint64_t)seconds) * (1ULL << 32);
+    return SXE_TIME_FROM_DOUBLE_SECONDS(seconds);
 }
 
 static inline double
 sxe_time_to_double_seconds(SXE_TIME sxe_time)
 {
-    return (double)((uint64_t)sxe_time >> SXE_TIME_BITS_IN_FRACTION) + (double)(uint32_t)sxe_time / (1ULL << 32);
+    return SXE_TIME_TO_DOUBLE_SECONDS(sxe_time);
 }
 
 #include "sxe-time-proto.h"

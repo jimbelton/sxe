@@ -21,6 +21,10 @@
 
 #include "mock.h"
 
+#ifdef WINDOWS_NT
+#include <Windows.h>
+#endif
+
 #define MOCK_CDECL
 #define MOCK_DEF(type, scope, function, parameters) type (MOCK_ ## scope * mock_ ## function) parameters = function
 
@@ -39,13 +43,15 @@ MOCK_DEF(int,          CDECL,   gettimeofday,(struct timeval * __restrict tm, st
 MOCK_DEF(off_t,        CDECL,   lseek,       (int fd, off_t offset, int whence));
 MOCK_DEF(int,          STDCALL, listen,      (MOCK_SOCKET, int));
 MOCK_DEF(void *,       CDECL,   malloc,      (size_t));
-MOCK_DEF(MOCK_SSIZE_T, STDCALL, recvfrom,    (MOCK_SOCKET, void *, MOCK_SOCKET_SSIZE_T, int, struct sockaddr *, MOCK_SOCKLEN_T *));
+MOCK_DEF(MOCK_SSIZE_T, STDCALL, recvfrom,    (MOCK_SOCKET, MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int, struct sockaddr *, MOCK_SOCKLEN_T *));
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, send,        (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int));
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, sendto,      (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int, const struct sockaddr *, MOCK_SOCKLEN_T));
 MOCK_DEF(MOCK_SOCKET,  STDCALL, socket,      (int, int, int));
 MOCK_DEF(MOCK_SSIZE_T, CDECL,   write,       (int, const void *, MOCK_SIZE_T));
 
-#ifndef WINDOWS_NT
+#ifdef WINDOWS_NT
+MOCK_DEF(DWORD,        STDCALL, timeGetTime, (void));
+#else
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, sendfile,    (int, int, off_t *, size_t));
 #endif
 

@@ -56,7 +56,7 @@ void plan_tests(unsigned int tests);
 #else
 
 #define is(g, e, ...)                  _gen_result(1, (const void *)(long)(g), (const void *)(long)(e), (void *)0, (void *)0, \
-												   __func__, __FILE__, __LINE__, __VA_ARGS__)
+                                                   __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define is_eq(g, e, ...)               _gen_result(2, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
@@ -65,6 +65,9 @@ void plan_tests(unsigned int tests);
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define is_strncmp(g, e, len, ...)     _gen_result(4, (const void *)(g), (const void *)(e), (void *)(long)(len), (void *)0, \
+                                                   __func__, __FILE__, __LINE__, __VA_ARGS__)
+
+#define is_strstr(g, e, ...)           _gen_result(5, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 /**
@@ -273,13 +276,19 @@ void plan_skip_all(const char *reason);
 
 /* New in libtap2 - See the man page for help */
 
+#define TAP_FLAG_ON_FAILURE_EXIT 0x00000001
+#define TAP_FLAG_DEBUG           0x00000002
+
 typedef struct tap_ev       * tap_ev;
 typedef struct tap_ev_queue * tap_ev_queue;
 
 extern const char TAP_EV_NO_EVENT[];
 
 void         tap_init(                FILE * out);
+void         tap_plan(                unsigned tests, unsigned flags, FILE * output);
+void         tap_test_case_name(      const char * name);
 void *       tap_dup(                 const void * mem, size_t size);
+
 unsigned     tap_ev_arg_count(        tap_ev ev);
 const void * tap_ev_arg(              tap_ev ev, const char * name);
 unsigned     tap_ev_count(            const char * identifier);

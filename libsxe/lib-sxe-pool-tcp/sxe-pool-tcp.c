@@ -33,6 +33,10 @@
 #include "sxe-pool-tcp-private.h"
 #include "sxe-spawn.h"
 
+#ifdef WIN32
+    /* TODO: Implement on Windows once sxe_spawn() is implemented on Windows */
+#else
+
 #define SXE_CONCURRENCY_MAX      1000000
 #define SXE_WRITE_RAMP           10
 #define SXE_CONNECTION_RAMP      16
@@ -573,3 +577,5 @@ sxe_pool_tcp_delete(SXE * this, SXE_POOL_TCP * pool)
     free(pool);
     SXER80I("return");
 }
+
+#endif

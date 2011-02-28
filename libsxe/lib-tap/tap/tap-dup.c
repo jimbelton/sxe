@@ -17,8 +17,9 @@ tap_dup(const void * mem, size_t size)
 {
     void * ret;
 
-    if ((ret = malloc(size)) != NULL) {
+    if ((ret = malloc(size + 1)) != NULL) {
         memcpy(ret, mem, size);
+        ((char *)ret)[size] = '\0';
     }
 
     return ret;
