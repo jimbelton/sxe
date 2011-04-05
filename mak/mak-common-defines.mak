@@ -164,13 +164,13 @@ $(PERL) -e $(OSQUOTE) \
 	$$gcov_output  =~ s~[^\s]+source file is newer than graph file [^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+cannot open graph file[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+\:cannot open data file, assuming not executed[\r\n]+~~gs; \
+	$$gcov_output  =~ s~\(the message is only displayed one per source file\)[\r\n]+~~gs; \
 	while ( $$gcov_output =~ m~([^\s]+)\.gcda\:cannot open data file[\r\n]+~gs ) { \
 		printf qq[MAKE_PERL_COVERAGE_CHECK: WARNING: no coverage for file: $$1.c\n]; \
 	} \
 	$$gcov_output =~ s~[^\s]+\:cannot open data file[\r\n]+~~gs; \
 	if ( $$gcov_output !~ m~^\s*$$~s ) { \
-		printf qq[MAKE_PERL_COVERAGE_CHECK: WARNING: unexpected gcov output:\n$$gcov_output\n]; \
-		exit 1; \
+		die(qq[MAKE_PERL_COVERAGE_CHECK: FATAL: unexpected gcov output:\n$$gcov_output\n]); \
 	} \
 	printf qq[MAKE_PERL_COVERAGE_CHECK: showing exclusions\n] if ( $(MAKE_DEBUG) ); \
 	@g = glob ( qq[$$dst_dir/*.c.gcov] ); \

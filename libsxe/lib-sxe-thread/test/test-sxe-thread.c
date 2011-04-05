@@ -1,5 +1,4 @@
-/* Copyright (c) 2010 Sophos G
- * roup.
+/* Copyright (c) 2010 Sophos Group.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -54,7 +53,7 @@ test_log_line(SXE_LOG_LEVEL level, char * line)
     /* Stuff unwanted diagnostics
      */
     if (level >= test_log_level) {
-        fprintf(stderr, line);
+        fputs(line, stderr);
         fflush(stderr);
     }
 }
