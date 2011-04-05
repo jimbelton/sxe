@@ -208,9 +208,9 @@ sxe_spawn_backticks(const char * cmd, char * buf, unsigned int buf_max)
 
     buf[bytes_written] = '\0';
 #ifdef _WIN32
-    SXEA80(_pclose(fp) == 0, "sxe_spawn_backticks: failed to close pipe");
+    SXEV80(_pclose(fp), == 0, "sxe_spawn_backticks: failed to close pipe");
 #else
-    SXEA80(pclose(fp) == 0, "sxe_spawn_backticks: failed to close pipe");
+    SXEV80(pclose(fp), == 0, "sxe_spawn_backticks: failed to close pipe");
 #endif
 
     SXER80("return");

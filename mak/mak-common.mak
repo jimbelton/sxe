@@ -101,23 +101,24 @@ ifdef DST.dir
         COVERAGE_CHECK   := $(MAKE_PERL_COVERAGE_CHECK) $(call OSPATH,$(DST.dir) $(OS_class))
     endif
 
-    ifndef MAKE_PEER_DEPENDENTS
-        # come here if       making peer dependents
-    else
-        # come here if *not* making peer dependents
-        ifdef MAKE_DEBUG
+    # vvv - This code was disabled when building peers - that broke things, so I reverted; TBD: why was this done?
+
+    ifdef MAKE_DEBUG
         $(info make[$(MAKELEVEL)]: ensure folder exists: $(DST.dir))
-        endif
-        DUMMY := $(shell $(MKDIR) $(DST.dir) $(REDIRECT))
-        ifdef THIRD_PARTY.dir
-            DUMMY := $(shell $(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: 3rdparty: replicating: $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir))")
-            $(info $(DUMMY))
-            DUMMY := $(shell $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir)))
-            ifdef THIRD_PARTY.del
-               DUMMY := $(shell $(DEL) $(DST.dir)$(DIR_SEP)$(THIRD_PARTY.dir)$(DIR_SEP)$(THIRD_PARTY.del))
-            endif
+    endif
+
+    DUMMY := $(shell $(MKDIR) $(DST.dir) $(REDIRECT))
+
+    ifdef THIRD_PARTY.dir
+        DUMMY := $(shell $(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: 3rdparty: replicating: $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir))")
+        $(info $(DUMMY))
+        DUMMY := $(shell $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir)))
+        ifdef THIRD_PARTY.del
+           DUMMY := $(shell $(DEL) $(DST.dir)$(DIR_SEP)$(THIRD_PARTY.dir)$(DIR_SEP)$(THIRD_PARTY.del))
         endif
     endif
+
+    # ^^^ - This code was disabled when building peers - that broke things, so I reverted; TBD: why was this done?
 else
     ifneq ($(filter test,$(MAKECMDGOALS)),)
         $(error make: error: do not specify test goal without release, debug or coverage goals)
@@ -204,11 +205,8 @@ COMMON_TEST.objs := $(patsubst test/%.c,$(DST.dir)/test/%$(EXT.obj),$(COMMON_TES
 
 $(DEP.dirs):
 ifndef MAKE_PEER_DEPENDENTS
-    # come here if       making peer dependents
 	@$(MAKE_PERL_ECHO_BOLD) "make[$(MAKELEVEL)]: checking: $(DST.dir): peer dependent: $@"
 	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) -C $@ MAKE_PEER_DEPENDENTS=1 $(MAKECMDGOALS)
-else
-    # come here if *not* making peer dependents
 endif
 
 ifdef MAKE_DEBUG
@@ -257,14 +255,14 @@ MAKE_RUN=@                                   # Shut things up unless MAKE_DEBUG 
 MAKE_DEBUG_SUB_MAKE_DIR=--no-print-directory # Shut things up unless MAKE_DEBUG is set
 endif
 
-ifndef MAKE_PEER_DEPENDENTS
-    # come here if       making peer dependents
-else
-    # come here if *not* making peer dependents
-    DST.all = $(DST.inc) $(DST.lib) $(DST.exe)
+# Includes are martialed in a second pass that has the MAKE_PEER_DEPENDENTS flag
+#
+ifdef MAKE_PEER_DEPENDENTS
+INCLUDES=$(DST.inc)
 endif
 
-release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DEP.dirs) $(DST.all) $(DST.lib)
+# Dependency on DST.exe was made conditional on MAKE_PEER_DEPENDENCIES; this broke thing; reverted; TBD: why was this done?
+release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DEP.dirs) $(INCLUDES) $(DST.lib) $(DST.exe)
 ifneq ($(DST.inc),)
     # come here if need to collect all include files for high level library; recurse for make wildcards
 	$(MAKE_RUN) $(MAKE) $(MAKE_DEBUG_SUB_MAKE_DIR) DST.dir=$(DST.dir) include
@@ -285,13 +283,8 @@ coverage_clean:
 
 run_tests: $(DST.oks)
 
-ifndef MAKE_PEER_DEPENDENTS
-    # come here if       making peer dependents
+# This code ws disabled when making peer dependents; this broke stuff; reverted it; TBD: why was this disabled?
 .PHONY: test
-test:
-	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: ran:      $(DST.dir): tests complete for all dependents"
-else
-    # come here if *not* making peer dependents
 test:				$(DO_COVERAGE) run_tests
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: ran:      $(DST.dir): tests complete"
 ifdef DO_COVERAGE
@@ -299,7 +292,6 @@ ifneq ($(strip $(DST.oks)),)
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: coverage: check"
 	$(MAKE_RUN) $(COVERAGE_CHECK)
 	$(MAKE_RUN) $(DEL) $(DST.dir)$(DIR_SEP)*.c
-endif
 endif
 endif
 
@@ -330,17 +322,14 @@ realclean::
 	$(RMDIR) $(wildcard build-$(OS_name)-$(OS_bits)-*) $(TO_NUL) $(FAKE_PASS)
 
 # If we are making, not cleaning, include dependency files, silently ignoring failure to include them.
+# This code ws disabled when making peer dependents; this broke stuff; reverted it; TBD: why was this disabled?
 #
-ifndef MAKE_PEER_DEPENDENTS
-    # come here if       making peer dependents
-else
-    # come here if *not* making peer dependents
-    ifdef DST.dir
-        ifdef MAKE_DEBUG
-            $(info make[$(MAKELEVEL)]: debug: sinclude $(DST.d))
-        endif
-        sinclude $(DST.d)
+ifdef DST.dir
+    ifdef MAKE_DEBUG
+        $(info make[$(MAKELEVEL)]: debug: sinclude $(DST.d))
     endif
+
+    sinclude $(DST.d)
 endif
 
 $(DST.dir)/test/%.d:

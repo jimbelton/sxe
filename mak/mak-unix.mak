@@ -113,8 +113,8 @@ PROVE              = prove
 #   - --no-target-directory treat DEST as a normal file
 #   - --verbose             explain what is being done
 #   - --preserve=timestamps make copies the same age as the sources
-COPYDIR            = cp --update --verbose --preserve=timestamps --recursive --no-target-directory
-COPYFILES2DIR      = cp --update --verbose --preserve=timestamps
+COPYDIR            = cp --update --verbose --preserve=timestamps --recursive --no-target-directory --force
+COPYFILES2DIR      = cp --update --verbose --preserve=timestamps --force
 CFLAGS_DEBUG       = -g
 CFLAGS_FOR_CPP     = -lstdc++
 

@@ -54,7 +54,7 @@ test_log_line(SXE_LOG_LEVEL level, char * line)
     /* Stuff unwanted diagnostics
      */
     if (level >= test_log_level) {
-        fputs(line, stderr);
+        fprintf(stderr, line);
         fflush(stderr);
     }
 }

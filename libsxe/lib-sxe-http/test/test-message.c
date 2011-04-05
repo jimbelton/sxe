@@ -61,7 +61,7 @@ int
 main(void)
 {
     SXE_HTTP_MESSAGE message;
-    plan_tests(58);
+    plan_tests(59);
 
     tap_test_case_name("defragmentation");
     sxe_http_message_construct(&message, MESSAGE_HAPPY, 0);
@@ -183,6 +183,12 @@ main(void)
     is(sxe_http_message_parse_next_header(&message), SXE_RETURN_OK,                   "Parsed first multi header");
     is(sxe_http_message_get_header_name_length(&message), strlen("Connection"),       "Header name is as long as 'Connection'");
 
+    /* Test to replicate bug found during WDX cnxd integration
+     */
+    tap_test_case_name("nearly a complete response line");
+    sxe_http_message_construct(&message, "HTTP/1.1 200 ", strlen("HTTP/1.1 200 "));
+    is(sxe_http_message_parse_next_line_element(&message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), SXE_RETURN_WARN_WOULD_BLOCK,
+                                                                                      "Would block on rest of response line");
     return exit_status();
 }
 

@@ -40,12 +40,14 @@
 void
 sxe_http_message_construct(SXE_HTTP_MESSAGE * message, const char * buffer, unsigned buffer_length)
 {
-    SXEE84("%s(message=%p, buffer=%u, buffer_length=%u)", __func__, message, buffer, buffer_length);
+    SXEE84("%s(message=%p, buffer=%p, buffer_length=%u)", __func__, message, buffer, buffer_length);
     message->buffer         = buffer;
     message->buffer_length  = buffer_length;
     message->consumed       = 0;
     message->element_length = 0;
     message->next_field     = 0;
+    message->ignore_line    = 0;
+    message->ignore_length  = 0;
     SXER80("return");
 }
 
@@ -111,7 +113,9 @@ sxe_http_message_parse_next_line_element(SXE_HTTP_MESSAGE * message, SXE_HTTP_LI
     unsigned     next_field = message->next_field;
     unsigned     offset;
 
-    SXEE83("%s(message=%p,type=%s)", __func__, message, type == SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN ? "TOKEN" : "END_OF_LINE");
+    SXEE84("%s(message=%p,type=%s) // message->buffer_length=%u", __func__, message,
+           type == SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN ? "TOKEN" : "END_OF_LINE", message->buffer_length);
+    SXEA11(message->buffer != NULL, "%s: Message has a NULL buffer pointer", __func__);
 
     if (message->element_length == SXE_HTTP_LINE_PARSED
      || (next_field >= 2 && message->buffer[next_field - 2] == '\r' && message->buffer[next_field - 1] == '\n'))
@@ -178,6 +182,10 @@ sxe_http_message_parse_next_line_element(SXE_HTTP_MESSAGE * message, SXE_HTTP_LI
             goto SXE_ERROR_OUT;
         }
     }
+    else if (type == SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE) {
+        SXEL90("Fragment: Haven't reached end of request/response line");
+        goto SXE_EARLY_OUT;
+    }
 
     SXEL83("Parsed %s message line: '%.*s'", type == SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN ? "token from" : "rest of",
            message->element_length, &message->buffer[message->consumed]);
@@ -213,9 +221,13 @@ sxe_http_message_parse_next_header(SXE_HTTP_MESSAGE * message)
         message->element_length = SXE_HTTP_LINE_PARSED;
     }
 
+    /* Caller will ignore(consume) ignore_length byte of data, so need to reset it each time */
+    message->ignore_length = 0;
+
     /* If the current header field has already been returned or this is the first call after parsing the line, move along
      */
     if (message->next_field != 0) {
+        SXEL81("Current header field returned or this is the first call after parsing the line(next_field=%u)", message->next_field);
         message->consumed     = message->next_field;
         message->name_length  = 0;
         message->value_offset = 0;
@@ -237,9 +249,58 @@ sxe_http_message_parse_next_header(SXE_HTTP_MESSAGE * message)
         }
     }
 
+    if (message->ignore_line) {
+        SXEL80("Ignore current line: trying to find the ending '\n'");
+        for (;;) {
+            for (offset = message->consumed; message->buffer[offset] != '\n'; offset++) {
+                if (offset >= message->buffer_length) {
+                    message->ignore_length  = message->buffer_length;
+                    SXEL81("Ignore current line: Partial header, %u bytes to ignore", message->ignore_length);
+                    goto SXE_IGNORE_LINE_EARLY_OUT;
+                }
+            }
+
+            /* Need at least two more characters to check end of header or line continuation.
+             */
+            if (offset + 2 >= message->buffer_length) {
+                message->ignore_length  = message->buffer_length - 2; /* save the ending '\n' for next time */
+                SXEL81("Ignore current line: Partial end of header field, %u bytes to ignore", message->ignore_length);
+                goto SXE_IGNORE_LINE_EARLY_OUT;
+            }
+
+            if (message->buffer[offset + 1] == '\r' && message->buffer[offset + 2] == '\n') {
+                message->ignore_line    = 0;
+                message->ignore_length  = message->consumed = offset + 3;
+                message->buffer_length -= message->ignore_length;
+                result                  = SXE_RETURN_END_OF_FILE;
+                goto SXE_EARLY_OUT;
+            }
+
+            /* If this is a not a continuation, the end of line is found
+             */
+            if (message->buffer[++offset] != ' ' && message->buffer[offset] != '\t') {
+                message->ignore_length  = offset;
+                message->ignore_line    = 0;
+
+                /* reset all the offset and lengths */
+                message->name_length    = 0;
+                message->value_offset   = 0;
+                message->value_length   = 0;
+
+                SXEL81("Ignore current line: Found the end of current line, %u bytes to ignore", message->ignore_length);
+                goto SXE_IGNORE_LINE_EARLY_OUT;
+            }
+
+            /* It is a line continuation, carry on */
+            SXEL80("Ignore current line: Found a line continuation, carry on");
+            message->consumed = offset;
+        }
+    }
+
     /* If the head field name has not been parsed yet, do so.
      */
     if (message->value_offset == 0) {
+        SXEL82("Value offset is 0, consumed is %u, name length is %u", message->consumed, message->name_length);
         if (message->name_length == 0 && message->buffer[message->consumed] == ':') {
             SXEL31("%s: Bad message: header field begins with ':'", __func__);
             goto SXE_ERROR_OUT;
@@ -249,7 +310,7 @@ sxe_http_message_parse_next_header(SXE_HTTP_MESSAGE * message)
          */
         for (offset = message->consumed + message->name_length; message->buffer[offset] != ':'; offset++) {
             if (offset >= message->buffer_length) {
-                SXEL82("Fragment: Partial header field name '%.*s", offset - message->consumed,
+                SXEL82("Fragment: Partial header field name '%.*s'", offset - message->consumed,
                        &message->buffer[message->consumed]);
                 message->name_length = offset - message->consumed;
                 result               = SXE_RETURN_WARN_WOULD_BLOCK;
@@ -266,10 +327,12 @@ sxe_http_message_parse_next_header(SXE_HTTP_MESSAGE * message)
         message->name_length  = offset - message->consumed;
         message->value_offset = offset + 1;
     }
+    SXEL82("After looking for the header name, value offset is %u, name length is %u", message->value_offset, message->name_length);
 
     /* If the value hasn't started yet, trim leading spaces and tabs.  Note: Leading line continuations are not stripped.
      */
     if (message->value_length == 0) {
+        SXEL80("Value length is 0");
         for (;;) {
             if (message->value_offset >= message->buffer_length) {
                 SXEL80("Fragment: Partial header field before value");
@@ -284,6 +347,7 @@ sxe_http_message_parse_next_header(SXE_HTTP_MESSAGE * message)
             message->value_offset++;
         }
     }
+    SXEL81("After skipping the leading SP and TAB, value offset is %u", message->value_offset);
 
     /* Until the end of the header field value is reached.
      */
@@ -291,6 +355,7 @@ sxe_http_message_parse_next_header(SXE_HTTP_MESSAGE * message)
         /* Look for a return in the header field value.
          * Note: Newlines without a preceding return are allowed (violating RFC 822 3.1.2)
          */
+        SXEL80("Look for a return in the header field value");
         for (offset = message->value_offset + message->value_length; message->buffer[offset] != '\r'; offset++) {
             if (offset >= message->buffer_length) {
                 SXEL80("Fragment: Partial header field value");
@@ -341,6 +406,12 @@ sxe_http_message_parse_next_header(SXE_HTTP_MESSAGE * message)
     SXEL84("Message header field '%.*s' has value '%.*s'", message->name_length,  &message->buffer[message->consumed],
                                                            message->value_length, &message->buffer[message->value_offset]);
     result = SXE_RETURN_OK;
+    goto SXE_EARLY_OUT;
+
+SXE_IGNORE_LINE_EARLY_OUT:
+    message->buffer_length -= message->ignore_length;
+    message->consumed       = 0;
+    result                  = SXE_RETURN_WARN_WOULD_BLOCK;
 
 SXE_EARLY_OR_ERROR_OUT:
     SXER81("return result=%s", sxe_return_to_string(result));

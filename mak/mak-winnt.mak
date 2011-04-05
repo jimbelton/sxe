@@ -138,9 +138,9 @@ ifeq "$(MAKE_MSVC)" "inpath"
 # come here if    ms visual c installed / vcvars32.bat     run
 else
 # come here if no ms visual c installed / vcvars32.bat not run
-MINGW_DETECTED := $(shell mingw32-gcc.exe --version 2>&1 | $(PERL) -lane "$$lines .= $$_; sub END{ printf qq[%%d], $$lines =~ m~mingw32-gcc~is; })
+MINGW_DETECTED := $(shell gcc.exe --version 2>&1 | $(PERL) -lane "$$lines .= $$_; sub END{ printf qq[%%d], $$lines =~ m~gcc~is; })
 ifneq ($(filter 1,$(MINGW_DETECTED)),)
-# come here if mingw32-gcc.exe found
+# come here if gcc.exe found
 MAKE_MINGW = 1
 else
 # come here if no compiler found
@@ -160,8 +160,8 @@ else
 OS_name     = mingw
 endif
 EXT.lib     = .a
-CXX         = mingw32-gcc.exe
-CC          = mingw32-gcc.exe
+CXX         = gcc.exe
+CC          = gcc.exe
 CC_OUT      = -o
 CFLAGS_PROD = -std=gnu99
 CFLAGS_TEST = -std=gnu99
@@ -186,7 +186,7 @@ else
 CFLAGS.more +=  -O -Wuninitialized
 endif
 
-LINK        = mingw32-gcc.exe
+LINK        = gcc.exe
 LINK_CHECK  =
 LINK_OUT    = -o
 LINK_FLAGS  = -g -lm -lWs2_32

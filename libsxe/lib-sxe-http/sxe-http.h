@@ -23,6 +23,7 @@
 #ifndef __SXE_HTTP_H__
 #define __SXE_HTTP_H__
 
+#include <string.h>
 #include "sxe-log.h"
 
 #define SXE_HTTP_VERB_LENGTH_MAXIMUM 8
@@ -52,6 +53,8 @@ typedef struct SXE_HTTP_MESSAGE {
     unsigned     value_offset;
     unsigned     value_length;
     unsigned     next_field;
+    unsigned     ignore_line;
+    unsigned     ignore_length;
 } SXE_HTTP_MESSAGE;
 
 static inline const char *
@@ -89,6 +92,28 @@ sxe_http_message_get_header_value(SXE_HTTP_MESSAGE * message)
 static inline unsigned
 sxe_http_message_get_header_value_length(SXE_HTTP_MESSAGE * message) {
     return message->value_length;
+}
+
+static inline unsigned
+sxe_http_message_get_ignore_length(SXE_HTTP_MESSAGE * message) {
+    return message->ignore_length;
+}
+
+static inline unsigned
+sxe_http_message_get_buffer_length(SXE_HTTP_MESSAGE * message) {
+    return message->buffer_length;
+}
+
+static inline void
+sxe_http_message_set_ignore_line(SXE_HTTP_MESSAGE * message) {
+    message->buffer_length = 0;
+    message->ignore_line   = 1;
+}
+
+static inline void
+sxe_http_message_buffer_shift_ignore_length(SXE_HTTP_MESSAGE * message) {
+    /* Bypass the "cast discards qualifiers ..." warning */
+    memmove((char *)((unsigned)(message->buffer)), message->buffer + message->ignore_length, message->buffer_length);
 }
 
 #include "lib-sxe-http-proto.h"

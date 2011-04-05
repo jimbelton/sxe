@@ -192,7 +192,7 @@ main(void)
     snprintf(&pipe_name[sizeof(TEST_PIPE_NAME_PREFIX) - 1], TEST_PID_MAX_DIGITS + 1, "%d", getpid());
     (void)unlink(pipe_name);
 
-    sxe_httpd_construct(&httpd, 1, 0);
+    sxe_httpd_construct(&httpd, 2, 0);
     SXE_HTTPD_SET_HANDLER(&httpd, connect, evhttp_connect);
     SXE_HTTPD_SET_HANDLER(&httpd, request, evhttp_request);
     SXE_HTTPD_SET_HANDLER(&httpd, respond, evhttp_respond);

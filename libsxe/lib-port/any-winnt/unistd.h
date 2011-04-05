@@ -59,7 +59,9 @@
 #define funlockfile(file)
 
 #define getpid()                 _getpid()
+#define pclose(stream)           _pclose(stream)
 #define pipe(phandles)           _pipe((phandles), PIPE_BUF, _O_BINARY)
+#define popen(command, modes)    _popen((command), (modes))
 #define snprintf                 _snprintf
 #define strncasecmp(s1, s2, n)   _strnicmp((s1), (s2), (n))
 

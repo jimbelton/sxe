@@ -38,17 +38,19 @@
 
 /**
  * Construct a list object.
+ *
+ * @note Trace logged at dump level to prevent flooding the logs at trace level on startup
  */
 void
 sxe_list_construct_impl(SXE_LIST * list, unsigned id, size_t offset)
 {
-    SXEE82("sxe_list_construct_impl(list=%p, id=%u, offset=%u)", list, offset);
+    SXEE92("sxe_list_construct_impl(list=%p, id=%u, offset=%u)", list, offset);
     list->HEAD          = SENTINEL_PTR_REL(list);
     list->TAIL          = SENTINEL_PTR_REL(list);
     list->sentinel.id   = id;
     list->length        = 0;
     list->offset        = offset;
-    SXER80("return");
+    SXER90("return");
 }
 
 /**

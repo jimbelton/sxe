@@ -27,14 +27,15 @@
 #include "sxe-http.h"
 #include "sxe-list.h"
 
+/* NOTE: Order of states is important! */
 typedef enum {
     SXE_HTTPD_CONN_FREE = 0,           /* not connected */
+    SXE_HTTPD_CONN_BAD,                /* invalid http, sink mode until close */
     SXE_HTTPD_CONN_IDLE,               /* client connected */
     SXE_HTTPD_CONN_REQ_LINE,           /* VERB <SP> URL [<SP> VERSION] */
     SXE_HTTPD_CONN_REQ_HEADERS,        /* reading headers */
     SXE_HTTPD_CONN_REQ_BODY,           /* at BODY we run the handler for each chunk. */
     SXE_HTTPD_CONN_REQ_RESPONSE,       /* generating the response (read disabled) */
-    SXE_HTTPD_CONN_ERROR_SENT,         /* sent an error, waiting for close           */
     SXE_HTTPD_CONN_NUMBER_OF_STATES
 } SXE_HTTPD_CONN_STATE;
 
@@ -86,8 +87,12 @@ typedef bool (*sxe_http_header_handler)(const char *key, unsigned key_length,
  */
 typedef void (*sxe_httpd_sendfile_handler)(struct SXE_HTTPD_REQUEST *, SXE_RETURN, void *);
 
-#define SXE_HTTPD_REQUEST_USER_DATA(request) (request)->user_data
-#define SXE_HTTPD_REQUEST_SERVER_USER_DATA(request) (request)->server->user_data
+#define SXE_HTTPD_REQUEST_USER_DATA(request)                         (request)->user_data
+#define SXE_HTTPD_REQUEST_USER_DATA_AS_UNSIGNED(request) ((unsigned)((request)->user_data))
+#define SXE_HTTPD_REQUEST_SERVER_USER_DATA(request)                  (request)->server->user_data
+
+/* Pointer substraction is signed but index is unsigned */
+#define SXE_HTTPD_REQUEST_INDEX(base_ptr, object_ptr) (((unsigned)(object_ptr) - (unsigned)(base_ptr))/sizeof(SXE_HTTPD_REQUEST))
 
 typedef struct SXE_HTTPD_REQUEST {
     struct SXE_HTTPD         * server;

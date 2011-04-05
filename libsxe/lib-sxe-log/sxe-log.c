@@ -347,20 +347,22 @@ sxe_log_decrease_level(SXE_LOG_LEVEL level)
 }
 
 void
-sxe_log(unsigned id, SXE_LOG_LEVEL level, const char *fmt, ...)
+sxe_log(SXE_LOG_LEVEL * max_level, const char * file, unsigned id, SXE_LOG_LEVEL level, const char * format, ...)
 {
-    char  log_buffer[SXE_LOG_BUFFER_SIZE];
+    char     log_buffer[SXE_LOG_BUFFER_SIZE];
     va_list  ap;
     unsigned i;
 
+    SXE_UNUSED_ARGUMENT(max_level);
+    SXE_UNUSED_ARGUMENT(file);
     SXE_CHECK_LOG_INITIALIZE();
     SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
 
     i = sxe_log_buffer_set_prefix(log_buffer, id, level);
-    va_start(ap, fmt);
+    va_start(ap, format);
 
     if (!sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s%s", sxe_log_get_indent() * 2, "", (id == ~0U - 1) ? "" : "- ")) ||
-        !sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, fmt    , ap                          )))
+        !sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format    , ap                          )))
     {
         goto SXE_EARLY_OUT;
     }
@@ -372,22 +374,25 @@ SXE_EARLY_OR_ERROR_OUT:
 }
 
 void
-sxe_log_entry(unsigned id, SXE_LOG_LEVEL level, const char * file, int line, const char *fmt, ...)
+sxe_log_entry(SXE_LOG_LEVEL * max_level, const char * file, unsigned id, SXE_LOG_LEVEL level, const char * function, int line,
+              const char * format, ...)
 {
-    char  log_buffer[SXE_LOG_BUFFER_SIZE];
+    char     log_buffer[SXE_LOG_BUFFER_SIZE];
     va_list  ap;
     unsigned i;
     unsigned prefix_length;
 
+    SXE_UNUSED_ARGUMENT(max_level);
+    SXE_UNUSED_ARGUMENT(function);
     SXE_CHECK_LOG_INITIALIZE();
     SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
 
     prefix_length   = sxe_log_buffer_set_prefix(log_buffer, id, level);
     i               = prefix_length;
-    va_start(ap, fmt);
+    va_start(ap, format);
 
     if (sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s+ ", sxe_log_get_indent() * 2, ""))
-    &&  sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, fmt, ap))) {
+    &&  sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap))) {
         sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
     }
 
@@ -400,18 +405,19 @@ sxe_log_entry(unsigned id, SXE_LOG_LEVEL level, const char * file, int line, con
 }
 
 void
-sxe_log_return(unsigned id, SXE_LOG_LEVEL level, const char * file, int line )
+sxe_log_return(SXE_LOG_LEVEL * max_level, const char * file, unsigned id, SXE_LOG_LEVEL level, int line)
 {
-    char  log_buffer[SXE_LOG_BUFFER_SIZE];
+    char     log_buffer[SXE_LOG_BUFFER_SIZE];
     unsigned i;
 
+    SXE_UNUSED_ARGUMENT(max_level);
     SXE_CHECK_LOG_INITIALIZE();
     SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
     SXEA61(sxe_log_get_indent() > 0, "Indentation level %d must be greater than zero!\n", sxe_log_get_indent());
 
     i = sxe_log_buffer_set_prefix(log_buffer, id, level);
-    sxe_log_safe_append( log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s} // %s:%d\n",
-                                  sxe_log_get_indent() * 2, "", file, line));
+    sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s} // %s:%d\n",
+                        sxe_log_get_indent() * 2, "", file, line));
     sxe_log_set_indent(sxe_log_get_indent() - 1);
 
 SXE_EARLY_OR_ERROR_OUT:
@@ -419,19 +425,20 @@ SXE_EARLY_OR_ERROR_OUT:
 }
 
 void
-sxe_log_assert(unsigned id, const char *file, int line, const char *con, const char *fmt, ...)
+sxe_log_assert(SXE_LOG_LEVEL * max_level, const char * file, unsigned id, int line, const char *con, const char * format, ...)
 {
-    char  log_buffer[SXE_LOG_BUFFER_SIZE_ASSERT];
+    char     log_buffer[SXE_LOG_BUFFER_SIZE_ASSERT];
     va_list  ap;
     unsigned i = 0;
 
+    SXE_UNUSED_ARGUMENT(max_level);
     SXE_CHECK_LOG_INITIALIZE();
 
     i = sxe_log_buffer_set_prefix(log_buffer, id, 1);
-    va_start(ap, fmt);
+    va_start(ap, format);
 
     if (sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "ERROR: debug assertion '%s' failed at %s:%d; ", con, file, line))
-    &&  sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, fmt, ap))) {
+    &&  sxe_log_safe_append(log_buffer, &i, VSNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap))) {
         sxe_log_safe_append(log_buffer, &i,  SNPRINTF(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
     }
 
@@ -441,16 +448,18 @@ SXE_EARLY_OR_ERROR_OUT:
 }
 
 void
-sxe_log_dump_memory(unsigned id, SXE_LOG_LEVEL level, const void * pointer, unsigned length)
+sxe_log_dump_memory(SXE_LOG_LEVEL * max_level, const char * file, unsigned id, SXE_LOG_LEVEL level, const void * pointer, unsigned length)
 {
-    char            log_buffer[SXE_LOG_BUFFER_SIZE];
-    unsigned        prefix_length;
-    unsigned        c;
-    unsigned        i;
-    unsigned        j;
-    unsigned        k;
-    SXE_PTR_UNION   memory;
+    char          log_buffer[SXE_LOG_BUFFER_SIZE];
+    unsigned      prefix_length;
+    unsigned      c;
+    unsigned      i;
+    unsigned      j;
+    unsigned      k;
+    SXE_PTR_UNION memory;
 
+    SXE_UNUSED_ARGUMENT(max_level);
+    SXE_UNUSED_ARGUMENT(file);
     SXE_CHECK_LOG_INITIALIZE();
     SXE_CHECK_LEVEL_BEFORE_ANYTHING_ELSE();
 

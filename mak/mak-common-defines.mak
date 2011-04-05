@@ -72,9 +72,15 @@ $(PERL) -e $(OSQUOTE) \
 	while ((scalar(@ARGV) > 1) && ($$ARGV[scalar(@ARGV) - 1] =~ m~\.a$$~)) { \
 		my $$lib = pop(@ARGV); \
 		printf qq[MAKE_PERL_LIB: debug: expanding .a: $(OSPC)s\n], $$lib if ( $(MAKE_DEBUG) ); \
-		-d $$tmp_lib_dir or mkdir($$tmp_lib_dir)                                         or die(qq[MAKE_PERL_LIB: Cannot make directory $$tmp_lib_dir\n]); \
-		system(qq[cp $$lib $$tmp_lib_dir/.]) == 0                                        or die(qq[MAKE_PERL_LIB: Cannot copy library $$lib into $$tmp_lib_dir\n]); \
-		system(qq[cd $$tmp_lib_dir && find *$(EXT.lib) | xargs --max-lines=1 ar x]) == 0 or die(qq[MAKE_PERL_LIB: Cannot explode library $$lib\n]); \
+		-d $$tmp_lib_dir or mkdir($$tmp_lib_dir)          or die(qq[MAKE_PERL_LIB: Cannot make directory $$tmp_lib_dir\n]); \
+		system(qq[cp $$lib $$tmp_lib_dir/.]) == 0         or die(qq[MAKE_PERL_LIB: Cannot copy library $$lib into $$tmp_lib_dir\n]); \
+		my @expand_libs_with_path = glob(qq[$$tmp_lib_dir/*$(EXT.lib)]); \
+		foreach my $$expand_lib_with_path (@expand_libs_with_path) { \
+			my ( $$expand_lib ) = $$expand_lib_with_path =~ m~([^\\\/]+)$$~; \
+			my $$lib_cmd = qq[cd $$tmp_lib_dir && ar x $$expand_lib]; \
+			printf qq[MAKE_PERL_LIB: debug: expanding library: $(OSPC)s\n], $$lib_cmd if ( $(MAKE_DEBUG) ); \
+			system($$lib_cmd) == 0                        or die(qq[MAKE_PERL_LIB: Cannot explode library $$_\n]); \
+		} \
 	} \
 	my $$lib_cmd = qq[ar csr ] . join(q[ ], @ARGV) . qq[ ] . join(q[ ],glob(qq[$$tmp_lib_dir/*$(EXT.obj)])); \
 	printf qq[MAKE_PERL_LIB: debug: creating library: $(OSPC)s\n], $$lib_cmd if ( $(MAKE_DEBUG) ); \
@@ -142,21 +148,20 @@ $(PERL) -e $(OSQUOTE) \
 		printf qq[MAKE_PERL_COVERAGE_CHECK: updating @os_class_c_to_copy\n] if ( $(MAKE_DEBUG) ); \
 		copyfiles2dir_sub ( @os_class_c_to_copy, qq[$$dst_dir/$$os_class] ); \
         $$gcov_cmd = qq[cd $$dst_dir && gcov $$os_class/*.c 2>&1]; \
-        printf qq[MAKE_PERL_COVERAGE_CHECK: running gcov: $$gcov_cmd\n] if ( $(MAKE_DEBUG) ); \
+        printf qq[MAKE_PERL_COVERAGE_CHECK: running gcov; $$gcov_cmd\n] if ( $(MAKE_DEBUG) ); \
         $$gcov_output = `$$gcov_cmd`; \
 	} \
 	@c_to_copy = glob ( qq[*.c] ); \
 	printf qq[MAKE_PERL_COVERAGE_CHECK: updating @c_to_copy\n] if ( $(MAKE_DEBUG) ); \
 	copyfiles2dir_sub ( @c_to_copy, $$dst_dir ); \
 	$$gcov_cmd = qq[cd $$dst_dir && gcov *.c 2>&1]; \
-	printf qq[MAKE_PERL_COVERAGE_CHECK: running gcov: $$gcov_cmd\n] if ( $(MAKE_DEBUG) ); \
+	printf qq[MAKE_PERL_COVERAGE_CHECK: running gcov; $$gcov_cmd\n] if ( $(MAKE_DEBUG) ); \
 	$$gcov_output .=  `$$gcov_cmd`; \
 	$$gcov_output  =~ s~[^\s]+\.h:cannot open source file[\r\n]+~~gs; \
 	$$gcov_output  =~ s~File [^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~Lines executed:[^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+:creating [^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+source file is newer than graph file [^\r\n]+[\r\n]+~~gs; \
-	$$gcov_output  =~ s~\(the message is only displayed one per source file\)[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+cannot open graph file[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+\:cannot open data file, assuming not executed[\r\n]+~~gs; \
 	while ( $$gcov_output =~ m~([^\s]+)\.gcda\:cannot open data file[\r\n]+~gs ) { \
@@ -164,7 +169,8 @@ $(PERL) -e $(OSQUOTE) \
 	} \
 	$$gcov_output =~ s~[^\s]+\:cannot open data file[\r\n]+~~gs; \
 	if ( $$gcov_output !~ m~^\s*$$~s ) { \
-		die(qq[MAKE_PERL_COVERAGE_CHECK: fatal: unexpected gcov output:\n$$gcov_output\n]); \
+		printf qq[MAKE_PERL_COVERAGE_CHECK: WARNING: unexpected gcov output:\n$$gcov_output\n]; \
+		exit 1; \
 	} \
 	printf qq[MAKE_PERL_COVERAGE_CHECK: showing exclusions\n] if ( $(MAKE_DEBUG) ); \
 	@g = glob ( qq[$$dst_dir/*.c.gcov] ); \

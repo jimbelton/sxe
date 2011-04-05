@@ -105,7 +105,7 @@ sxe_httpd_default_respond_handler(SXE_HTTPD_REQUEST *request) /* Coverage Exclus
     SXE_UNUSED_PARAMETER(request);
     SXEE92I("%s(request=%p)", __func__, request);
     SXEL30I("warning: default respond handler: generating 404 Not Found"); /* Coverage Exclusion - todo: win32 coverage */
-    sxe_httpd_response_error(request, 404, "Not Found");
+    sxe_httpd_response_simple(request, 404, "Not Found", NULL, NULL);
     SXER90I("return");
 } /* Coverage Exclusion - todo: win32 coverage */
 
@@ -181,11 +181,11 @@ sxe_httpd_state_to_string(unsigned state)
     switch (state) {
     case SXE_HTTPD_CONN_FREE:             return "FREE";        /* not connected */
     case SXE_HTTPD_CONN_IDLE:             return "IDLE";        /* client connected */
+    case SXE_HTTPD_CONN_BAD:              return "BAD";         /* bad connection */
     case SXE_HTTPD_CONN_REQ_LINE:         return "LINE";        /* VERB <SP> URL [<SP> VERSION] */
     case SXE_HTTPD_CONN_REQ_HEADERS:      return "HEADERS";     /* reading headers */
     case SXE_HTTPD_CONN_REQ_BODY:         return "BODY";        /* at BODY we run the handler for each chunk. */
     case SXE_HTTPD_CONN_REQ_RESPONSE:     return "RESPONSE";    /* awaiting the response (read disabled) */
-    case SXE_HTTPD_CONN_ERROR_SENT:       return "ERROR";       /* sent an error, waiting for close            */
     }
 
     return NULL;                                                /* not a state - just keeps the compiler happy */
@@ -214,20 +214,22 @@ sxe_httpd_clear_request(SXE_HTTPD_REQUEST *request)
 void
 sxe_httpd_close(SXE_HTTPD_REQUEST * request)
 {
-    SXE *              this     = request->sxe;
-    SXE_HTTPD_REQUEST * requests = request->server->requests;
-    unsigned           state    = sxe_pool_index_to_state(requests, request - requests);
+    SXE *               this       = request->sxe;
+    SXE_HTTPD_REQUEST * requests   = request->server->requests;
+    unsigned            request_id = SXE_HTTPD_REQUEST_INDEX(requests, request);
+    unsigned            state;
 
     SXE_UNUSED_PARAMETER(this);
 
-    SXEE81I("sxe_httpd_close(request=%u)", request - requests);
+    SXEE82I("sxe_httpd_close(request=%p, request_id=%u)", request, request_id);
     sxe_httpd_clear_request(request);
 
     if (request->sxe != NULL) {
         sxe_close(request->sxe);
     }
 
-    sxe_pool_set_indexed_element_state(requests, request - requests, state, SXE_HTTPD_CONN_FREE);
+    state = sxe_pool_index_to_state(requests, request_id);
+    sxe_pool_set_indexed_element_state(requests, request_id, state, SXE_HTTPD_CONN_FREE);
     SXER80I("return");
 }
 
@@ -261,30 +263,39 @@ sxe_httpd_response_simple(SXE_HTTPD_REQUEST * request, int code, const char * st
     SXER80I("return");
 }
 
-/**
- * Send an error response
- *
- * @param request Request to respond to
- * @param code    Status code (e.g. 404)
- * @param status  Status string (e.g. "Not Found")
- *
- * @note The connection is intentionally left open (see RFC 2616 10.4: an immediate close can cause data loss on the client).
- *       If you want to force it closed, it should be safe immediately after this call to call sxe_http_close, but otherwise,
- *       you should let the client close the connection or let HTTPD reap it if it runs out of free connections.  You will not
- *       get a free event for a client close on a connection to which you have sent an error response.
- */
-void
-sxe_httpd_response_error(SXE_HTTPD_REQUEST * request, unsigned code, const char * status)
+static void
+sxe_httpd_reap_oldest_connection(SXE_HTTPD * self)
 {
-    SXE               * this = request->sxe;
-    SXE_HTTPD_REQUEST * pool = request->server->requests;
-    unsigned            id   = request - pool;
+    unsigned             oldest_id;
+    SXE_TIME             oldest_time = 0;
+    SXE_TIME             element_time;
+    SXE_HTTPD_CONN_STATE oldest_state;
+    SXE_HTTPD_CONN_STATE element_state;
 
-    SXE_UNUSED_PARAMETER(this);
-    SXEE84I("%s(request=%u,code=%u,status=%s)", __func__, id, code, status);
-    sxe_httpd_response_simple(request, code, status, NULL, "Connection", "close", NULL);
-    sxe_pool_set_indexed_element_state(pool, id, sxe_pool_index_to_state(pool, id), SXE_HTTPD_CONN_ERROR_SENT);
-    SXER80I("return");
+    SXEE81("sxe_httpd_reap_oldest_connection(self=%p)", self);
+
+    /* reap connections in IDLE state first */
+    oldest_id = sxe_pool_get_oldest_element_index(self->requests, SXE_HTTPD_CONN_BAD);
+
+    if (oldest_id == SXE_POOL_NO_INDEX) {
+        SXEL20("sxe_httpd_reap_oldest_connection: no bad connections to reap");
+
+        for (element_state = SXE_HTTPD_CONN_IDLE; element_state != SXE_HTTPD_CONN_NUMBER_OF_STATES; element_state++) {
+            element_time = sxe_pool_get_oldest_element_time(self->requests, element_state);
+            if (oldest_time == 0 || (element_time != 0 && element_time < oldest_time)) {
+                oldest_time  = element_time;
+                oldest_state = element_state;
+            }
+        }
+        oldest_id = sxe_pool_get_oldest_element_index(self->requests, oldest_state);
+    }
+
+    SXEA10(oldest_id != SXE_POOL_NO_INDEX, "The oldest state has an index");
+    SXEL91("sxe_httpd_reap_oldest_connection: Going to reap request index %u", oldest_id);
+    (*self->on_close)(&self->requests[oldest_id]);
+    sxe_httpd_close(&self->requests[oldest_id]);
+
+    SXER80("return");
 }
 
 static void
@@ -298,23 +309,7 @@ sxe_httpd_event_connect(SXE * this)
     SXEE81I("sxe_httpd_event_connect(this=%p)", this);
 
     id = sxe_pool_set_oldest_element_state(self->requests, SXE_HTTPD_CONN_FREE, SXE_HTTPD_CONN_IDLE);
-
-    if (id == SXE_POOL_NO_INDEX) {
-        SXEL20I("sxe_httpd_event_connect: no free connections: checking for errored connections");
-        id = sxe_pool_get_oldest_element_index(self->requests, SXE_HTTPD_CONN_ERROR_SENT);
-
-        if (id == SXE_POOL_NO_INDEX) {
-            SXEL20I("sxe_httpd_event_connect: no errored connections either: returning 503 error"); /* Coverage Exclusion - todo: win32 coverage */
-            SXE_WRITE_LITERAL(this, "HTTP/1.1 503 Service unavailable\r\n" "Connection: close\r\n\r\n");
-            sxe_close(this);
-            goto SXE_EARLY_OUT;
-        }
-
-        sxe_httpd_close(&self->requests[id]);
-        SXEA11I(sxe_pool_set_oldest_element_state(self->requests, SXE_HTTPD_CONN_FREE, SXE_HTTPD_CONN_IDLE) == id,
-               "sxe_httpd_event_connect: Expected oldest free request to be the reaped error request %u", id);
-        SXEL51I("sxe_pool_set_oldest_element_state: Reaped oldest request to which error response was sent (%u)", id);
-    }
+    SXEA10(id != SXE_POOL_NO_INDEX, "Ran out of connections, should not happen");
 
     request = &self->requests[id];
     memset(request, '\0', sizeof(*request));
@@ -324,7 +319,12 @@ sxe_httpd_event_connect(SXE * this)
 
     (*self->on_connect)(request);
 
-SXE_EARLY_OUT:
+    /* reap the oldest connection if we have no free connections */
+    if (sxe_pool_get_number_in_state(self->requests, SXE_HTTPD_CONN_FREE) == 0) {
+        SXEL60("sxe_httpd_event_connect: connection pool full, reaping the oldest connection");
+        sxe_httpd_reap_oldest_connection(self);
+    }
+
     SXER80I("return");
 }
 
@@ -333,23 +333,22 @@ sxe_httpd_event_close(SXE * this)
 {
     SXE_HTTPD_REQUEST * request = SXE_USER_DATA(this);
     SXE_HTTPD_REQUEST * pool    = request->server->requests;
-    unsigned           id      = request - pool;
+    unsigned            id      = SXE_HTTPD_REQUEST_INDEX(pool, request);
+
+    SXE_UNUSED_PARAMETER(pool);
+    SXE_UNUSED_PARAMETER(id);
 
     SXEE81I("sxe_httpd_event_close(request=%u)", id);
-
     request->sxe = NULL;    /* Suppress further activity on this connection */
-
-    if (sxe_pool_index_to_state(pool, id) != SXE_HTTPD_CONN_ERROR_SENT) {
-        (*request->server->on_close)(request);
-    }
+    (*request->server->on_close)(request);
 
     sxe_httpd_close(request);
     SXER80I("return");
 }
 
 static const struct {
-    const char *name;
-    unsigned length;
+    const char *    name;
+    unsigned        length;
     SXE_HTTP_METHOD method;
 } methods[] = {
     { "GET",    3, SXE_HTTP_METHOD_GET     },
@@ -360,23 +359,23 @@ static const struct {
     { NULL,     0, SXE_HTTP_METHOD_INVALID }
 };
 
-SXE_HTTP_METHOD
-sxe_httpd_parse_method(const char *method, unsigned method_length)
+static SXE_HTTP_METHOD
+sxe_httpd_parse_method(const char * method_string, unsigned method_length)
 {
-    SXE_HTTP_METHOD meth = SXE_HTTP_METHOD_INVALID;
-    unsigned i;
+    SXE_HTTP_METHOD method = SXE_HTTP_METHOD_INVALID;
+    unsigned        i;
 
-    SXEE83("%s(method=[%.*s])", __func__, method_length, method);
+    SXEE83("%s(method_string='%.*s')", __func__, method_length, method_string);
 
-    for (i = 0; methods[i].name; i++) {
-        if (method_length == methods[i].length && 0 == strncmp(method, methods[i].name, methods[i].length)) {
-            meth = methods[i].method;
+    for (i = 0; methods[i].name != NULL; i++) {
+        if (method_length == methods[i].length && 0 == memcmp(method_string, methods[i].name, methods[i].length)) {
+            method = methods[i].method;
             break;
         }
     }
 
-    SXER81("return %u", meth);
-    return meth;
+    SXER81("return method=%u", method);
+    return method;
 }
 
 static const struct {
@@ -390,113 +389,96 @@ static const struct {
 };
 
 SXE_HTTP_VERSION
-sxe_httpd_parse_version(const char *version, unsigned version_length)
+sxe_httpd_parse_version(const char * version_string, unsigned version_length)
 {
-    SXE_HTTP_VERSION v = SXE_HTTP_VERSION_UNKNOWN;
-    unsigned i;
+    SXE_HTTP_VERSION version = SXE_HTTP_VERSION_UNKNOWN;
+    unsigned         i;
 
-    SXEE83("%s(version=[%.*s])", __func__, version_length, version);
+    SXEE83("%s(version_string='%.*s')", __func__, version_length, version_string);
 
-    for (i = 0; versions[i].value; i++) {
-        if (version_length == versions[i].length && 0 == strncmp(version, versions[i].value, versions[i].length)) {
-            v = versions[i].version;
+    for (i = 0; versions[i].value != NULL; i++) {
+        if (version_length == versions[i].length && 0 == memcmp(version_string, versions[i].value, versions[i].length)) {
+            version = versions[i].version;
             break;
         }
     }
 
-    SXER81("return %u", v);
-    return v;
+    SXER81("return version=%u", version);
+    return version;
 }
 
-static bool
-sxe_httpd_parse_request_line(SXE_HTTPD_REQUEST * request, const char * start, unsigned length)
+/* Note: This function should be called after the whole request line is received */
+static SXE_RETURN
+sxe_httpd_parse_request_line(SXE_HTTPD_REQUEST * request)
 {
-    SXE_HTTPD * server           = request->server;
-    SXE       * this             = request->sxe;
-    bool        request_is_valid = false;
-    unsigned    i;
-    unsigned    method_length;
-    unsigned    url_off, url_length;
-    unsigned    version_off, version_length;
+    SXE_HTTPD  * server           = request->server;
+    SXE        * this             = request->sxe;
+    SXE_RETURN   result;
+    const char * method_string;
+    unsigned     method_length;
+    const char * url_string;
+    unsigned     url_length;
+    const char * version_string;
+    unsigned     version_length;
 
-    SXE_UNUSED_PARAMETER(this);
-    SXEE83I("sxe_httpd_parse_request_line(request=%p,start=%p,length=%d)", request, start, length);
+    SXEE81I("sxe_httpd_parse_request_line(request=%p)", request);
 
-    if (length == 0) {
-        goto SXE_EARLY_OUT;                            /* COVERAGE EXCLUSION: TODO: Test me! */
+    /* Look for the method */
+    result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN);
+    if (result != SXE_RETURN_OK) {
+        goto SXE_ERROR_OUT;
     }
-
-    /* Look for the request */
-    for (i = 0; i < length && !strchr(" \t", start[i]); ++i) {
+    method_string    = sxe_http_message_get_line_element(       &request->message);
+    method_length    = sxe_http_message_get_line_element_length(&request->message);
+    request->method  = sxe_httpd_parse_method(method_string, method_length);
+    if (request->method == SXE_HTTP_METHOD_INVALID) {
+        SXEL23I("%s: Invalid method in HTTP request line: '%.*s'", __func__, method_length, method_string);
+        result = SXE_RETURN_ERROR_BAD_MESSAGE;
+        goto SXE_ERROR_OUT;
     }
+    SXEL93I("Method: '%.*s' (%u)", method_length, method_string, request->method);
 
-    if (i == length) {
-        goto SXE_EARLY_OUT;
+    /* Look for the Url */
+    result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN);
+    if (result != SXE_RETURN_OK) {
+        goto SXE_ERROR_OUT;
     }
-
-    method_length = i;
-    SXEL93I("method: %u[%.*s]", i, i, start);
-
-    /* Whitespace */
-    for (; i < length && strchr(" \t", start[i]); ++i) {
-    }
-
-    if (i == length) {
-        goto SXE_EARLY_OUT;                            /* COVERAGE EXCLUSION: TODO: Test me! */
-    }
-
-    /* Look for the URL */
-    url_off = i;
-
-    for (; i < length && !strchr(" \t", start[i]); ++i) {
-    }
-
-    if (i == length) {
-        goto SXE_EARLY_OUT;
-    }
-
-    url_length = i - url_off;
-    SXEL93I("url: %u[%.*s]", url_length, url_length, start + url_off);
-
-    /* Skip ahead */
-    for (; i < length && strchr(" \t", start[i]); ++i) {
-    }
-
-    if (i == length) {
-        goto SXE_EARLY_OUT;                            /* COVERAGE EXCLUSION: TODO: Test me! */
-    }
+    url_string    = sxe_http_message_get_line_element(       &request->message);
+    url_length    = sxe_http_message_get_line_element_length(&request->message);
+    SXEL92I("Url: '%.*s'", url_length, url_string);
 
     /* Look for the HTTP version */
-    version_off = i;
-
-    for (; i < length && !strchr(" \t", start[i]); ++i) {
+    result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN);
+    if (result != SXE_RETURN_OK) {
+        goto SXE_ERROR_OUT;
     }
-
-    if (i != length) {
-        goto SXE_EARLY_OUT;                            /* COVERAGE EXCLUSION: TODO: Test me! */
+    version_string    = sxe_http_message_get_line_element(       &request->message);
+    version_length    = sxe_http_message_get_line_element_length(&request->message);
+    request->version  = sxe_httpd_parse_version(version_string, version_length);
+    if (request->version == SXE_HTTP_VERSION_UNKNOWN) {
+        SXEL23I("%s: Invalid version in HTTP request line: '%.*s'", __func__, version_length, version_string);
+        result = SXE_RETURN_ERROR_BAD_MESSAGE;
+        goto SXE_ERROR_OUT;
     }
+    SXEL92I("Version: '%.*s'", version_length, version_string);
 
-    version_length = i - version_off;
-    SXEL93I("httpver: %u[%.*s]", version_length, version_length, start + version_off);
-
-    request->method  = sxe_httpd_parse_method(start, method_length);
-
-    if (request->method == SXE_HTTP_METHOD_INVALID) {
-        goto SXE_EARLY_OUT;
+    /* Look for the end of line */
+    result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE);
+    if (result != SXE_RETURN_OK && result != SXE_RETURN_END_OF_FILE) {
+        goto SXE_ERROR_OUT;
     }
-
-    request->version = sxe_httpd_parse_version(start + version_off, version_length);
+    else {
+        result = SXE_RETURN_OK; /* EOF is okay here */
+    }
 
     (*server->on_request)(request,
-                          start, method_length,
-                          start + url_off, url_length,
-                          start + version_off, version_length);
+                          method_string,  method_length,
+                          url_string,     url_length,
+                          version_string, version_length);
 
-    request_is_valid = true;
-
-SXE_EARLY_OUT:
-    SXER81I("return request_is_valid=%s", SXE_BOOL_TO_STR(request_is_valid));
-    return request_is_valid;
+SXE_ERROR_OUT:
+    SXER81I("return result=%s", sxe_return_to_string(result));
+    return result;
 }
 
 static void
@@ -511,6 +493,7 @@ sxe_httpd_event_read(SXE * this, int additional_length)
     char              * end;
     unsigned            length;
     unsigned            consumed             = 0;
+    unsigned            buffer_left          = 0;
     int                 response_status_code = 400;
     const char        * response_reason      = "Bad request";
     SXE_RETURN          result;
@@ -519,25 +502,29 @@ sxe_httpd_event_read(SXE * this, int additional_length)
     const char        * value;
     unsigned            value_length;
     unsigned            i;
+    unsigned            request_id;
 
     SXEE82I("sxe_httpd_event_read(request=%p,additional_length=%d)", request, additional_length);
     SXE_UNUSED_PARAMETER(additional_length);
     message      = &request->message;
     server       = request->server;
     request_pool = server->requests;
-    state        = sxe_pool_index_to_state(request_pool, request - request_pool);
+    request_id   = SXE_HTTPD_REQUEST_INDEX(request_pool, request);
+    state        = sxe_pool_index_to_state(request_pool, request_id);
 
     switch (state) {
     case SXE_HTTPD_CONN_IDLE:
         SXEL90I("state IDLE -> LINE");
-        sxe_pool_set_indexed_element_state(request_pool, request - request_pool, state, SXE_HTTPD_CONN_REQ_LINE);
+        sxe_http_message_construct(message, SXE_BUF(this), SXE_BUF_USED(this));
+        sxe_pool_set_indexed_element_state(request_pool, request_id, state, SXE_HTTPD_CONN_REQ_LINE);
         state = SXE_HTTPD_CONN_REQ_LINE;
         /* fall through */
 
     case SXE_HTTPD_CONN_REQ_LINE:
+        sxe_http_message_increase_buffer_length(message, SXE_BUF_USED(this));
         start  = SXE_BUF(this);
         length = SXE_BUF_USED(this);
-        end    = sxe_strncspn(start, "\r\n", length);    /* TODO: Be smarter about not rescanning */
+        end    = sxe_strncspn(start, "\n", length);    /* TODO: Be smarter about not rescanning */
 
         if (end == NULL) {
             if (length == SXE_BUF_SIZE) {
@@ -545,20 +532,20 @@ sxe_httpd_event_read(SXE * this, int additional_length)
                 response_reason = "Request-URI too large";
                 goto SXE_ERROR_OUT;
             }
-
             goto SXE_EARLY_OUT;    /* Buffer is not full. Try again when there is more data */
         }
 
-        if (!sxe_httpd_parse_request_line(request, start, end - start)) {
+        if (*--end != '\r') {
+            goto SXE_ERROR_OUT;
+        }
+
+        if ((result = sxe_httpd_parse_request_line(request)) != SXE_RETURN_OK) {
             goto SXE_ERROR_OUT;
         }
 
         SXEL90I("state LINE -> REQ_HEADERS");
-        sxe_pool_set_indexed_element_state(request_pool, request - request_pool, state, SXE_HTTPD_CONN_REQ_HEADERS);
+        sxe_pool_set_indexed_element_state(request_pool, request_id, state, SXE_HTTPD_CONN_REQ_HEADERS);
         state = SXE_HTTPD_CONN_REQ_HEADERS;
-        sxe_http_message_construct(message, SXE_BUF(this), SXE_BUF_USED(this));
-        SXEV80(sxe_http_message_parse_next_line_element(message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), == SXE_RETURN_OK,
-               "Failed to reparse request line");
 
         /* fall through */
 
@@ -572,6 +559,15 @@ sxe_httpd_event_read(SXE * this, int additional_length)
                 goto SXE_ERROR_OUT;
             }
 
+            if ((consumed = sxe_http_message_get_ignore_length(message))) {
+                sxe_buf_consume(this, consumed);
+                if ((buffer_left = sxe_http_message_get_buffer_length(message))) {
+                    SXEL92I("%u bytes ignored , move the remaining %u bytes to the beginning of buffer", consumed, buffer_left);
+                    sxe_http_message_buffer_shift_ignore_length(message);
+                }
+                goto SXE_EARLY_OUT;
+            }
+
             if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
                 /* If the buffer is full
                  */
@@ -579,13 +575,14 @@ sxe_httpd_event_read(SXE * this, int additional_length)
                     consumed = sxe_http_message_consume_parsed_headers(message); /* COVERAGE EXCLUSION - TODO: WIN32 COVERAGE */
 
                     if (consumed == 0) {
-                        SXEL31I("%s: Bad request: Haven't found the end of the current header, but the buffer is full", __func__);
-                        goto SXE_ERROR_OUT; /* COVERAGE EXCLUSION - TODO: WIN32 COVERAGE */
+                        SXEL32I("%s: Found a header which is too big(>=%u), ignore it", __func__, SXE_BUF_SIZE);
+                        sxe_buf_clear(this);
+                        sxe_http_message_set_ignore_line(message);
+                        goto SXE_EARLY_OUT;
                     }
 
                     SXEL90I("About to consume the headers processed so far");
                     sxe_buf_consume(this, consumed);
-                    sxe_buf_resume( this, SXE_BUF_RESUME_IMMEDIATE);
                     goto SXE_EARLY_OUT; /* COVERAGE EXCLUSION - TODO: WIN32 COVERAGE */
                 }
 
@@ -636,7 +633,7 @@ sxe_httpd_event_read(SXE * this, int additional_length)
         (*server->on_eoh)(request);
         request->in_content_seen = 0;
         SXEL90I("state REQ_EOH -> REQ_BODY");
-        sxe_pool_set_indexed_element_state(request_pool, request - request_pool, state, SXE_HTTPD_CONN_REQ_BODY);
+        sxe_pool_set_indexed_element_state(request_pool, request_id, state, SXE_HTTPD_CONN_REQ_BODY);
         state = SXE_HTTPD_CONN_REQ_BODY;
 
         /* fall through */
@@ -658,18 +655,18 @@ sxe_httpd_event_read(SXE * this, int additional_length)
 
         if (request->in_content_length <= request->in_content_seen) {
             SXEL90I("state REQ_BODY -> REQ_RESPONSE");
-            sxe_pool_set_indexed_element_state(request_pool, request - request_pool, state, SXE_HTTPD_CONN_REQ_RESPONSE);
+            sxe_pool_set_indexed_element_state(request_pool, request_id, state, SXE_HTTPD_CONN_REQ_RESPONSE);
             state = SXE_HTTPD_CONN_REQ_RESPONSE;
             (*server->on_respond)(request);
         }
 
         goto SXE_EARLY_OUT;
 
-    case SXE_HTTPD_CONN_ERROR_SENT:
-        SXEL61I("Discarding %u bytes of data from a client in ERROR_SENT state", SXE_BUF_USED(this));
+    case SXE_HTTPD_CONN_REQ_RESPONSE:
         goto SXE_EARLY_OUT;
 
-    case SXE_HTTPD_CONN_REQ_RESPONSE:
+    case SXE_HTTPD_CONN_BAD:
+        SXEL61I("Discarding %u bytes of data from a client in CONN_BAD state", SXE_BUF_USED(this));
         goto SXE_EARLY_OUT;
 
     default:
@@ -678,9 +675,10 @@ sxe_httpd_event_read(SXE * this, int additional_length)
 
 SXE_ERROR_OUT:
     sxe_buf_clear(this);
-    sxe_httpd_response_error(request, response_status_code, response_reason);
-    (*server->on_close)(request);
-    consumed = 0;    /* Data is not actually consumed - just let it pile up in the receive buffer */
+    sxe_httpd_response_simple(request, response_status_code, response_reason, NULL, NULL);
+    /* Set the state to BAD so from now on it will just early out (sink mode) */
+    sxe_pool_set_indexed_element_state(request_pool, request_id, SXE_HTTPD_CONN_IDLE, SXE_HTTPD_CONN_BAD);
+    consumed = 0;
 
 SXE_EARLY_OUT:
     if (consumed > 0) {
@@ -790,7 +788,8 @@ sxe_httpd_response_end(SXE_HTTPD_REQUEST *request)
 {
     SXE               * this = request->sxe;
     SXE_HTTPD_REQUEST * request_pool = request->server->requests;
-    unsigned            state        = sxe_pool_index_to_state(request_pool, request - request_pool);
+    unsigned            request_id   = SXE_HTTPD_REQUEST_INDEX(request_pool, request);
+    unsigned            state        = sxe_pool_index_to_state(request_pool, request_id);
 
     SXE_UNUSED_PARAMETER(this);
     SXEE81I("sxe_httpd_response_end(request=%p)", request);
@@ -800,11 +799,8 @@ sxe_httpd_response_end(SXE_HTTPD_REQUEST *request)
     }
 
     sxe_httpd_clear_request(request);
-
-    if (state != SXE_HTTPD_CONN_ERROR_SENT) {
-    sxe_pool_set_indexed_element_state(request_pool, request - request_pool, state, SXE_HTTPD_CONN_IDLE);
+    sxe_pool_set_indexed_element_state(request_pool, request_id, state, SXE_HTTPD_CONN_IDLE);
     sxe_buf_resume(this, SXE_BUF_RESUME_IMMEDIATE);
-    }
 
     SXER80I("return");
 }
@@ -817,16 +813,16 @@ sxe_httpd_listen(SXE_HTTPD * self, const char *address, unsigned short port)
     SXEE82("sxe_httpd_listen(address=%s, port=%hu)", address, port);
 
     if ((this = sxe_new_tcp(NULL, address, port, sxe_httpd_event_connect, sxe_httpd_event_read, sxe_httpd_event_close)) == NULL) {
-        SXEL20("sxe_httpd_listen: Failed to allocate a SXE for TCP");           /* Coverage Exclusion: TODO: Test me! */
-        goto SXE_ERROR_OUT;                                                     /* Coverage Exclusion: TODO: Test me! */
+        SXEL20("sxe_httpd_listen: Failed to allocate a SXE for TCP");           /* Coverage Exclusion: No need to test */
+        goto SXE_ERROR_OUT;                                                     /* Coverage Exclusion: No need to test */
     }
 
     SXE_USER_DATA(this) = self;
 
     if (sxe_listen(this) != SXE_RETURN_OK) {
-        SXEL22("sxe_httpd_listen: Failed to listen on address %s, port %hu)", address, port);    /* Coverage Exclusion: TODO: Test me! */
-        sxe_close(this);                                                        /* Coverage Exclusion: TODO: Test me! */
-        this = NULL;                                                            /* Coverage Exclusion: TODO: Test me! */
+        SXEL22("sxe_httpd_listen: Failed to listen on address %s, port %hu)", address, port);    /* Coverage Exclusion: No need to test */
+        sxe_close(this);                                                        /* Coverage Exclusion: No need to test */
+        this = NULL;                                                            /* Coverage Exclusion: No need to test */
     }
 
 SXE_ERROR_OUT:
@@ -834,8 +830,7 @@ SXE_ERROR_OUT:
     return this;
 }
 
-#ifdef WINDOWS_NT
-#else
+#ifndef WINDOWS_NT
 SXE *
 sxe_httpd_listen_pipe(SXE_HTTPD * self, const char * path)
 {
@@ -844,16 +839,16 @@ sxe_httpd_listen_pipe(SXE_HTTPD * self, const char * path)
     SXEE81("sxe_httpd_listen_pipe(path=%s)", path);
 
     if ((this = sxe_new_pipe(NULL, path, sxe_httpd_event_connect, sxe_httpd_event_read, sxe_httpd_event_close)) == NULL) {
-        SXEL20("sxe_httpd_listen_pipe: Failed to allocate a SXE for pipes");    /* Coverage Exclusion: TODO: Test me! */
-        goto SXE_ERROR_OUT;                                                     /* Coverage Exclusion: TODO: Test me! */
+        SXEL20("sxe_httpd_listen_pipe: Failed to allocate a SXE for pipes");    /* Coverage Exclusion: No need to test */
+        goto SXE_ERROR_OUT;                                                     /* Coverage Exclusion: No need to test */
     }
 
     SXE_USER_DATA(this) = self;
 
     if (sxe_listen(this) != SXE_RETURN_OK) {
-        SXEL21("sxe_httpd_listen_pipe: Failed to listen on path %s)", path);    /* Coverage Exclusion: TODO: Test me! */
-        sxe_close(this);                                                        /* Coverage Exclusion: TODO: Test me! */
-        this = NULL;                                                            /* Coverage Exclusion: TODO: Test me! */
+        SXEL21("sxe_httpd_listen_pipe: Failed to listen on path %s)", path);    /* Coverage Exclusion: No need to test */
+        sxe_close(this);                                                        /* Coverage Exclusion: No need to test */
+        this = NULL;                                                            /* Coverage Exclusion: No need to test */
     }
 
 SXE_ERROR_OUT:
@@ -869,7 +864,9 @@ sxe_httpd_construct(SXE_HTTPD * self, int connections, unsigned options)
 
     SXE_UNUSED_PARAMETER(options);
 
-    self->requests   = sxe_pool_new("httpd", connections, sizeof(SXE_HTTPD_REQUEST), SXE_HTTPD_CONN_NUMBER_OF_STATES, SXE_POOL_OPTION_UNLOCKED);
+    SXEA10(connections > 1, "Requires minimum TWO connections");
+
+    self->requests   = sxe_pool_new("httpd", connections, sizeof(SXE_HTTPD_REQUEST), SXE_HTTPD_CONN_NUMBER_OF_STATES, SXE_POOL_OPTION_UNLOCKED | SXE_POOL_OPTION_TIMED);
     sxe_pool_set_state_to_string(self->requests, sxe_httpd_state_to_string);
     self->on_connect = sxe_httpd_default_connect_handler;
     self->on_request = sxe_httpd_default_request_handler;
@@ -880,117 +877,6 @@ sxe_httpd_construct(SXE_HTTPD * self, int connections, unsigned options)
     self->on_close   = sxe_httpd_default_close_handler;
 
     SXER80("return");
-}
-
-#define VALID_HEADER_CHARACTER(c) ( ((c) >= '0' && (c) <= '9') \
-                                 || ((c) >= 'A' && (c) <= 'Z') \
-                                 || ((c) >= 'a' && (c) <= 'z') \
-                                 || ((c) == '-') )
-
-bool
-sxe_http_header_parse(const char *ptr, unsigned length, unsigned *pconsumed, bool *found_eoh, sxe_http_header_handler func, void *user_data)    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-{    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-    const char * key;
-    const char * val;
-    unsigned     key_len;
-    unsigned     val_len;
-    bool         headers_are_valid = true;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-    bool         call_func = true;            /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-    unsigned     i = 0;                       /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-
-    SXEE82("sxe_http_header_parse(buf=%p,length=%u)", ptr, length);
-
-    *pconsumed = 0;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-
-    while (i < length) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        SXEL92("sxe_http_header_parse: i=%d length=%d", i, length);
-
-        SXEL92("sxe_http_header_parse:      header block: [%.*s]", length - i, &ptr[i]);
-
-        if (length - i >= 4 && 0 == strncmp(&ptr[i], "\r\n\r\n", 4)) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            /* it is valid to have a header block containing only \r\n\r\n. This
-             * means we have a valid header block containing zero headers. */
-            *found_eoh = true;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            break;
-        }
-
-        SXEL92("sxe_http_header_parse:     skipping CRLF: offset=%d (%c)", i, ptr[i]);
-        for (; i < length && strchr("\r\n", ptr[i]); i++);    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        if (i == length) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            goto SXE_EARLY_OUT;     /* COVERAGE EXCLUSION: TODO: Test defragmentation */
-        }
-        SXEL92("sxe_http_header_parse:                  : offset=%d (%c)", i, ptr[i]);
-
-        key = &ptr[i];    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-
-        SXEL92("sxe_http_header_parse: looking for colon: offset=%d (%c)", i, ptr[i]);
-
-        for (; i < length && VALID_HEADER_CHARACTER(ptr[i]); i++) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        }
-        if (i == length) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            SXEL90("sxe_http_header_parse: hit end of buffer without finding colon; not done yet");
-            goto SXE_EARLY_OUT; /* Coverage Exclusion - todo: win32 coverage */
-        }
-        SXEL92("sxe_http_header_parse:                  : offset=%d (%c)", i, ptr[i]);
-        if (ptr[i] != ':') {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            headers_are_valid = false;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            goto SXE_EARLY_OUT;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        }
-
-        SXEL92("sxe_http_header_parse:                  : offset=%d (%c)", i, ptr[i]);
-        key_len = &ptr[i] - key;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-
-        if (key_len == 0) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            headers_are_valid = false;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            goto SXE_EARLY_OUT;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        }
-
-        SXEL92("sxe_http_header_parse:        key length: offset=%d (%d)", i, key_len);
-        i++;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-
-        SXEL92("sxe_http_header_parse:   skipping SP-TAB: offset=%d (%c)", i, ptr[i]);
-
-        for (; i < length && strchr(" \t", ptr[i]); i++) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        }
-
-        if (i == length) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            goto SXE_EARLY_OUT;     /* COVERAGE EXCLUSION: TODO: Test defragmentation */
-        }
-
-        SXEL92("sxe_http_header_parse:                  : offset=%d (%c)", i, ptr[i]);
-
-        val = &ptr[i];    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        SXEL92("sxe_http_header_parse:  looking for CRLF: offset=%d (%c)", i, ptr[i]);
-
-        for (; i < length && !strchr("\r\n", ptr[i]); i++) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        }
-
-        if (i == length) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            goto SXE_EARLY_OUT;     /* COVERAGE EXCLUSION: TODO: Test defragmentation */
-        }
-
-        val_len = &ptr[i] - val;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-
-        if (val_len == 0) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            headers_are_valid = false;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            goto SXE_EARLY_OUT;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        }
-
-        SXEL91("sxe_http_header_parse:              end : offset=%d", i);
-        SXEL92("sxe_http_header_parse:      value length: offset=%d (%d)", i, val_len);
-        SXEL92("sxe_http_header_parse:            header: %.*s", val + val_len - key, key);
-        *pconsumed = i;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-
-        if (func && call_func) {    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-            call_func = func(key, key_len, val, val_len, user_data);    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-        }
-    }
-
-    SXEL90("sxe_http_header_parse: headers are done");
-
-SXE_EARLY_OUT:                   /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
-    SXER82("return headers_are_valid=%s // consumed=%u", SXE_BOOL_TO_STR(headers_are_valid), *pconsumed);
-    return headers_are_valid;    /* COVERAGE EXCLUSION: To be removed once cnxd no longer uses */
 }
 
 /* vim: set ft=c sw=4 sts=4 ts=8 listchars=tab\:^.,trail\:@ expandtab list: */

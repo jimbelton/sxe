@@ -7,11 +7,10 @@
 #include "tap.h"
 
 #define TEST_WAIT 2
-#define TEST_400  "HTTP/1.1 400 Bad request\r\n"           "Connection: close\r\n\r\n"
-#define TEST_414  "HTTP/1.1 414 Request-URI too large\r\n" "Connection: close\r\n\r\n"
+#define TEST_400  "HTTP/1.1 400 Bad request\r\n\r\n"
+#define TEST_414  "HTTP/1.1 414 Request-URI too large\r\n\r\n"
 #define A100      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 #define A1000     A100 A100 A100 A100 A100 A100 A100 A100 A100 A100
-#define A16000    A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000 A1000
 #define TEST_CASES (sizeof(cases)/sizeof(cases[0]))
 
 /* Table of error cases
@@ -22,7 +21,11 @@ static struct {
     const char *request;
     const char *response;
 } cases[] = {
+    { "\r\n",                                                   TEST_400 },
+    { "GET \r\n",                                               TEST_400 },
     { "GET /\r\n",                                              TEST_400 },
+    { "GET / HTTP/9.9\r\n",                                     TEST_400 },
+    { "GET / HTTP/1.1 \n",                                      TEST_400 },
     { "FIGZZ / HTTP/1.1\r\n\r\n",                               TEST_400 },
     { "GET / HTTP/1.0\r\nSDF\r\n\r\n",                          TEST_400 },
     { "GET / HTTP/1.0\r\nA B\r\n\r\n",                          TEST_400 },
@@ -31,13 +34,6 @@ static struct {
     { "POST / HTTP/1.1\r\nContent-Length:\r\n\r\n",             TEST_400 },    /* Empty Content-Length */
     { "POST / HTTP/1.1\r\nContent-Length: non-numeric\r\n\r\n", TEST_400 },
     { A1000 A1000,                                              TEST_414 },
-#ifndef WINDOWS_NT
-    /* On windows, this causes a WSAECONNRESET event because the server close()s the connection
-     * before reading all the data from the client. That's desired server behaviour, but causes
-     * the test fail on Windows. Skip this case for now on Windows.
-     */
-    { "GET / HTTP/1.0\r\n" A16000 A1000 ": really big\r\n\r\n", TEST_400 },
-#endif
 };
 
 static SXE        * listener;
@@ -103,7 +99,7 @@ main(void)
     char         buffer[4096];
     char         test_case_name[8];
 
-    tap_plan(19 + 6 * TEST_CASES, TAP_FLAG_ON_FAILURE_EXIT, NULL);
+    tap_plan(20 + (8 * TEST_CASES), TAP_FLAG_ON_FAILURE_EXIT, NULL);
 
     sxe_register(1000, 0);
     tq_client = tap_ev_queue_new();
@@ -111,7 +107,7 @@ main(void)
 
     SXEA10(sxe_init() == SXE_RETURN_OK,                                                          "Failed to initialize SXE package");
 
-    sxe_httpd_construct(&httpd, 1, 0);
+    sxe_httpd_construct(&httpd, 2, 0);
     SXE_HTTPD_SET_HANDLER(&httpd, connect, evhttp_connect);
     SXE_HTTPD_SET_HANDLER(&httpd, close, evhttp_close);
     ok((listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0)) != NULL,                              "HTTPD listening");
@@ -131,10 +127,10 @@ main(void)
         is(tap_ev_queue_length(tq_server),                                     0,                    "No server events lurking");
     }
 
-    /* Send a bad request, make sure an error response occurs, send another request (which should be silently discarded), then
-     * make a new connection and make sure the previous one is reaped by the server (it only supports one connection in this test)
+    /* Send a bad request, make sure an error response occurs, send another request (which should be served this time), then
+     * make a new connection and make sure the previous one is reaped by the server (it is the oldest one and a free one is required)
      */
-    tap_test_case_name("reap baddies");
+    tap_test_case_name("reap connections");
     {
         SXEA10((client = sxe_new_tcp(NULL, "0.0.0.0", 0, test_event_connect, test_event_read, test_event_close)) != NULL,
                "Failed to allocate client SXE");
@@ -143,11 +139,15 @@ main(void)
         is(tap_ev_arg(event, "this"), client,                                                        "It's the client");
         is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event), "evhttp_connect",     "Got a server connect event");
         SXEA10(SXE_WRITE_LITERAL(client, "GISSLERB\r\n") == SXE_RETURN_OK,                           "Failed to write GISSLERB request");
+
         test_ev_queue_wait_read(tq_client, TEST_WAIT, &event, client, "test_event_read", buffer, SXE_LITERAL_LENGTH(TEST_400), "client");
+
         is_strncmp(buffer, TEST_400, SXE_LITERAL_LENGTH(TEST_400),                                   "Got correct error response");
 
+        /* Anymore writes to this connection are ignored */
         SXEA10(SXE_WRITE_LITERAL(client, "GET /good HTTP/1.1\r\n\r\n") == SXE_RETURN_OK,             "Failed to write good request");
-        test_process_all_libev_events();
+        is(tap_ev_queue_length(tq_server),                                         0,                "No server events lurking");
+        is(tap_ev_queue_length(tq_client),                                         0,                "No client events lurking");
 
         SXEA10((client2 = sxe_new_tcp(NULL, "0.0.0.0", 0, test_event_connect, test_event_read, test_event_close)) != NULL,
                "Failed to allocate a second client SXE");
@@ -166,17 +166,22 @@ main(void)
             is(tap_ev_arg(event, "this"), client2,                                                       "It's the 2nd client");
         }
 
-        is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event),     "evhttp_close",       "Got a server close event");
         is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event),     "evhttp_connect",     "Got a server connect event");
+        is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event),     "evhttp_close",       "Got a server close event");
+
         sxe_close(client2);
-        is(tap_ev_queue_length(tq_server),                                         0,                    "No server events lurking");
+       // is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event),     "evhttp_close",       "Got a server close event");
+       // is(tap_ev_queue_length(tq_server),                                         0,                    "No server events lurking");
+        is(tap_ev_queue_length(tq_client),                                         0,                    "No client events lurking");
     }
 
     for (id = 0; id < TEST_CASES; id++) {
         snprintf(test_case_name, sizeof(test_case_name), "Case %u", id);
         tap_test_case_name(test_case_name);
         diag("length of server queue = %u", tap_ev_queue_length(tq_server));
-        is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event), "evhttp_close",           "Got a server closed event");
+
+        is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event),     "evhttp_close",       "Got a server close event");
+
         SXEA10((client = sxe_new_tcp(NULL, "0.0.0.0", 0, test_event_connect, test_event_read, test_event_close)) != NULL,
                "Failed to allocate client SXE");
         SXE_USER_DATA_AS_INT(client) = id;
@@ -193,10 +198,11 @@ main(void)
         test_ev_queue_wait_read(tq_client, TEST_WAIT, &event, client, "test_event_read", buffer, strlen(response), "client");
         is_strncmp(buffer, response, strlen(response),                                                   "Got correct response");
         sxe_close(client);
+
+        is(tap_ev_queue_length(tq_server),                                         0,                    "No server events lurking");
+        is(tap_ev_queue_length(tq_client),                                         0,                    "No client events lurking");
     }
 
-    is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event),      "evhttp_close",          "Got a server closed event");
-//    is(tap_ev_queue_length(tq_server),                                          0,                       "No server events lurking");
     sxe_close(listener);
     return exit_status();
 }
