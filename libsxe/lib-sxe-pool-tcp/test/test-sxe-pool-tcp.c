@@ -141,8 +141,8 @@ test_expect_server_read(const char * expected_buf, unsigned expected_length)
     SXEE63("%s(expected_buf=%p, expected_length=%d)", __func__, expected_buf, expected_length);
 
     ok((ev = test_next_server_event()) != NULL,                      "Event occurred");
-    is_eq(tap_ev_identifier(ev), "test_event_server_read",            "Got a server read event");
-    is((unsigned)tap_ev_arg(ev, "length"), expected_length,           "Server received %u characters", expected_length);
+    is_eq(tap_ev_identifier(ev), "test_event_server_read",           "Got a server read event");
+    is((int)(uintptr_t)tap_ev_arg(ev, "length"), expected_length,    "Server received %u characters", expected_length);
     this = (SXE *)(long)tap_ev_arg(ev, "this");
 
     /* If the expected buffer contains a string that is shorter than the expected length, just make sure the received buffer
@@ -150,7 +150,7 @@ test_expect_server_read(const char * expected_buf, unsigned expected_length)
      */
     if (strlen(expected_buf) < expected_length) {
         is_strncmp(tap_ev_arg(ev, "buf"), expected_buf, strlen(expected_buf), "Server received message matched /%s%.*s/",
-                   expected_buf, expected_length - strlen(expected_buf), "................");
+                   expected_buf, (int)(expected_length - strlen(expected_buf)), "................");
     }
     else {
         is_strncmp(tap_ev_arg(ev, "buf"), expected_buf, strlen(expected_buf), "Server received '%s'", expected_buf);
@@ -211,7 +211,7 @@ test_case_happy_path(void)
     this = test_expect_server_read("Hello", 5);
     sxe_write(this, "There", 5);
     is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_read", "1st client read");
-    is(tap_ev_arg(ev, "length"), 5,                        "Five bytes of data received on the tcp pool object");
+    is((int)(uintptr_t)tap_ev_arg(ev, "length"), 5,        "Five bytes of data received on the tcp pool object");
     is_strncmp(tap_ev_arg(ev, "buf"), "There", 5,          "Received 'There' on the tcp pool object");
 
     /* Two sends at a time */
@@ -230,7 +230,7 @@ test_case_happy_path(void)
 
     for (i = 0; i < 2; i++) {
         is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_read", "2nd or 3rd client read");
-        is(tap_ev_arg(ev, "length"), 3,                        "3 bytes of data received on the tcp pool object");
+        is((int)(intptr_t)tap_ev_arg(ev, "length"), 3,         "3 bytes of data received on the tcp pool object");
         is_strncmp(tap_ev_arg(ev, "buf"), "xxx", 3,            "Received 'xxx' on the tcp pool object");
     }
 

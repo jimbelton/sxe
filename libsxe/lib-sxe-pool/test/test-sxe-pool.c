@@ -98,7 +98,13 @@ test_pool_3_timeout(void * array, unsigned array_index, void * caller_info)
 static struct timeval test_mock_gettimeofday_timeval;
 
 static int
-test_mock_gettimeofday(struct timeval * SXE_SOCKET_RESTRICT tv, struct timezone * SXE_SOCKET_RESTRICT tz)
+test_mock_gettimeofday(struct timeval  * SXE_SOCKET_RESTRICT tv,
+#ifdef __APPLE__
+                       void            * SXE_SOCKET_RESTRICT tz
+#else
+                       struct timezone * SXE_SOCKET_RESTRICT tz
+#endif
+                      )
 {
     /* Note: It's safe to use log functions here because they don't use gettimeofday() :-) */
     SXEE63("%s(tv=%p, tz=%p)", __func__, tv, tz);
@@ -141,7 +147,7 @@ main(void)
     /* Initialization causes expected state
      */
     ok((size = sxe_pool_size(4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= 4 * sizeof(*pool),
-       "Expect pool size %u to be at least the size of the array %u", size, 4 * sizeof(*pool));
+       "Expect pool size %u to be at least the size of the array %u", (unsigned)size, 4 * (unsigned)sizeof(*pool));
     SXEA10((base[0] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 1st copy of pool");
     pool = sxe_pool_construct(base[0], "cesspool", 4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_OPTION_TIMED);
     SXEA10((base[1] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 2nd copy of pool");

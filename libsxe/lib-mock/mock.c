@@ -39,7 +39,7 @@ MOCK_DEF(int,          STDCALL, connect,     (MOCK_SOCKET, const struct sockaddr
 MOCK_DEF(FILE *,       CDECL,   fopen,       (const char * file, const char * mode));
 MOCK_DEF(int,          CDECL,   fputs,       (const char * string, FILE * file));
 MOCK_DEF(int,          STDCALL, getsockopt,  (MOCK_SOCKET, int, int, MOCK_SOCKET_VOID *, MOCK_SOCKLEN_T * __restrict));
-MOCK_DEF(int,          CDECL,   gettimeofday,(struct timeval * __restrict tm, struct timezone * __restrict tz));
+MOCK_DEF(int,          CDECL,   gettimeofday,(struct timeval * __restrict tm, __timezone_ptr_t __restrict tz));
 MOCK_DEF(off_t,        CDECL,   lseek,       (int fd, off_t offset, int whence));
 MOCK_DEF(int,          STDCALL, listen,      (MOCK_SOCKET, int));
 MOCK_DEF(void *,       CDECL,   malloc,      (size_t));
@@ -51,6 +51,8 @@ MOCK_DEF(MOCK_SSIZE_T, CDECL,   write,       (int, const void *, MOCK_SIZE_T));
 
 #ifdef WINDOWS_NT
 MOCK_DEF(DWORD,        STDCALL, timeGetTime, (void));
+#elif defined(__APPLE__)
+MOCK_DEF(int         , STDCALL, sendfile,    (int, int, off_t, off_t *, struct sf_hdtr *, int));
 #else
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, sendfile,    (int, int, off_t *, size_t));
 #endif

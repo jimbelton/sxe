@@ -23,7 +23,11 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __APPLE__
+#include <alloca.h>    /* For alloca() under Mac OS X */
+#else
 #include <malloc.h>    /* For alloca() under Windows */
+#endif
 
 #include "sxe-httpd.h"
 #include "sxe-log.h"
@@ -773,13 +777,14 @@ sxe_httpd_response_sendfile(SXE_HTTPD_REQUEST *request, int fd, unsigned length,
 {
     request->sendfile_handler  = handler;
     request->sendfile_userdata = user_data;
+    request->sendfile_offset   = lseek(fd, 0, SEEK_CUR);
 
     if (!request->out_eoh) {
         sxe_write(request->sxe, "\r\n", 2);
         request->out_eoh = true;
     }
 
-    sxe_sendfile(request->sxe, fd, length, sxe_httpd_event_sendfile_done);
+    sxe_sendfile(request->sxe, fd, &request->sendfile_offset, length, sxe_httpd_event_sendfile_done);
 }
 #endif
 

@@ -88,7 +88,7 @@ test_event_read_server(SXE * this, int length)
 static void
 test_event_send_complete(SXE * this, SXE_RETURN sxe_return)
 {
-    SXEE61I("test_event_send_complete(sxe_return=%s)", sxe_return_to_string(sxe_return));
+    SXEE62I("test_event_send_complete(sxe_return=%s/%u)", sxe_return_to_string(sxe_return), sxe_return);
     tap_ev_queue_push(tap_q_client, __func__, 2, "this", this, "sxe_return", sxe_return);
     SXER60I("return");
 }
@@ -138,7 +138,7 @@ main(void)
 
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_server, 1, &ev), "test_event_read_server",
           "First - SXE server got read event");
-    is(tap_ev_arg(ev, "length"), TEST_DATA_LENGTH, "Client got %u bytes", TEST_DATA_LENGTH);
+    is(tap_ev_arg(ev, "length"), TEST_DATA_LENGTH, "Client got %u bytes", (unsigned)TEST_DATA_LENGTH);
 
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
@@ -167,7 +167,7 @@ main(void)
             fail("Unexpected server event %s", (const char *)tap_ev_identifier(ev));
             break;
         }
-        x += (unsigned)tap_ev_arg(ev, "length");
+        x += (uintptr_t)tap_ev_arg(ev, "length");
     }
     is(x, sizeof(test_data_2),                "Second - Received all the data");
     is(tap_ev_queue_length(tap_q_server),  0, "Second - There are no pending server events at this point");
@@ -178,7 +178,7 @@ main(void)
 #else
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev), "test_event_send_complete",
           "Second - Called back after sxe_send() completed");
-    is(tap_ev_arg(ev, "sxe_return"), SXE_RETURN_OK, "Second - sxe_send() was successful");
+    is((SXE_RETURN)tap_ev_arg(ev, "sxe_return"), SXE_RETURN_OK, "Second - sxe_send() was successful");
 #endif
 
     is(tap_ev_queue_length(tap_q_client),  0, "Second - There are no pending client events at this point");
@@ -203,7 +203,7 @@ main(void)
     test_buf_length = 0;
     sxe_write(server_side_connected_sxe, TEST_DATA_3, TEST_DATA_3_LENGTH);
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev), "test_event_read_client", "Third - client got a read event");
-    is(tap_ev_arg(ev, "length"), TEST_DATA_3_LENGTH, "client read %u bytes", TEST_DATA_3_LENGTH);
+    is(tap_ev_arg(ev, "length"), TEST_DATA_3_LENGTH, "client read %u bytes", (unsigned)TEST_DATA_3_LENGTH);
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
 
@@ -218,7 +218,7 @@ main(void)
     test_buf_length = 0;
     sxe_write(server_side_connected_sxe, TEST_DATA_3, TEST_DATA_3_LENGTH);
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev), "test_event_read_client", "Fourth - client got a read event");
-    is(tap_ev_arg(ev, "length"), TEST_DATA_3_LENGTH, "client read %u bytes", TEST_DATA_3_LENGTH);
+    is(tap_ev_arg(ev, "length"), TEST_DATA_3_LENGTH, "client read %u bytes", (unsigned)TEST_DATA_3_LENGTH);
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
 

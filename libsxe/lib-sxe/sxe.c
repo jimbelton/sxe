@@ -21,7 +21,7 @@
 
 /* Under Linux, request _GNU_SOURCE extensions to support ucred structure
  */
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 #define _GNU_SOURCE
 #include <features.h>
 #endif
@@ -41,11 +41,20 @@
 #include <winsock2.h>
 
 #else /* UNIX */
-#include <linux/sockios.h>    /* For SIOCINQ: This appears to be Linux specific; under FreeBSD, use MSG_PEEK */
+
+#ifdef __APPLE__ /* Apple */
+# include <sys/uio.h>          /* For sendfile */
+# include <sys/sysctl.h>       /* To find out the maximum socket buffer size */
+# undef   EV_ERROR             /* remove duplicate definition from <sys/event.h> - conflicts with ev.h */
+# define SIOCINQ FIONREAD
+#else
+# include <linux/sockios.h>    /* For SIOCINQ: This appears to be Linux specific; under FreeBSD, use MSG_PEEK */
+# include <sys/sendfile.h>
+#endif
+
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>
-#include <sys/sendfile.h>
 #include <sys/un.h>           /* For pipes (AKA UNIX domain sockets) on UNIX                                 */
 
 #define PIPE_PATH_MAX sizeof(((struct sockaddr_un *)NULL)->sun_path)    /* Maximum size of a UNIX pipe path  */
@@ -399,16 +408,27 @@ sxe_set_socket_options(SXE * this, int sock)
         flags = 1;
         SXEV83I(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
                >= 0, "socket=%d: couldn't set TCP no delay flag: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+
+#ifdef __APPLE__
+        /* Prevent firing SIGPIPE */
+        flags = 1;
+        SXEV83I(setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
+                >= 0, "socket=%d: couldn't set SO_NOSIGPIPE flag: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+#endif
     }
     else {
         //debug SXEV83I(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &so_rcvbuf_size, &so_rcvbuf_size_length), >= 0, "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         //debug SXEV83I(getsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &so_sndbuf_size, &so_sndbuf_size_length), >= 0, "socket=%d: couldn't get SO_SNDBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         //debug SXEL12I("SO_RCVBUF %d, SO_SNDBUF %d", so_rcvbuf_size, so_sndbuf_size);
 
-#define SXE_UDP_SO_RCVBUF_SIZE (32 * 1024 * 1024)
+#ifdef __APPLE__
+# define SXE_UDP_SO_RCVBUF_SIZE (     1024 * 1024)
+#else
+# define SXE_UDP_SO_RCVBUF_SIZE (32 * 1024 * 1024)
+#endif
 
         so_rcvbuf_size = SXE_UDP_SO_RCVBUF_SIZE;
-        SXEV83I(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &so_rcvbuf_size, sizeof(so_rcvbuf_size)), >= 0, "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEV84I(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &so_rcvbuf_size, sizeof(so_rcvbuf_size)), >= 0, "socket=%d: couldn't set SO_RCVBUF=%u: (%d) %s", sock, so_rcvbuf_size, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         //do we need this? so_sndbuf_size = (128 * 1024 * 1024);
         //do we need this? SXEV83I(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &so_sndbuf_size, sizeof(so_sndbuf_size)), >= 0, "socket=%d: couldn't get SO_SNDBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 
@@ -498,6 +518,10 @@ SXE_TRY_AND_READ_AGAIN:
                 }
 
                 if (this->next_socket >= 0) {
+                    getpeername(this->next_socket, (struct sockaddr *)&this->peer_addr, &peer_addr_size);
+                    SXEA81I(peer_addr_size == sizeof(this->peer_addr), "Peer address is not an IPv4 address (peer_addr_size=%d)",
+                            peer_addr_size);
+
                      if (ioctl(this->socket, SIOCINQ, &input_data_left) < 0) {
                          SXEL22("sxe_io_cb_read(): ioctl(socket=%d,SIOCINQ) failed: %s", this->socket,    /* Coverage Exclusion: TODO */
                                 sxe_socket_error_as_str(errno));                                          /* Coverage Exclusion: TODO */
@@ -746,6 +770,16 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
 #if SXE_DEBUG
 #ifndef _WIN32
         if (this->path) {
+#ifdef __APPLE__
+            uid_t euid;
+            gid_t egid;
+
+            SXEV80(getpeereid(that_socket, &euid, &egid), >= 0, "could not obtain credentials from unix domain socket");
+
+            SXEL82I("Accepted connection from uid %d, gid %d",
+                euid,  /* the effective UID         of the process on the other side of the socket */
+                egid); /* the effective primary GID of the process on the other side of the socket */
+#else
             struct ucred credentials;
             unsigned ucred_length = sizeof(struct ucred);
 
@@ -755,6 +789,7 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
                 credentials.pid,  /* the process ID            of the process on the other side of the socket */
                 credentials.uid,  /* the effective UID         of the process on the other side of the socket */
                 credentials.gid); /* the effective primary GID of the process on the other side of the socket */
+#endif
         }
         else
 #endif
@@ -1092,9 +1127,10 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
         /* todo: position in code to implement equivalent to unix domain socket / fd passing on winnt */
         pipe_address.sun_family = AF_UNIX;
         strcpy(pipe_address.sun_path, this->path);
+        pipe_address.sun_len = SUN_LEN(&pipe_address);
 
         peer_address        = (struct sockaddr *)&pipe_address;
-        peer_address_length = sizeof(pipe_address.sun_family) + strlen(pipe_address.sun_path);
+        peer_address_length = pipe_address.sun_len;
     }
     else
 #endif
@@ -1452,22 +1488,52 @@ sxe_io_cb_sendfile(EV_P_ ev_io * io, int revents)
     SXE_UNUSED_PARAMETER(revents);
 
     SXEE83I("sxe_io_cb_sendfile(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
-    sxe_sendfile(this, this->sendfile_in_fd, this->sendfile_bytes, this->out_event_written);
+    sxe_sendfile(this, this->sendfile_in_fd, this->sendfile_offset, this->sendfile_bytes, this->out_event_written);
     SXER80("return");
 }
 
 SXE_RETURN
-sxe_sendfile(SXE * this, int in_fd, unsigned total_bytes, SXE_OUT_EVENT_WRITTEN on_complete)
+sxe_sendfile(SXE * this, int in_fd, off_t * offset, unsigned total_bytes, SXE_OUT_EVENT_WRITTEN on_complete)
 {
     SXE_RETURN result = SXE_RETURN_ERROR_WRITE_FAILED;
     ssize_t    sent;
 
-    SXEE83I("sxe_sendfile(in_fd=%d, total_bytes=%u, on_complete=%p)", in_fd, total_bytes, on_complete);
+    SXEE84I("sxe_sendfile(in_fd=%d, offset=%lu, total_bytes=%u, on_complete=%p)", in_fd, (unsigned long)*offset, total_bytes, on_complete);
+
     SXEA10I(on_complete != NULL, "sxe_sendfile: on_complete callback function pointer can't be NULL");
+    SXEA10I(offset      != NULL, "sxe_sendfile: offset pointer can't be NULL");
+    SXEA10I(total_bytes != 0,    "sxe_sendfile: total_bytes can't be zero"); /* Apple and FreeBSD: send '0' means send until EOF */
+
     this->sendfile_in_fd    = in_fd;
+    this->sendfile_offset   = offset;
     this->out_event_written = on_complete;
 
-    sent = sendfile(this->socket, in_fd, NULL, total_bytes);
+#if defined(__APPLE__)
+    {
+        off_t len = (off_t)total_bytes;
+        int   res;
+
+        SXEL84I("apple:sendfile(in=%u, s=%u, off=%lu, total_bytes=%u, ...)", in_fd, this->socket, (unsigned long)*offset, total_bytes);
+
+        res = sendfile(in_fd, this->socket, *offset, &len, /* No preamble or postamble data */NULL, /* reserved */0);
+        if (res < 0) {
+            if (errno == EAGAIN) {
+                *offset += len;
+                sent = (ssize_t)len;
+                goto SXE_PARTIAL_WRITE;
+            }
+            else
+                sent = -1; /* error; see below */
+        }
+        else {
+            SXEL81I("apple:sendfile() sent={%lu}", (unsigned long)len);
+            *offset += len;
+            sent = (ssize_t)len;
+        }
+    }
+#else
+    sent = sendfile(this->socket, in_fd, offset, total_bytes);
+#endif
 
     if (sent < 0) {
         SXEL22I("sendfile() failed: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
@@ -1476,10 +1542,11 @@ sxe_sendfile(SXE * this, int in_fd, unsigned total_bytes, SXE_OUT_EVENT_WRITTEN 
             (*this->out_event_written)(this, result);
         }
 
-        goto SXE_EARLY_OUT;
+        goto SXE_CLEANUP_OUT;
     }
 
     if ((sent > 0) && ((unsigned)sent < total_bytes)) {
+SXE_PARTIAL_WRITE:
         SXEL82I("sendfile() sent %d bytes of %u, filling send buffer", sent, total_bytes);
         result = SXE_RETURN_IN_PROGRESS;
         this->sendfile_bytes = total_bytes - sent;
@@ -1490,7 +1557,7 @@ sxe_sendfile(SXE * this, int in_fd, unsigned total_bytes, SXE_OUT_EVENT_WRITTEN 
         goto SXE_EARLY_OUT;
     }
 
-    if ((unsigned)sent == 0) {
+    if (sent == 0) {
         SXEL80I("sendfile() sent 0 bytes (EOF)");
         result = SXE_RETURN_END_OF_FILE;
     }
@@ -1503,16 +1570,17 @@ sxe_sendfile(SXE * this, int in_fd, unsigned total_bytes, SXE_OUT_EVENT_WRITTEN 
         (*this->out_event_written)(this, result);
     }
 
-    this->sendfile_in_fd    = -1;
-    this->sendfile_bytes    = 0;
-    this->out_event_written = NULL;
-
     ev_io_stop(sxe_private_main_loop, &this->io);
     ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
     ev_io_start(sxe_private_main_loop, &this->io);
 
+SXE_CLEANUP_OUT:
+    this->sendfile_in_fd    = -1;
+    this->sendfile_bytes    = 0;
+    this->out_event_written = NULL;
+
 SXE_EARLY_OUT:
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXER82I("return %d // %s", result, sxe_return_to_string(result));
     return result;
 }
 #endif

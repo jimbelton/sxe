@@ -72,11 +72,11 @@ SXE_EARLY_OUT:
 /**
  * Get the value of an element in a hash with fixed size elements (SHA1 + unsigned) by SHA1 key in hex
  */
-int
+unsigned
 sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 {
     SXE_HASH *  hash  = SXE_HASH_ARRAY_TO_IMPL(array);
-    int         value = SXE_HASH_KEY_NOT_FOUND;
+    unsigned    value = SXE_HASH_KEY_NOT_FOUND;
     unsigned    id;
     SOPHOS_SHA1 sha1;
 
@@ -95,11 +95,11 @@ sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     return value;
 }
 
-int
+unsigned
 sxe_hash_remove(void * array, const char * sha1_as_char, unsigned sha1_key_len)
 {
     SXE_HASH *  hash  = SXE_HASH_ARRAY_TO_IMPL(array);
-    int         value = SXE_HASH_KEY_NOT_FOUND;
+    unsigned    value = SXE_HASH_KEY_NOT_FOUND;
     unsigned    id;
     SOPHOS_SHA1 sha1;
 

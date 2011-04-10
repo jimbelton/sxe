@@ -60,7 +60,7 @@ main(int argc, char ** argv)
     if (argc > 1) {
         count = atoi(argv[1]);
         sxe_mmap_open(&memmap, "memmap");
-        shared  = (unsigned *)(unsigned long)SXE_MMAP_ADDR(&memmap);
+        shared  = (unsigned *)(uintptr_t)SXE_MMAP_ADDR(&memmap);
         pool    = sxe_pool_from_base(shared);
         SXEL63("Instance %u mapped to shared pool // base=%p, pool=%p", count, shared, pool);
 
@@ -80,13 +80,13 @@ main(int argc, char ** argv)
 
     plan_tests(6);
     ok((size = sxe_pool_size(TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= TEST_CLIENT_INSTANCES * sizeof(*pool),
-       "Expect pool size %u to be at least the size of the array %u", size, TEST_CLIENT_INSTANCES * sizeof(*pool));
+       "Expect pool size %u to be at least the size of the array %u", (unsigned)size, (unsigned)(TEST_CLIENT_INSTANCES * sizeof(*pool)));
 
     SXEA11((fd = open("memmap", O_CREAT | O_TRUNC | O_WRONLY, 0666)) >= 0, "Failed to create file 'memmap': %s",         strerror(errno));
     SXEA12(ftruncate(fd, size)                                       >= 0, "Failed to extend the file to %lu bytes: %s", size, strerror(errno));
     close(fd);
     sxe_mmap_open(&memmap, "memmap");
-    shared = (unsigned *)(unsigned long)SXE_MMAP_ADDR(&memmap);
+    shared = (unsigned *)(uintptr_t)SXE_MMAP_ADDR(&memmap);
 
     pool = sxe_pool_construct(shared, "shared-pool", TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES,
                               SXE_POOL_OPTION_LOCKED);

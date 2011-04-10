@@ -33,7 +33,7 @@ CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wcha
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
 CFLAGS += -O0
 else
-CFLAGS += -O -Wuninitialized
+CFLAGS += -O0
 endif
 
 # FreeBSD platform specific compiler flags.
@@ -78,7 +78,7 @@ COV_LFLAGS         = -coverage -lgcov
 COV_INIT           = $(DEL) $(DST.dir)/*.gcda $(DST.dir)/*.ok
 CXX                = g++
 LINK               = gcc
-LINK_OUT           = -o
+LINK_OUT           = -o $(EMPTY)
 LINK_FLAGS        += -ldl
 # -lm needed by ev; ceil()
 LINK_FLAGS        += -g -lm
@@ -94,7 +94,10 @@ TEST_ENV_VARS      = LIBC_FATAL_STDERR_=1
 
 
 # note: -march=i486 for __sync_val_compare_and_swap gcc builtin used by sxe-mmap
-ifeq ($(OS_bits), 32)
+ifeq ($(OS_name), darwin)
+	CFLAGS		  += -march=core2 -pthread
+	OS_bits		  = 64
+else ifeq ($(OS_bits), 32)
 	CFLAGS		  += -march=i486
 else
 # x86-64 for 64 bit systems
@@ -113,8 +116,13 @@ PROVE              = prove
 #   - --no-target-directory treat DEST as a normal file
 #   - --verbose             explain what is being done
 #   - --preserve=timestamps make copies the same age as the sources
+ifeq ($(OS_name), darwin)
+COPYDIR            = cp -pPRfv
+COPYFILES2DIR      = cp -pPfv
+else
 COPYDIR            = cp --update --verbose --preserve=timestamps --recursive --no-target-directory --force
 COPYFILES2DIR      = cp --update --verbose --preserve=timestamps --force
+endif
 CFLAGS_DEBUG       = -g
 CFLAGS_FOR_CPP     = -lstdc++
 

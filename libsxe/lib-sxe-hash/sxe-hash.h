@@ -41,7 +41,7 @@
  */
 typedef struct SXE_HASH_KEY_VALUE_PAIR {
     SOPHOS_SHA1 sha1;
-    int         value;
+    unsigned    value;
 } SXE_HASH_KEY_VALUE_PAIR;
 
 typedef struct SXE_HASH {

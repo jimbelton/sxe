@@ -49,7 +49,7 @@ static void
 test_event_read(SXE * this, int length)
 {
     SXEE62I("test_event_read(this->socket=%d, length=%d)", this->socket, length);
-    tap_ev_push(__func__, 3, "this", this, "length", length, "buf_used", SXE_BUF_USED(this));
+    tap_ev_push(__func__, 3, "this", this, "length", length, "buf_used", (size_t)SXE_BUF_USED(this));
     SXER60I("return");
 }
 
@@ -57,7 +57,7 @@ static void
 test_event_close(SXE * this)
 {
     SXEE61I("test_event_close(this->socket=%d)", this->socket);
-    tap_ev_push(__func__, 2, "this", this, "buf_used", SXE_BUF_USED(this));
+    tap_ev_push(__func__, 2, "this", this, "buf_used", (size_t)SXE_BUF_USED(this));
     SXER60I("return");
 }
 
@@ -73,7 +73,7 @@ static void
 test_event_client_read(SXE * this, int length)
 {
     SXEE62I("test_event_client_read(this->socket=%d, length=%d)", this->socket, length);
-    tap_ev_queue_push(client_queue, __func__, 3, "this", this, "length", length, "buf_used", SXE_BUF_USED(this));
+    tap_ev_queue_push(client_queue, __func__, 3, "this", this, "length", length, "buf_used", (size_t)SXE_BUF_USED(this));
     SXER60I("return");
 }
 
@@ -253,7 +253,7 @@ main(void)
     ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "2nd connector: Got second client event");
     is_eq(tap_ev_identifier(ev),     "test_event_client_close",              "2nd connector: Second event is client close");
     is(tap_ev_arg(ev, "this"),       second_connector,                       "2nd connector: Second connector closed");
-    is(tap_ev_arg(ev, "buf_used"), 0,                                        "2nd connector: 0 bytes in receive buffer");
+    is((unsigned)(uintptr_t)tap_ev_arg(ev, "buf_used"), 0,                              "2nd connector: 0 bytes in receive buffer");
 
     /* Close and reallocate connections.
      */
@@ -297,7 +297,7 @@ main(void)
     ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "Connection failure: Got another event");
     is_eq(tap_ev_identifier(ev), "test_event_client_close",                  "Connection failure: It's a client close event");
     is(tap_ev_arg(ev, "this"), first_connector,                              "Connection failure: third connection close indication" );
-    is(tap_ev_arg(ev, "buf_used"), 0,                                        "Connection failure: 0 bytes in receive buffer");
+    is((unsigned)(uintptr_t)tap_ev_arg(ev, "buf_used"), 0,                                        "Connection failure: 0 bytes in receive buffer");
 
     listener = sxe_new_tcp(NULL, "INADDR_ANY", SXE_LOCAL_PORT(listener), test_event_connected, test_event_read, test_event_close);
     is(sxe_listen(listener), SXE_RETURN_OK,                                  "Reconnect failure: Recreated listener");

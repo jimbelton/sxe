@@ -54,6 +54,11 @@ on 1 byte), but shoehorning those bytes into integers efficiently is messy.
 
 #include "lookup3.h"
 
+#if defined(__APPLE__)
+#    define __LITTLE_ENDIAN LITTLE_ENDIAN
+#    define __BYTE_ORDER    BYTE_ORDER
+#endif
+
 /*
  * My best guess at if you are big-endian or little-endian.  This may
  * need adjustment.
@@ -788,11 +793,11 @@ uint32_t hashbig( const void *key, size_t length, uint32_t initval)
  * @return 32 bit hash value
  */
 unsigned
-lookup3_hash(const void *key, size_t length)
+lookup3_hash(const void *key, unsigned length)
 {
 #if HASH_LITTLE_ENDIAN
-    return hashlittle(key, length, 0);
+    return hashlittle(key, (size_t)length, 0);
 #else
-    return hashbig(key, length, 0);
+    return hashbig(key, (size_t)length, 0);
 #endif
 }

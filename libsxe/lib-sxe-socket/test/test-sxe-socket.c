@@ -26,6 +26,8 @@
  */
 #ifdef WINDOWS_NT
 static char success[] = "The operation completed successfully.";
+#elif defined(__APPLE__)
+static char success[] = "Unknown error: 0";
 #else
 static char success[] = "Success";
 #endif

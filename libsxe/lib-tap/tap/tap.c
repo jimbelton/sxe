@@ -46,6 +46,11 @@
 #include <signal.h>
 #endif
 
+#ifdef __APPLE__
+#define sighandler_t sig_t
+#define _NSIG        __DARWIN_NSIG
+#endif
+
 #include "tap.h"
 
 static int          no_plan        = 0;

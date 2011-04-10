@@ -68,7 +68,12 @@ InterlockedExchangeAdd(long volatile * Addend, long Value)
     return __sync_add_and_fetch(Addend, Value);
 }
 
+#ifdef __APPLE__
+#define SXE_GETTID() syscall(SYS_thread_selfid)
+#else
 #define SXE_GETTID() syscall(SYS_gettid)
+#endif
+
 #define SXE_YIELD()  sched_yield()
 
 #else

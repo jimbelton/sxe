@@ -34,6 +34,11 @@
 #include <unistd.h>          /* for getpid() */
 #endif
 
+#ifdef __APPLE__
+#include <pthread.h>         /* for pthread_getspecific() */
+#include <sys/syscall.h>     /* for SYS_thread_selfid */
+#endif
+
 #include "sxe-log.h"
 
 #define SXE_U32                     unsigned int
@@ -70,6 +75,8 @@ static unsigned sxe_log_is_first_call = 1;
 
 #ifdef _WIN32
 static DWORD    sxe_log_tls_slot;
+#elif defined(__APPLE__)
+static pthread_key_t sxe_log_tls_key;
 #else
 static __thread unsigned sxe_log_indent;
 #endif
@@ -83,6 +90,8 @@ sxe_log_get_indent(void)
 
     indent = (unsigned)TlsGetValue(sxe_log_tls_slot);
     SetLastError(error);
+#elif defined(__APPLE__)
+    indent = (unsigned)(uintptr_t)pthread_getspecific(sxe_log_tls_key);
 #else
     indent = sxe_log_indent;
 #endif
@@ -97,6 +106,8 @@ sxe_log_set_indent(unsigned indent)
 
     (void)TlsSetValue(sxe_log_tls_slot, (void *)indent);
     SetLastError(error);
+#elif defined(__APPLE__)
+    pthread_setspecific(sxe_log_tls_key, (void *)(uintptr_t)indent);
 #else
     sxe_log_indent = indent;
 #endif
@@ -252,7 +263,10 @@ sxe_log_buffer_set_prefix(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
     struct timeval   mytv;
     struct tm        mytm;
     pid_t            ProcessId;
-#endif
+#if defined(__APPLE__)
+    pid_t            ThreadId;
+#endif /* __APPLE__ */
+#endif /* !WIN32 */
 
 #if defined(WIN32)
     GetSystemTime(&st);
@@ -265,8 +279,14 @@ sxe_log_buffer_set_prefix(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
     gmtime_r((time_t *)&mytv.tv_sec, &mytm);
     ProcessId = getpid();
 
+#if defined(__APPLE__)
+    ThreadId = syscall(SYS_thread_selfid);
+    SNPRINTF(log_buffer, SXE_LOG_BUFFER_SIZE, "%04d%02d%02d %02d%02d%02d.%03ld P%08x/T%08x ", mytm.tm_year + 1900, mytm.tm_mon+1,
+             mytm.tm_mday, mytm.tm_hour, mytm.tm_min, mytm.tm_sec, (long int)(mytv.tv_usec / 1000), ProcessId, ThreadId);
+#else /* !__APPLE__ */
     SNPRINTF(log_buffer, SXE_LOG_BUFFER_SIZE, "%04d%02d%02d %02d%02d%02d.%03ld P%08x ", mytm.tm_year + 1900, mytm.tm_mon+1,
              mytm.tm_mday, mytm.tm_hour, mytm.tm_min, mytm.tm_sec, mytv.tv_usec / 1000, ProcessId);
+#endif /* !__APPLE__ */
 #endif
 
     if (id == ~0U || id == (~0U - 1)) {
@@ -292,10 +312,15 @@ sxe_log_init(void)
 
 #ifdef _WIN32
     if ((sxe_log_tls_slot = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
-        /* todo: use thread local storage on linux (so able to debug multi-threaded code) */
         /* todo: consider changing sxe_log_line_out() to take const char * so that (char *)(long) unnecessary */
         (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, (char *)(long)"sxe_log_init: Unable to allocate thread local storage\n");
         abort(); /* Coverage Exclusion - todo: win32 coverage: TLS */
+    }
+#elif defined(__APPLE__)
+    if (pthread_key_create(&sxe_log_tls_key, NULL) < 0) {
+        /* todo: consider changing sxe_log_line_out() to take const char * so that (char *)(long) unnecessary */
+        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, (char *)(long)"sxe_log_init: Unable to allocate thread local storage\n");
+        abort(); /* Coverage Exclusion - todo: darwin coverage: TLS */
     }
 #endif
 

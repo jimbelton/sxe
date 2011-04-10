@@ -33,7 +33,7 @@ sxe_strnchr(const char * buf, char c, unsigned n)
         }
 
         if (*buf == c) {
-            return (char *)(unsigned long)buf;
+            return (char *)(uintptr_t)buf;
         }
     }
 
@@ -49,7 +49,7 @@ sxe_strncspn(const char * buf, const char * reject, unsigned n)
     for (i = 0; (i < n) && (buf[i] != '\0'); i++) {
         for (j = 0; reject[j] != '\0'; j++) {
             if (buf[i] == reject[j]) {
-                return (char *)(unsigned long)&buf[i];
+                return (char *)(uintptr_t)&buf[i];
             }
         }
     }
@@ -63,13 +63,17 @@ sxe_strnstr(const char * buf, const char * str, unsigned n)
     unsigned     length = strlen(str);
     const char * end;
 
+    if (n < length) {
+        return NULL;
+    }
+
     for (end = &buf[n - length]; buf <= end; buf++) {
         if (*buf == '\0') {
             break;
         }
 
         if (memcmp(buf, str, length) == 0) {
-            return (char *)(unsigned long)buf;
+            return (char *)(uintptr_t)buf;
         }
     }
 
@@ -84,7 +88,7 @@ sxe_rstrnstr(const char * haystack, const char * needle, unsigned haystack_len)
 
     for (ptr = haystack + haystack_len - needle_len; ptr >= haystack; ptr--) {
         if (memcmp(ptr, needle, needle_len) == 0) {
-            return (char *)(unsigned long)ptr;
+            return (char *)(uintptr_t)ptr;
         }
     }
 
@@ -97,13 +101,17 @@ sxe_strncasestr(const char * buf, const char * str, unsigned n)
     unsigned     length = strlen(str);
     const char * end;
 
+    if (n < length) {
+        return NULL;
+    }
+
     for (end = &buf[n - length]; buf <= end; buf++) {
         if (*buf == '\0') {
             break;
         }
 
         if (strncasecmp(buf, str, length) == 0) {
-            return (char *)(unsigned long)buf;
+            return (char *)(uintptr_t)buf;
         }
     }
 

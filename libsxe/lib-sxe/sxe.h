@@ -71,12 +71,13 @@ typedef struct SXE {
     SXE_OUT_EVENT_WRITTEN  out_event_written;    /*         function to call when long write completes                    */
     int                    sendfile_in_fd;
     unsigned               sendfile_bytes;
+    off_t                * sendfile_offset;
     const char           * send_buf;
     unsigned               send_buf_len;
     unsigned               send_buf_written;
     union {
        void            *   as_ptr;
-       int                 as_int;
+       intptr_t            as_int;
     }                      user_data;            /* Not used by sxe                                                       */
     int                    next_socket;          /* Socket to switch to from pipe when all data has been read and cleared */
 } SXE;

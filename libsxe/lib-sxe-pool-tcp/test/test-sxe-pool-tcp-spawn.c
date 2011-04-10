@@ -107,8 +107,14 @@ test_event_close(SXE * this)
     SXER80I("return");
 }
 
+#ifdef __APPLE__
+#define TYPE_TZ void *
+#else
+#define TYPE_TZ struct timezone *
+#endif
+
 static int
-test_mock_gettimeofday(struct timeval * tv, struct timezone * tz)
+test_mock_gettimeofday(struct timeval * tv, TYPE_TZ tz)
 {
     SXE_UNUSED_ARGUMENT(tz);
     *tv = current_timeval;

@@ -68,7 +68,13 @@
 static inline void sxe_socket_close(int sock) {closesocket(sock);}
 
 #else  /* UNIX */
+
+#ifdef __APPLE__
+#define SXE_SOCKET_MSG_NOSIGNAL       0
+#else
 #define SXE_SOCKET_MSG_NOSIGNAL       MSG_NOSIGNAL
+#endif
+
 #define SXE_SOCKET_ERROR_OCCURRED     (-1)
 #define SXE_SOCKET_ERROR(error)       error
 #define SXE_SOCKET_FAR

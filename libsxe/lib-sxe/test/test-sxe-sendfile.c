@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #include "mock.h"
 #include "sxe.h"
@@ -83,6 +84,24 @@ test_event_sendfile_complete(SXE * this, SXE_RETURN sxe_return)
     SXER60I("return");
 }
 
+#ifdef __APPLE__
+static int
+test_mock_sendfile(int in_fd, int out_fd, off_t offset, off_t *len, struct sf_hdtr *ign, int reserved)
+{
+    SXE_UNUSED_ARGUMENT(in_fd);
+    SXE_UNUSED_ARGUMENT(out_fd);
+    SXE_UNUSED_ARGUMENT(offset);
+    SXE_UNUSED_ARGUMENT(len);
+    SXE_UNUSED_ARGUMENT(ign);
+    SXE_UNUSED_ARGUMENT(reserved);
+    SXEE64("test_mock_sendfile(in_fd=%d, out_fd=%d, offset=%lu, len=%lu)", in_fd, out_fd, (unsigned long)offset, (unsigned long)*len);
+
+    errno = EBADF;
+
+    SXER60("return -1 // errno=EBADF");
+    return -1;
+}
+#else /* !__APPLE__ */
 static ssize_t
 test_mock_sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
 {
@@ -97,7 +116,8 @@ test_mock_sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
     SXER60("return -1 // errno=EBADF");
     return -1;
 }
-#endif
+#endif /* !__APPLE__ */
+#endif /* !WINDOWS_NT */
 
 int
 main(void)
@@ -105,6 +125,7 @@ main(void)
 #ifdef WINDOWS_NT
     plan_skip_all("sxe_sendfile is not currently supported on Windows");    /* TODO: Add support using Windows TransmitFile() */
 #else
+    char        tempfile[PATH_MAX];
     int         in_fd;
     struct stat in_stat;
     SXE       * client;
@@ -115,12 +136,10 @@ main(void)
     int         bytes_read;
     unsigned    bytes_compared;
     char        buffer[4096];
+    off_t       offset;
 
     sxe_log_level = SXE_LOG_LEVEL_LIBRARY_TRACE;
     plan_tests(22);
-    SXEA10((in_fd = open("test-sxe-sendfile.t", O_RDONLY)) >= 0,         "Failed to open 'test-sxe-sendfile.t'");
-    SXEA10(stat("test-sxe-sendfile.t", &in_stat) >= 0,                   "Failed to stat 'test-sxe-sendfile.t'");
-    SXEA11((test_buf = malloc(test_buf_size = in_stat.st_size)) != NULL, "Failed to allocate %u byte buffer", test_buf_size);
     sxe_register(3, 0);
 
     is(sxe_init(), SXE_RETURN_OK, "SXE initialized");
@@ -133,16 +152,37 @@ main(void)
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, NULL), "test_event_connected", "SXE connected from client");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, NULL), "test_event_connected", "SXE connected from server");
 
+    /* Write a file larger than the send buffer size */
     size = sizeof(tcp_send_buffer_size);
     SXEA13(getsockopt(client->socket, SOL_SOCKET, SO_SNDBUF, &tcp_send_buffer_size, &size) >= 0,
            "socket %d: couldn't get SO_SNDBUF: (%d) %s", client->socket, sxe_socket_get_last_error(),
            sxe_socket_get_last_error_as_str());
 
+    {
+        int fd, i;
+        int len = snprintf(buffer, sizeof buffer,
+                           "I am slowly going crazy, one two three four five six switch; "
+                           "crazy going slowly am I, six five four three two one switch\n");
+        snprintf(tempfile, sizeof tempfile, "./test-XXXXXX");
+        SXEA11((fd = mkstemp(tempfile)) >= 0,                            "Failed to mkstemp '%s'", tempfile);
+        for (i = 0; i < tcp_send_buffer_size * 4 + 1024; ) {
+            i += write(fd, buffer, len);
+        }
+
+        lseek(fd, 0, SEEK_SET);
+        in_fd = fd;
+    }
+
+    SXEA11(stat(tempfile, &in_stat) >= 0,                                "Failed to stat '%s'", tempfile);
+    SXEA11((test_buf = malloc(test_buf_size = in_stat.st_size)) != NULL, "Failed to allocate %u byte buffer", test_buf_size);
+    SXEL12("Created a tempfile %u bytes (send buffer %u)", in_stat.st_size, tcp_send_buffer_size);
+
     /* Test a small send */
 
     SXEA12(tcp_send_buffer_size > TEST_SMALL_SEND_SIZE, "TCP send buffer size %u is <= %u; make TEST_SMALL_SEND_SIZE smaller!",
            tcp_send_buffer_size, TEST_SMALL_SEND_SIZE);
-    is(sxe_sendfile(client, in_fd, TEST_SMALL_SEND_SIZE, test_event_sendfile_complete), SXE_RETURN_OK,
+    offset = 0;
+    is(sxe_sendfile(client, in_fd, &offset, TEST_SMALL_SEND_SIZE, test_event_sendfile_complete), SXE_RETURN_OK,
        "sxe_sendfile() returns OK - %u bytes were written immediately", TEST_SMALL_SEND_SIZE);
     is_eq(tap_ev_identifier(ev = tap_ev_shift()), "test_event_sendfile_complete", "Called back before sxe_sendfile() completed");
     is(tap_ev_arg(ev, "sxe_return"), SXE_RETURN_OK, "Sendfile operation was successful");
@@ -153,7 +193,7 @@ main(void)
 
     SXEA12(test_buf_size > (unsigned)tcp_send_buffer_size * 3 + 1024, "File size %u is <= %u; use a bigger file!",
            test_buf_size,  (unsigned)tcp_send_buffer_size * 3 + 1024);
-    is(sxe_sendfile(client, in_fd, tcp_send_buffer_size * 3 + 1024, test_event_sendfile_complete), SXE_RETURN_IN_PROGRESS,
+    is(sxe_sendfile(client, in_fd, &offset, tcp_send_buffer_size * 3 + 1024, test_event_sendfile_complete), SXE_RETURN_IN_PROGRESS,
        "sxe_sendfile() returns IN_PROGRESS when tcp buffer has less room that what needs to be written");
     is(tap_ev_length(), 0, "Callback is not called when sxe_sendfile() is incomplete");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_sendfile_complete", "SXE sendfile completed asynchronously");
@@ -162,18 +202,24 @@ main(void)
 
     /* Test sending the rest of the file */
 
-    is(sxe_sendfile(client, in_fd, test_buf_size, test_event_sendfile_complete), SXE_RETURN_IN_PROGRESS,
+    is(sxe_sendfile(client, in_fd, &offset, test_buf_size, test_event_sendfile_complete), SXE_RETURN_IN_PROGRESS,
        "sxe_sendfile() returns IN_PROGRESS when not all bytes are written");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, NULL), "test_event_sendfile_complete", "SXE sendfile completed asynchronously");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, NULL), "test_event_read",              "Server got the rest of the file");
     diag("received %u of %u", test_buf_length, test_buf_size);
     close(in_fd);
 
-    SXEA10((in_fd = open("test-sxe-sendfile.t", O_RDONLY)) >= 0, "Failed to reopen 'test-sxe-sendfile.t'");
+    SXEA11((in_fd = open(tempfile, O_RDONLY)) >= 0, "Failed to reopen '%s'", tempfile);
 
     for (bytes_compared = 0; (bytes_read = read(in_fd, buffer, sizeof(buffer))) > 0; bytes_compared += bytes_read) {
         SXEA12(bytes_compared + bytes_read <= test_buf_size, "Read more (%u) from file than last time (%u)",
                bytes_compared + bytes_read, test_buf_size);
+        if (memcmp(buffer, &test_buf[bytes_compared], bytes_read)) {
+            SXEL10("=== received:");
+            SXED10(buffer, bytes_read);
+            SXEL10("=== expected:");
+            SXED10(&test_buf[bytes_compared], bytes_read);
+        }
         SXEA12(memcmp(buffer, &test_buf[bytes_compared], bytes_read) == 0, "Mismatch in sent file in bytes %u .. %u",
                bytes_compared, bytes_compared + bytes_read - 1);
     }
@@ -183,9 +229,10 @@ main(void)
 
     /* Test the sendfail failure case.
      */
-    SXEA10((in_fd = open("test-sxe-sendfile.t", O_RDONLY)) >= 0, "Failed to open 'test-sxe-sendfile.t' for the 3rd time");
+    SXEA11((in_fd = open(tempfile, O_RDONLY)) >= 0, "Failed to open '%s' for the 3rd time", tempfile);
     MOCK_SET_HOOK(sendfile, test_mock_sendfile);
-    is(sxe_sendfile(client, in_fd, test_buf_size, test_event_sendfile_complete), SXE_RETURN_ERROR_WRITE_FAILED,
+    offset = 0;
+    is(sxe_sendfile(client, in_fd, &offset, test_buf_size, test_event_sendfile_complete), SXE_RETURN_ERROR_WRITE_FAILED,
        "sxe_sendfile() returns ERROR_WRITE_FAILED when sendfile fails");
 #endif
 
