@@ -33,7 +33,7 @@ CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wcha
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
 CFLAGS += -O0
 else
-CFLAGS += -O0
+CFLAGS += -O -Wuninitialized
 endif
 
 # FreeBSD platform specific compiler flags.
