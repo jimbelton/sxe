@@ -31,7 +31,7 @@ CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wcha
 #  was executed, you should not compile with optimization at the same
 #  time."
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
-CFLAGS += -O0
+CFLAGS += -O0 -Wunused
 else ifneq ($(filter debug,$(MAKECMDGOALS)),)
 CFLAGS += -O -Wuninitialized -Wno-unused
 else
