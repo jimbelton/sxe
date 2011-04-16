@@ -370,7 +370,7 @@ test_write_command_pl_file(void)
         "                                                                                                   \n"
         "while(my $line = <>) {                                                                             \n"
         "    if ($line =~ /^abort/) {                                                                       \n"
-        "        abort();                                                                                   \n"
+        "        _exit(1);                                                                                  \n"
         "    }                                                                                              \n"
         "                                                                                                   \n"
         "    if ($line =~ /^sleep (\\d+)/) {                                                                \n"
