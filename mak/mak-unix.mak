@@ -23,7 +23,7 @@
 #
 CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wchar-subscripts -Wcomment                   \
 		-Wformat -Wimplicit  -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wparentheses -Wpointer-arith     \
-		-Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch  -Wtrigraphs -Wunused         \
+		-Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch  -Wtrigraphs         \
 		-Wwrite-strings
 
 # See http://gcc.gnu.org/onlinedocs/gcc-3.0/gcc_8.html#SEC135
@@ -32,8 +32,10 @@ CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wcha
 #  time."
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
 CFLAGS += -O0
+else ifneq ($(filter debug,$(MAKECMDGOALS)),)
+CFLAGS += -O -Wuninitialized -Wno-unused
 else
-CFLAGS += -O -Wuninitialized
+CFLAGS += -O -Wuninitialized -Wunused
 endif
 
 # FreeBSD platform specific compiler flags.
