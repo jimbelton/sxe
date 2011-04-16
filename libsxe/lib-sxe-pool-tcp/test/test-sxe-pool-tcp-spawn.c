@@ -41,12 +41,11 @@ static const char   * write_data  = NULL;
 static struct timeval current_timeval;
 
 static void
-test_event_log_line(SXE_LOG_LEVEL level, char * line)
+test_event_log_line(SXE_LOG_LEVEL level, const char * line)
 {
     unsigned length = strlen(line) - 1;
 
     SXE_UNUSED_ARGUMENT(level);
-    line[length] = '\0';
 
     /* Nota bene: You must NOT call anything that logs from this function! */
 
@@ -223,7 +222,7 @@ test_case_initialization_succeeds(void)
     write_data = "echo\n";
     sxe_pool_tcp_queue_ready_to_write_event(pool);    /* Should not be called back */
     event = test_tap_ev_shift_wait(5);
-    this  = (SXE *)(unsigned long)tap_ev_arg(event, "this");
+    this  = SXE_CAST(SXE *, tap_ev_arg(event, "this"));
     is_eq(tap_ev_identifier(event), "test_event_read",                               "1st program sent data");
     is_strncmp(tap_ev_arg(event, "buf"), "\n", tap_ev_arg(event, "length"),          "1st program sent a newline");
     event = test_tap_ev_shift_wait(5);
@@ -233,7 +232,7 @@ test_case_initialization_succeeds(void)
     /* Mark both processes as initialized and make sure we can perform a transaction.
      */
     sxe_pool_tcp_initialized(this);
-    this  = (SXE *)(unsigned long)tap_ev_arg(event, "this");
+    this  = SXE_CAST(SXE *, tap_ev_arg(event, "this"));
     sxe_pool_tcp_initialized(this);
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_ready_to_write", "1st program is ready to write to");
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_read",           "1st program replied with echo");

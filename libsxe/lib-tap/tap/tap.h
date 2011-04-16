@@ -29,6 +29,7 @@
 #ifndef __TAP_H__
 #define __TAP_H__
 
+#include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -55,7 +56,7 @@ void plan_tests(unsigned int tests);
 # error "Needs gcc or C99 compiler for variadic macros."
 #else
 
-#define is(g, e, ...)                  _gen_result(1, (const void *)(long)(g), (const void *)(long)(e), (void *)0, (void *)0, \
+#define is(g, e, ...)                  _gen_result(1, (const void *)(uintptr_t)(g), (const void *)(uintptr_t)(e), (void *)0, (void *)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define is_eq(g, e, ...)               _gen_result(2, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
@@ -64,7 +65,7 @@ void plan_tests(unsigned int tests);
 #define is_cmp(g, e, cmp, to_str, ...) _gen_result(3, (const void *)(g), (const void *)(e), (cmp), (to_str), \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define is_strncmp(g, e, len, ...)     _gen_result(4, (const void *)(g), (const void *)(e), (void *)(long)(len), (void *)0, \
+#define is_strncmp(g, e, len, ...)     _gen_result(4, (const void *)(g), (const void *)(e), (void *)(uintptr_t)(len), (void *)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define is_strstr(g, e, ...)           _gen_result(5, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \

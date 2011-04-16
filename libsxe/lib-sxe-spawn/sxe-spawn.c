@@ -116,7 +116,7 @@ sxe_spawn(SXE                    * this,
         posix_spawn_file_actions_adddup2(&fa, sock, 1);
         posix_spawn_file_actions_addclose(&fa, sock);
 
-        err = posix_spawnp(&that->pid, command, &fa, NULL, (char * const *)(intptr_t)argv, environ);
+        err = posix_spawnp(&that->pid, command, &fa, NULL, SXE_CAST_NOCONST(char * const *, argv), environ);
         if (err != 0) {
             SXEL13I("posix_spawnp failed to run '%s': %d:%s\n", command, err, strerror(err));
             result = SXE_RETURN_ERROR_COMMAND_NOT_RUN;

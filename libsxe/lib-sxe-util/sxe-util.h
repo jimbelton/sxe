@@ -33,6 +33,9 @@
 #define SXE_UNUSED_PARAMETER(param) (void)(param)
 #define SXE_BIT_OPTION(number)      (1 << number)
 
+#define SXE_CAST(type, ptr)         ((type)(uintptr_t)(ptr))
+#define SXE_CAST_NOCONST(type, ptr) SXE_CAST(type, ptr)
+
 /* TODO: Figure out a way to do a safe cast, something like this:
 #define SXE_SAFE_CAST_UNSIGNED_CHAR(value) \
     ((unsigned char)(SXEV81((unsigned long)value, <= 0xFF, "%lu cannot be safely cast to unsigned char", (unsigned long)value)))

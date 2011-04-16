@@ -60,9 +60,9 @@ main(int argc, char ** argv)
     test_program_name = argv[0];
     plan_tests(2);
     ok(test_log(),                                              "Test log succeeded");
-    SXEA12(putenv((char *)(long)"SXE_LOG_LEVEL=2") >= 0,        "%s: Failed to setenv: %s", test_program_name, strerror(errno));
+    SXEA12(setenv("SXE_LOG_LEVEL", "2", 1) >= 0,                "%s: Failed to setenv: %s", test_program_name, strerror(errno));
     ok(!test_log(),                                             "Test log with SXE_LOG_LEVEL=2 failed");
-//    SXEA12(putenv((char *)(long)"SXE_LIBSXE_LOG_LEVEL=2") >= 0, "%s: Failed to setenv: %s", test_program_name, strerror(errno));
+//    SXEA12(setenv("SXE_LIBSXE_LOG_LEVEL", "2", 1) >= 0,         "%s: Failed to setenv: %s", test_program_name, strerror(errno));
 //    ok(test_log(),                                              "Test log with SXE_LIBSXE_LOG_LEVEL=7 succeeded");
     return exit_status();
 }

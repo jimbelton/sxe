@@ -167,7 +167,7 @@ main(void)
             fail("Unexpected server event %s", (const char *)tap_ev_identifier(ev));
             break;
         }
-        x += (uintptr_t)tap_ev_arg(ev, "length");
+        x += SXE_CAST(unsigned, tap_ev_arg(ev, "length"));
     }
     is(x, sizeof(test_data_2),                "Second - Received all the data");
     is(tap_ev_queue_length(tap_q_server),  0, "Second - There are no pending server events at this point");

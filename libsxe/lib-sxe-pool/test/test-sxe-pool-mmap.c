@@ -60,7 +60,7 @@ main(int argc, char ** argv)
     if (argc > 1) {
         count = atoi(argv[1]);
         sxe_mmap_open(&memmap, "memmap");
-        shared  = (unsigned *)(uintptr_t)SXE_MMAP_ADDR(&memmap);
+        shared  = SXE_CAST(unsigned *, SXE_MMAP_ADDR(&memmap));
         pool    = sxe_pool_from_base(shared);
         SXEL63("Instance %u mapped to shared pool // base=%p, pool=%p", count, shared, pool);
 
@@ -86,7 +86,7 @@ main(int argc, char ** argv)
     SXEA12(ftruncate(fd, size)                                       >= 0, "Failed to extend the file to %lu bytes: %s", size, strerror(errno));
     close(fd);
     sxe_mmap_open(&memmap, "memmap");
-    shared = (unsigned *)(uintptr_t)SXE_MMAP_ADDR(&memmap);
+    shared = SXE_CAST(unsigned *, SXE_MMAP_ADDR(&memmap));
 
     pool = sxe_pool_construct(shared, "shared-pool", TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES,
                               SXE_POOL_OPTION_LOCKED);

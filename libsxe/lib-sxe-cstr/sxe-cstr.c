@@ -28,6 +28,7 @@
 
 #include "sxe-cstr.h"
 #include "sxe-log.h"
+#include "sxe-util.h"
 
 #define SXE_CSTR_FLAG_IS_CSTR  0x01
 #define SXE_CSTR_FLAG_OVERFLOW 0x02
@@ -156,7 +157,7 @@ sxe_cstr_construct(SXE_CSTR * cstr, char * buf, unsigned len, unsigned size)
 void
 sxe_cstr_construct_const(SXE_CSTR * cstr, const char * buf, unsigned len)
 {
-    sxe_cstr_construct(cstr, (char *)(long)buf, len, len);
+    sxe_cstr_construct(cstr, SXE_CAST_NOCONST(char *, buf), len, len);
     cstr->flags |= SXE_CSTR_FLAG_IS_CONST;
 }
 

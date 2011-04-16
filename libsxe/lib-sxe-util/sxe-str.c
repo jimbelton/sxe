@@ -33,7 +33,7 @@ sxe_strnchr(const char * buf, char c, unsigned n)
         }
 
         if (*buf == c) {
-            return (char *)(uintptr_t)buf;
+            return SXE_CAST_NOCONST(char *, buf);
         }
     }
 
@@ -49,7 +49,7 @@ sxe_strncspn(const char * buf, const char * reject, unsigned n)
     for (i = 0; (i < n) && (buf[i] != '\0'); i++) {
         for (j = 0; reject[j] != '\0'; j++) {
             if (buf[i] == reject[j]) {
-                return (char *)(uintptr_t)&buf[i];
+                return SXE_CAST_NOCONST(char *, &buf[i]);
             }
         }
     }
@@ -73,7 +73,7 @@ sxe_strnstr(const char * buf, const char * str, unsigned n)
         }
 
         if (memcmp(buf, str, length) == 0) {
-            return (char *)(uintptr_t)buf;
+            return SXE_CAST_NOCONST(char *, buf);
         }
     }
 
@@ -88,7 +88,7 @@ sxe_rstrnstr(const char * haystack, const char * needle, unsigned haystack_len)
 
     for (ptr = haystack + haystack_len - needle_len; ptr >= haystack; ptr--) {
         if (memcmp(ptr, needle, needle_len) == 0) {
-            return (char *)(uintptr_t)ptr;
+            return SXE_CAST_NOCONST(char *, ptr);
         }
     }
 
@@ -111,7 +111,7 @@ sxe_strncasestr(const char * buf, const char * str, unsigned n)
         }
 
         if (strncasecmp(buf, str, length) == 0) {
-            return (char *)(uintptr_t)buf;
+            return SXE_CAST_NOCONST(char *, buf);
         }
     }
 

@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include "sxe-log.h"
+#include "sxe-util.h"
 
 #define SXE_HTTP_VERB_LENGTH_MAXIMUM 8
 
@@ -114,8 +115,7 @@ sxe_http_message_set_ignore_line(SXE_HTTP_MESSAGE * message) {
 
 static inline void
 sxe_http_message_buffer_shift_ignore_length(SXE_HTTP_MESSAGE * message) {
-    /* Bypass the "cast discards qualifiers ..." warning */
-    memmove((char *)((uintptr_t)(message->buffer)), message->buffer + message->ignore_length, message->buffer_length);
+    memmove(SXE_CAST(char *, message->buffer), message->buffer + message->ignore_length, message->buffer_length);
 }
 
 #include "lib-sxe-http-proto.h"

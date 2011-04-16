@@ -35,6 +35,9 @@
 
 #define HTTPD_CONTENT_LENGTH "Content-Length"
 
+/* Pointer substraction is signed but index is unsigned */
+#define SXE_HTTPD_REQUEST_INDEX(base_ptr, object_ptr) ((SXE_CAST(uintptr_t, object_ptr) - SXE_CAST(uintptr_t, base_ptr))/sizeof(SXE_HTTPD_REQUEST))
+
 static void
 sxe_httpd_default_connect_handler(SXE_HTTPD_REQUEST *request) /* Coverage Exclusion - todo: win32 coverage */
 {

@@ -1246,7 +1246,7 @@ sxe_write_pipe(SXE * this, const void * buf, unsigned size, int fd_to_send)
 
     /* This may be the worst API yet: move over Windows.
      */
-    io_vector[0].iov_base                  = (void *)(long)buf;
+    io_vector[0].iov_base                  = SXE_CAST_NOCONST(void *, buf);
     io_vector[0].iov_len                   = size;
     message_header.msg_control             = &control_message_buf;
     message_header.msg_controllen          = CMSG_LEN(sizeof(fd_to_send));

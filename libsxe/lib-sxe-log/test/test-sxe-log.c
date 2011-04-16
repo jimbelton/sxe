@@ -34,10 +34,6 @@
 #include "sxe-log.h"
 #include "tap.h"
 
-/* Make putenv STFU about const strings
- */
-#define PUTENV(string) putenv((char *)(long)(string))
-
 struct object
 {
     unsigned id;
@@ -71,7 +67,7 @@ static const char   exiting[]  = "Exiting the log test";
 static const char   dumphex[]  = "74 65 73 74";
 
 static void
-log_line(SXE_LOG_LEVEL level, char * line)
+log_line(SXE_LOG_LEVEL level, const char * line)
 {
     char buf[256];
 
@@ -204,9 +200,9 @@ main(int argc, char *argv[]) {
     ok(signal(SIGABRT, test_abort_handler) != SIG_ERR, "Caught abort signal");
     sxe_log_hook_line_out(NULL); /* for coverage */
     sxe_log_hook_line_out(log_line);
-    PUTENV("SXE_LOG_LEVEL=6");   /* Trigger processing of the level in the first call to the log */
+    setenv("SXE_LOG_LEVEL", "6", 1);   /* Trigger processing of the level in the first call to the log */
     SXEE60(entering);
-    PUTENV("SXE_LOG_LEVEL=1");   /* This should be ignored. If it is not, the tests will fail    */
+    setenv("SXE_LOG_LEVEL", "1", 1);   /* This should be ignored. If it is not, the tests will fail    */
     this->id = 99;
     SXEL60I(logging);
     SXEA60(1, "Asserting true");

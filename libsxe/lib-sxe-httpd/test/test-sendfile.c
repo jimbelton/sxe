@@ -49,7 +49,7 @@ handle_sendfile_done(SXE_HTTPD_REQUEST *request, SXE_RETURN final, void *user_da
     SXE_UNUSED_PARAMETER(request);
     SXE_UNUSED_PARAMETER(final);
     SXEE62I("%s(final=%s)", __func__, sxe_return_to_string(final));
-    close((intptr_t)user_data);
+    close(SXE_CAST(intptr_t, user_data));
     SXER60I("return");
 }
 
@@ -108,7 +108,7 @@ main(void)
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "client_connect",                   "Client connected to HTTPD");
     SXE_WRITE_LITERAL(c, "GET /file HTTP/1.1\r\n\r\n");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "http_respond",                     "HTTPD ready to respond");
-    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
 
     {
         char readbuf[65536];

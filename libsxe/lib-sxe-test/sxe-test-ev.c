@@ -133,7 +133,7 @@ SXE_ERROR_OUT:
     if (event != NULL) {
         tap_ev_free(event);
     }
-    free((void*)(long)(event_list));
+    free(SXE_CAST_NOCONST(void *, event_list));
     free(expected_event_names);
     SXER61("return %d", result);
     return result;

@@ -135,33 +135,33 @@ main(void)
     sxe_sendfile(client, fd, &offset, (unsigned)file_status.st_size, test_event_client_file_sent);
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_request", "Got a request event");
-    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
-    is((int)(uintptr_t)tap_ev_arg(ev, "url_length"), (int)strlen("/sxe-httpd.c"),     "Request URL has the expected length");
+    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
+    is(SXE_CAST(int, tap_ev_arg(ev, "url_length")), (int)strlen("/sxe-httpd.c"),     "Request URL has the expected length");
     is_strncmp(tap_ev_arg(ev, "url"), "/sxe-httpd.c", strlen("/sxe-httpd.c"),         "Request is for URL '/sxe-httpd.c'");
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_file_sent", "Got a file-sent event");
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, 30, &ev), "test_event_httpd_respond", "Got a respond event");
-    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     sxe_httpd_response_simple(request, 200, "OK", NULL, NULL);
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");
-    is((int)(uintptr_t)tap_ev_arg(ev, "used"), (int)strlen(TEST_200_RESPONSE),        "POST response has expected length");
+    is(SXE_CAST(int, tap_ev_arg(ev, "used")), (int)strlen(TEST_200_RESPONSE),        "POST response has expected length");
     is_strncmp(tap_ev_arg(ev, "buf"), TEST_200_RESPONSE, strlen(TEST_200_RESPONSE),   "POST response is a 200 OK");
     SXE_WRITE_LITERAL(client, "GET / HTTP/1.1\r\nHost: foobar\r\nConnection: close\r\n\r\n");
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_request", "Got a request event");
-    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
-    is((int)(uintptr_t)tap_ev_arg(ev, "url_length"), (int)strlen("/"),                "Request URL has the expected length");
+    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
+    is(SXE_CAST(int, tap_ev_arg(ev, "url_length")), (int)strlen("/"),                "Request URL has the expected length");
     is_strncmp(tap_ev_arg(ev, "url"), "/", strlen("/"),                               "Request is for URL '/'");
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_respond", "Got a respond event");
-    request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
+    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     sxe_httpd_response_simple(request, 200, "OK", NULL, "Connection", "close", NULL);
     sxe_close(request->sxe);
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");
-    is((int)(uintptr_t)tap_ev_arg(ev, "used"), (int)strlen(TEST_200_CLOSE_RESPONSE),  "GET response has expected length");
+    is(SXE_CAST(int, tap_ev_arg(ev, "used")), (int)strlen(TEST_200_CLOSE_RESPONSE),  "GET response has expected length");
     is_strncmp(tap_ev_arg(ev, "buf"), TEST_200_CLOSE_RESPONSE, strlen(TEST_200_CLOSE_RESPONSE),
                                                                                       "GET response is a 200 OK with close");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_close",     "Got a close event");

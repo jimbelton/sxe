@@ -488,7 +488,7 @@ SXE_ERROR_OUT:
     SXER81((result == SXE_POOL_LOCK_NOT_TAKEN || result == SXE_POOL_INCORRECT_STATE) ? "return %s" : "return %u",
            result == SXE_POOL_LOCK_NOT_TAKEN  ? "LOCK_NOT_TAKEN"  :
            result == SXE_POOL_INCORRECT_STATE ? "INCORRECT_STATE" :
-           (void *)(uintptr_t)result);
+           SXE_CAST(void *, result));
     return result;
 }
 

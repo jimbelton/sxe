@@ -142,8 +142,8 @@ test_expect_server_read(const char * expected_buf, unsigned expected_length)
 
     ok((ev = test_next_server_event()) != NULL,                      "Event occurred");
     is_eq(tap_ev_identifier(ev), "test_event_server_read",           "Got a server read event");
-    is((int)(uintptr_t)tap_ev_arg(ev, "length"), expected_length,    "Server received %u characters", expected_length);
-    this = (SXE *)(long)tap_ev_arg(ev, "this");
+    is(SXE_CAST(int, tap_ev_arg(ev, "length")), expected_length,     "Server received %u characters", expected_length);
+    this = SXE_CAST(SXE *, tap_ev_arg(ev, "this"));
 
     /* If the expected buffer contains a string that is shorter than the expected length, just make sure the received buffer
      * starts with the string.
@@ -211,8 +211,8 @@ test_case_happy_path(void)
     this = test_expect_server_read("Hello", 5);
     sxe_write(this, "There", 5);
     is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_read", "1st client read");
-    is((int)(uintptr_t)tap_ev_arg(ev, "length"), 5,        "Five bytes of data received on the tcp pool object");
-    is_strncmp(tap_ev_arg(ev, "buf"), "There", 5,          "Received 'There' on the tcp pool object");
+    is(SXE_CAST(int, tap_ev_arg(ev, "length")), 5,          "Five bytes of data received on the tcp pool object");
+    is_strncmp(tap_ev_arg(ev, "buf"), "There", 5,           "Received 'There' on the tcp pool object");
 
     /* Two sends at a time */
 
@@ -230,8 +230,8 @@ test_case_happy_path(void)
 
     for (i = 0; i < 2; i++) {
         is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_read", "2nd or 3rd client read");
-        is((int)(intptr_t)tap_ev_arg(ev, "length"), 3,         "3 bytes of data received on the tcp pool object");
-        is_strncmp(tap_ev_arg(ev, "buf"), "xxx", 3,            "Received 'xxx' on the tcp pool object");
+        is(SXE_CAST(int, tap_ev_arg(ev, "length")), 3,          "3 bytes of data received on the tcp pool object");
+        is_strncmp(tap_ev_arg(ev, "buf"), "xxx", 3,             "Received 'xxx' on the tcp pool object");
     }
 
     /* Shut 'er down */
@@ -384,12 +384,12 @@ test_case_max_capacity(void)
     test_check_ready_to_write(pool, 1, __func__, __LINE__);
     is(sxe_pool_tcp_write(pool, "max one", 7, buf),         SXE_RETURN_OK,               "Wrote 'max one'");
     is_eq(tap_ev_identifier(ev = test_next_server_event()), "test_event_server_read",    "1st request read by server");
-    sxe_first = (SXE *)(long)tap_ev_arg(ev, "this");
+    sxe_first = SXE_CAST(SXE *, tap_ev_arg(ev, "this"));
 
     test_check_ready_to_write(pool, 1, __func__, __LINE__);
     is(sxe_pool_tcp_write(pool, "max two", 7, buf),         SXE_RETURN_OK,               "Wrote 'max two'");
     is_eq(tap_ev_identifier(ev = test_next_server_event()), "test_event_server_read",    "2nd request read by server");
-    sxe_second = (SXE *)(long)tap_ev_arg(ev, "this");
+    sxe_second = SXE_CAST(SXE *, tap_ev_arg(ev, "this"));
 
     /* Make sure that the connections are different */
 

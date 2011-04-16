@@ -33,6 +33,7 @@
 #include "sxe-spinlock.h"
 #include "sxe-test.h"
 #include "sxe-time.h"
+#include "sxe-util.h"
 #include "tap.h"
 
 #define TEST_MMAP_INSTANCES 16
@@ -72,13 +73,13 @@ main(int argc, char ** argv)
         shared = SXE_MMAP_ADDR(&memmap);
         SXEL11("Instance %u about to set shared memory", instance);
         shared[instance] = instance;
-        SXED10((char *)(uintptr_t)SXE_MMAP_ADDR(&memmap), sizeof(long) * (TEST_MMAP_INSTANCES + 2));
+        SXED10(SXE_CAST(char *, SXE_MMAP_ADDR(&memmap)), sizeof(long) * (TEST_MMAP_INSTANCES + 2));
         SXEL11("Instance %u just     set shared memory", instance);
         SXEA11(shared[instance] == instance, "WTF! Thought I wrote %u", instance);
 
-        shared_spinlock = (SXE_SPINLOCK *)(uintptr_t)(shared + 1024);
+        shared_spinlock = SXE_CAST(SXE_SPINLOCK *, shared + 1024);
 
-        InterlockedExchangeAdd((long* )(uintptr_t)&shared[0], 1);
+        InterlockedExchangeAdd(SXE_CAST(long *, &shared[0]), 1);
         start_time = sxe_get_time_in_seconds();
 
         while (shared[0] != TEST_MMAP_INSTANCES) {
@@ -142,7 +143,7 @@ main(int argc, char ** argv)
     sxe_mmap_open(&memmap, "memmap");
     shared = SXE_MMAP_ADDR(&memmap);
 
-    shared_spinlock = (SXE_SPINLOCK *)(uintptr_t)(shared + 1024);
+    shared_spinlock = SXE_CAST(SXE_SPINLOCK *, shared + 1024);
     sxe_spinlock_construct(&shared_spinlock[0]);
     sxe_spinlock_construct(&shared_spinlock[1]);
     shared[0] = 0;

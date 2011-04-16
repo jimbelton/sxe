@@ -26,6 +26,7 @@
 #include "sxe.h"
 #include "sxe-http.h"
 #include "sxe-list.h"
+#include "sxe-util.h"
 
 /* NOTE: Order of states is important! */
 typedef enum {
@@ -87,12 +88,9 @@ typedef bool (*sxe_http_header_handler)(const char *key, unsigned key_length,
  */
 typedef void (*sxe_httpd_sendfile_handler)(struct SXE_HTTPD_REQUEST *, SXE_RETURN, void *);
 
-#define SXE_HTTPD_REQUEST_USER_DATA(request)                         (request)->user_data
-#define SXE_HTTPD_REQUEST_USER_DATA_AS_UNSIGNED(request) ((uintptr_t)((request)->user_data))
-#define SXE_HTTPD_REQUEST_SERVER_USER_DATA(request)                  (request)->server->user_data
-
-/* Pointer substraction is signed but index is unsigned */
-#define SXE_HTTPD_REQUEST_INDEX(base_ptr, object_ptr) (((uintptr_t)(object_ptr) - (uintptr_t)(base_ptr))/sizeof(SXE_HTTPD_REQUEST))
+#define SXE_HTTPD_REQUEST_USER_DATA(request)                                  (request)->user_data
+#define SXE_HTTPD_REQUEST_USER_DATA_AS_UNSIGNED(request)  SXE_CAST(uintptr_t, (request)->user_data)
+#define SXE_HTTPD_REQUEST_SERVER_USER_DATA(request)       (request)->server->user_data
 
 typedef struct SXE_HTTPD_REQUEST {
     struct SXE_HTTPD         * server;

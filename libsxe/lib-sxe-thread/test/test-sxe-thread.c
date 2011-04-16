@@ -39,7 +39,7 @@ volatile unsigned thread_indent = 0;
 volatile unsigned main_indent   = 0;
 
 static void
-test_log_line(SXE_LOG_LEVEL level, char * line)
+test_log_line(SXE_LOG_LEVEL level, const char * line)
 {
     char * tag;
 

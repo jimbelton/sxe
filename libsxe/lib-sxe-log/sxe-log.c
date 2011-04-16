@@ -182,18 +182,18 @@ sxe_log_safe_append(char * log_buffer, unsigned * index_ptr, int appended)
 #endif
 
 static void
-sxe_log_line_out_default(SXE_LOG_LEVEL level, char * line)    /* Coverage Exclusion - default version for testing */
-{                                                             /* Coverage Exclusion - default version for testing */
+sxe_log_line_out_default(SXE_LOG_LEVEL level, const char * line)    /* Coverage Exclusion - default version for testing */
+{                                                                   /* Coverage Exclusion - default version for testing */
     SXE_UNUSED_ARGUMENT(level);
 
-    fputs(line, stderr);                                      /* Coverage Exclusion - default version for testing */
-    fflush(stderr);                                           /* Coverage Exclusion - default version for testing */
+    fputs(line, stderr);                                            /* Coverage Exclusion - default version for testing */
+    fflush(stderr);                                                 /* Coverage Exclusion - default version for testing */
 }
 
-static void (*sxe_log_line_out)(SXE_LOG_LEVEL level, char * line) = &sxe_log_line_out_default;
+static void (*sxe_log_line_out)(SXE_LOG_LEVEL level, const char * line) = &sxe_log_line_out_default;
 
 void
-sxe_log_hook_line_out(void (*line_out)(SXE_LOG_LEVEL level, char *))
+sxe_log_hook_line_out(void (*line_out)(SXE_LOG_LEVEL level, const char *))
 {
     if (line_out == NULL) {
         sxe_log_line_out = sxe_log_line_out_default;
@@ -312,14 +312,12 @@ sxe_log_init(void)
 
 #ifdef _WIN32
     if ((sxe_log_tls_slot = TlsAlloc()) == TLS_OUT_OF_INDEXES) {
-        /* todo: consider changing sxe_log_line_out() to take const char * so that (char *)(long) unnecessary */
-        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, (char *)(long)"sxe_log_init: Unable to allocate thread local storage\n");
+        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, "sxe_log_init: Unable to allocate thread local storage\n");
         abort(); /* Coverage Exclusion - todo: win32 coverage: TLS */
     }
 #elif defined(__APPLE__)
     if (pthread_key_create(&sxe_log_tls_key, NULL) < 0) {
-        /* todo: consider changing sxe_log_line_out() to take const char * so that (char *)(long) unnecessary */
-        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, (char *)(long)"sxe_log_init: Unable to allocate thread local storage\n");
+        (*sxe_log_line_out)(SXE_LOG_LEVEL_FATAL, "sxe_log_init: Unable to allocate thread local storage\n");
         abort(); /* Coverage Exclusion - todo: darwin coverage: TLS */
     }
 #endif

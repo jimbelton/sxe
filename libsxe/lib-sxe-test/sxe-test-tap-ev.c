@@ -28,6 +28,7 @@
 #include "sxe-log.h"
 #include "sxe-test.h"
 #include "sxe-time.h"
+#include "sxe-util.h"
 #include "tap.h"
 
 #ifdef gettimeofday
@@ -146,14 +147,14 @@ test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, 
             goto SXE_ERROR_OUT;
         }
 
-        if (used + (unsigned)(uintptr_t)tap_ev_arg(*ev_ptr, "used") > expected_length) {
-            fail("Expected to read %u, read %u", expected_length, used + (unsigned)(uintptr_t)tap_ev_arg(*ev_ptr, "used"));
+        if (used + SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used")) > expected_length) {
+            fail("Expected to read %u, read %u", expected_length, used + SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used")));
             memcpy(&buffer[used], tap_ev_arg(*ev_ptr, "buf"), expected_length - used);
             return;
         }
 
-        memcpy(&buffer[used], tap_ev_arg(*ev_ptr, "buf"), (unsigned)(uintptr_t)tap_ev_arg(*ev_ptr, "used"));
-        used += (unsigned)(uintptr_t)tap_ev_arg(*ev_ptr, "used");
+        memcpy(&buffer[used], tap_ev_arg(*ev_ptr, "buf"), SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used")));
+        used += SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used"));
 
         if (used == expected_length) {
             pass("Read %u bytes on %s", used, who);
