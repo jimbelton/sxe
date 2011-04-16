@@ -30,10 +30,16 @@
 #include <string.h>
 #include <sys/wait.h>
 
+#ifdef __APPLE__
+#include <spawn.h>
+#endif
+
+extern char **environ;
+
 intptr_t
 spawnl(int mode, const char * command, const char * arg0, ...)
 {
-    int pid;
+    int pid, err;
     int i, nargs;
     const char **argv;
 
@@ -67,6 +73,15 @@ spawnl(int mode, const char * command, const char * arg0, ...)
         argv[i] = NULL;
     }
 
+#ifdef __APPLE__
+    err = posix_spawn(&pid, arg0, NULL, NULL, (char * const *)(intptr_t)argv, environ);
+    if (err == 0) {
+        return (intptr_t)pid;
+    }
+
+    fprintf(stderr, "Failed to execute %s: %s", command, strerror(err));
+#else
+
     /* On error or if parent, return -1 or pid
      */
     if ((pid = fork()) != 0) {
@@ -74,8 +89,11 @@ spawnl(int mode, const char * command, const char * arg0, ...)
     }
 
     execv(command, (char * const *)(intptr_t)argv);
-    fprintf(stderr, "Failed to execute %s: %s", command, strerror(errno));
+    err = errno;
+    fprintf(stderr, "Failed to execute %s: %s", command, strerror(err));
     exit(1);
+#endif
+
     return (intptr_t)-1;    /* Can't happen */
 }
 

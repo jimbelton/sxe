@@ -453,7 +453,7 @@ SXE_EARLY_OR_ERROR_OUT:
 static void
 sxe_io_cb_read(EV_P_ ev_io * io, int revents)
 {
-    SXE                    * this           = (SXE *)io;
+    SXE                    * this           = (SXE *)io->data;
     SXE_SOCKLEN_T            peer_addr_size = sizeof(this->peer_addr);
     int                      length = 0; /* keep quiet mingw32-gcc.exe */
     int                      reads_remaining_this_event = SXE_IO_CB_READ_MAXIMUM;
@@ -540,8 +540,9 @@ SXE_TRY_AND_READ_AGAIN:
                          this->path         = NULL;
                          this->flags       |=  SXE_FLAG_IS_STREAM;
 
-                         ev_io_init((struct ev_io*)&this->io, sxe_io_cb_read, this->socket, EV_READ);
-                         ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
+                         ev_io_init(&this->io, sxe_io_cb_read, this->socket, EV_READ);
+                         this->io.data = this;
+                         ev_io_start(sxe_private_main_loop, &this->io);
                          SXEL81I("Set connection to use received TCP socket=%d", this->socket);
                      }
                 }
@@ -738,7 +739,7 @@ sxe_buf_resume(SXE * this, SXE_BUF_RESUME invoke_callback)
 static void
 sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
 {
-    SXE              * this           = (SXE *)io;
+    SXE              * this           = (SXE *)io->data;
     SXE              * that           = NULL;
     SXE_SOCKET         that_socket    = SXE_SOCKET_INVALID;
     struct sockaddr_in peer_addr;
@@ -830,8 +831,9 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
         memcpy(&that->peer_addr, &peer_addr, sizeof(that->peer_addr));
 
         SXEL82I("add accepted connection to watch list, socket==%d, socket_as_fd=%d", that_socket, that->socket_as_fd);
-        ev_io_init((struct ev_io*)&that->io, sxe_io_cb_read, that->socket_as_fd, EV_READ);
-        ev_io_start(sxe_private_main_loop, (struct ev_io*)&that->io);
+        ev_io_init(&that->io, sxe_io_cb_read, that->socket_as_fd, EV_READ);
+        that->io.data = that;
+        ev_io_start(sxe_private_main_loop, &that->io);
         sxe_stat_total_accept++;
 
         if (that->in_event_connected != NULL) {
@@ -855,7 +857,7 @@ SXE_EARLY_OUT:
 static void
 sxe_io_cb_connect(EV_P_ ev_io * io, int revents)
 {
-    SXE         * this                    = (SXE *)io;
+    SXE         * this                    = (SXE *)io->data;
     int           error_indication;
     SXE_SOCKLEN_T error_indication_length = sizeof(error_indication);
 
@@ -882,6 +884,7 @@ sxe_io_cb_connect(EV_P_ ev_io * io, int revents)
     SXEL81I("setup read event to call sxe_io_cb_read callback (socket==%d)", this->socket);
     ev_io_stop(sxe_private_main_loop, &this->io);
     ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
+    this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
 
     SXEL80I("connection complete; notify sxe application");
@@ -1018,8 +1021,9 @@ sxe_listen_plus(SXE * this, unsigned flags)
     SXEL86I("connection id of new listen socket is %d, socket_as_fd=%d, backlog=%d, address=%s:%hu, path=%s", this->id,
             this->socket_as_fd, sxe_listen_backlog, inet_ntoa(this->local_addr.sin_addr), ntohs(this->local_addr.sin_port), this->path);
 
-    ev_io_init((struct ev_io*)&this->io, ((this->flags & SXE_FLAG_IS_STREAM) ? sxe_io_cb_accept : sxe_io_cb_read), this->socket_as_fd, EV_READ);
-    ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
+    ev_io_init(&this->io, ((this->flags & SXE_FLAG_IS_STREAM) ? sxe_io_cb_accept : sxe_io_cb_read), this->socket_as_fd, EV_READ);
+    this->io.data = this;
+    ev_io_start(sxe_private_main_loop, &this->io);
 
     result = SXE_RETURN_OK;
 
@@ -1178,7 +1182,8 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
      */
 
     SXEL82I("add connection to watch list, socket==%d, socket_as_fd=%d", that_socket, _open_osfhandle(that_socket, 0));
-    ev_io_init((struct ev_io*)&this->io, sxe_io_cb_connect, _open_osfhandle(that_socket, 0), EV_WRITE);
+    ev_io_init(&this->io, sxe_io_cb_connect, _open_osfhandle(that_socket, 0), EV_WRITE);
+    this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
 
     if ((connect(that_socket, peer_address, peer_address_length) == SXE_SOCKET_ERROR_OCCURRED)
@@ -1375,7 +1380,7 @@ static void
 sxe_io_cb_send(EV_P_ ev_io * io, int revents) /* Coverage Exclusion - todo: win32 coverage */
 {
     SXE_RETURN result = SXE_RETURN_OK; /* Coverage Exclusion - todo: win32 coverage */
-    SXE * this = (SXE *)io; /* Coverage Exclusion - todo: win32 coverage */
+    SXE * this = (SXE *)io->data; /* Coverage Exclusion - todo: win32 coverage */
     SXE_UNUSED_PARAMETER(revents);
 
 #if EV_MULTIPLICITY
@@ -1401,6 +1406,7 @@ sxe_io_cb_send(EV_P_ ev_io * io, int revents) /* Coverage Exclusion - todo: win3
     SXEL80I("Re-enabling read events on this SXE");
     ev_io_stop(sxe_private_main_loop, &this->io); /* Coverage Exclusion - todo: win32 coverage */
     ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
+    this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
 
     if (this->out_event_written) { /* Coverage Exclusion - todo: win32 coverage */
@@ -1438,6 +1444,7 @@ sxe_send(SXE * this, const void * buf, unsigned size, SXE_OUT_EVENT_WRITTEN on_c
     this->out_event_written = on_complete; /* Coverage Exclusion - todo: win32 coverage */
     ev_io_stop(sxe_private_main_loop, &this->io);
     ev_io_init(&this->io, sxe_io_cb_send, this->socket_as_fd, EV_WRITE);
+    this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
 
 SXE_EARLY_OUT:
@@ -1449,7 +1456,7 @@ static void
 sxe_io_cb_notify_writable(EV_P_ ev_io * io, int revents)
 {
     SXE_OUT_EVENT_WRITTEN cb;
-    SXE * this = (SXE *)io;
+    SXE * this = (SXE *)io->data;
     SXE_UNUSED_PARAMETER(revents);
 #if EV_MULTIPLICITY
     SXE_UNUSED_PARAMETER(loop);
@@ -1458,6 +1465,7 @@ sxe_io_cb_notify_writable(EV_P_ ev_io * io, int revents)
     SXEL80I("Re-enabling read events on this SXE");
     ev_io_stop(sxe_private_main_loop, &this->io);
     ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
+    this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
 
     if (this->out_event_written) {
@@ -1475,6 +1483,7 @@ sxe_notify_writable(SXE * this, SXE_OUT_EVENT_WRITTEN writable_cb)
     this->out_event_written = writable_cb;
     ev_io_stop(sxe_private_main_loop, &this->io);
     ev_io_init(&this->io, sxe_io_cb_notify_writable, this->socket_as_fd, EV_WRITE);
+    this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
     SXER80I("return");
 }
@@ -1483,7 +1492,7 @@ sxe_notify_writable(SXE * this, SXE_OUT_EVENT_WRITTEN writable_cb)
 static void
 sxe_io_cb_sendfile(EV_P_ ev_io * io, int revents)
 {
-    SXE * this = (SXE *)io;
+    SXE * this = (SXE *)io->data;
     SXE_UNUSED_PARAMETER(loop);
     SXE_UNUSED_PARAMETER(revents);
 
@@ -1553,6 +1562,7 @@ SXE_PARTIAL_WRITE:
 
         ev_io_stop(sxe_private_main_loop, &this->io);
         ev_io_init(&this->io, sxe_io_cb_sendfile, this->socket_as_fd, EV_WRITE);
+        this->io.data = this;
         ev_io_start(sxe_private_main_loop, &this->io);
         goto SXE_EARLY_OUT;
     }
@@ -1572,6 +1582,7 @@ SXE_PARTIAL_WRITE:
 
     ev_io_stop(sxe_private_main_loop, &this->io);
     ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
+    this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
 
 SXE_CLEANUP_OUT:
@@ -1642,8 +1653,10 @@ sxe_close(SXE * this)
         CLOSESOCKET(this->socket);
 #ifdef EV_MULTIPLICITY
         ev_io_stop(sxe_private_main_loop, &this->io);
+        ev_async_stop(sxe_private_main_loop, &this->async);
 #else
         ev_io_stop(&this->io);
+        ev_io_stop(&this->async);
 #endif
 
         this->socket = SXE_SOCKET_INVALID;
@@ -1657,4 +1670,78 @@ SXE_EARLY_OUT:
     SXER81I("return %s", sxe_return_to_string(result));
     return result;
 }
+
+#ifndef _WIN32
+static void
+sxe_socketpair_connected_cb(EV_P_ struct ev_async *w, int revents)
+{
+    SXE               * this = (SXE *)w->data;
+
+    SXE_UNUSED_PARAMETER(revents);
+
+    SXEE82I("sxe_socketpair_connected_cb(w=%p,revents=%d)", w, revents);
+
+    ev_async_stop(EV_A_ &this->async);
+
+    if (this->in_event_connected) {
+        (*this->in_event_connected)(this);
+    }
+
+    ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
+    this->io.data = this;
+    ev_io_start(EV_A_ &this->io);
+
+    SXER80I("return");
+}
+
+SXE *
+sxe_new_socketpair(SXE                    * this              ,
+                   int                    * out_pairedsocket  ,
+                   SXE_IN_EVENT_CONNECTED   in_event_connected,
+                   SXE_IN_EVENT_READ        in_event_read     ,
+                   SXE_IN_EVENT_CLOSE       in_event_close    )
+{
+    SXE                * keeper = NULL;
+    struct sockaddr_in   local_addr;
+    int                  pair[2];
+
+    SXEE82I("sxe_new_socketpair(in_event_read=%p,in_event_close=%p)",
+            in_event_read, in_event_close);
+
+    SXEA12(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) >= 0, "socketpair() failed: (%d) %s", errno, strerror(errno));
+
+    memset(&local_addr, 0, sizeof local_addr);
+    keeper = sxe_new_internal(this, &local_addr, in_event_connected, in_event_read, in_event_close, SXE_TRUE, NULL);
+
+    if (keeper) {
+        int flags;
+
+        *out_pairedsocket = pair[1];
+
+        keeper->socket = pair[0];
+        keeper->socket_as_fd = _open_osfhandle(pair[0], 0);
+
+        sxe_socket_set_nonblock(pair[0], 1);
+#ifdef __APPLE__
+        /* Prevent firing SIGPIPE */
+        flags = 1;
+        SXEV83I(setsockopt(pair[0], SOL_SOCKET, SO_NOSIGPIPE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
+                >= 0, "socket=%d: couldn't set SO_NOSIGPIPE flag: (%d) %s", pair[0], sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+#endif
+
+        /* Arrange to call sxe_socketpair_connected_cb() at the next loop. */
+        ev_async_init(&keeper->async, sxe_socketpair_connected_cb);
+        keeper->async.data = keeper;
+        ev_async_start(sxe_private_main_loop, &keeper->async);
+        ev_async_send(sxe_private_main_loop, &keeper->async);
+    }
+    else {                      /* COVERAGE EXCLUSION */
+        close(pair[0]);         /* COVERAGE EXCLUSION */
+        close(pair[1]);         /* COVERAGE EXCLUSION */
+    }                           /* COVERAGE EXCLUSION */
+
+    SXER82I("return keeper=%p // out_pairedsocket=%d", keeper, pair[1]);
+    return keeper;
+}
+#endif
 

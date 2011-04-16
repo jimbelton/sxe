@@ -155,7 +155,7 @@ main(int argc, char ** argv)
 #ifdef WIN32
     plan_tests(2);
 #else
-    plan_tests(29);
+    plan_tests(26);
 #endif
 
     sxe_register(1, 0);   /* One SXE object to allow only a single simultaneous spawn in this test */
@@ -167,9 +167,12 @@ main(int argc, char ** argv)
 #else
     /* Tests with a non-existent command */
     result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
+#ifdef __APPLE__
+    is(result,                              SXE_RETURN_ERROR_COMMAND_NOT_RUN, "'Succeeded' in spawning non-existent-command");
+
+#else
     is(result,                              SXE_RETURN_OK,                    "'Succeeded' in spawning non-existent-command");
 
-    skip_start(TEST_ON_WINDOWS, 26, "not implemented on Windows yet");
     result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
     ok(result !=                            SXE_RETURN_OK,                    "Failed to spawn a second non-existent-command");
 
@@ -180,6 +183,7 @@ main(int argc, char ** argv)
     event = test_tap_ev_shift_wait(TEST_WAIT);
     is_eq(tap_ev_identifier(event),         "test_event_close",               "Got the first close event");
     tap_ev_free(event);
+#endif
 
     SXEL60("----------------------------------------");
     SXEL60("Make sure spawned program blocks in read");
@@ -253,7 +257,7 @@ main(int argc, char ** argv)
         usleep(10000); /* sleep a hundredth of a second */
         total_seconds_waited += 0.01;
         waitpid(pid, &status, WNOHANG);
-        SXEL61("Spawned child: has %s", WIFEXITED(status) ? "exited" : "not exited yet");
+        SXEL62("Spawned child[%d]: has %s", pid, WIFEXITED(status) ? "exited" : "not exited yet");
     } while(!WIFEXITED(status) && (total_seconds_waited < 2.0));     /* don't wait for more than 2 seconds */
 
     SXEL61("Spawned child: total_seconds_waited=%.2f", total_seconds_waited);
@@ -263,7 +267,6 @@ main(int argc, char ** argv)
     /* TODO - Spawn test: Make sure that we can spawn multiple processes */
     /* TODO - Spawn test: Test child is killed when ctrl-c used on spawn parent */
 
-    skip_end;
 #endif
     return exit_status();
 }

@@ -52,6 +52,7 @@ typedef void (*SXE_OUT_EVENT_WRITTEN )(struct SXE *, SXE_RETURN);
 /* SXE object. Used for "Accept Sockets", "Connection Sockets", and UDP ports.
  */
 typedef struct SXE {
+    struct ev_async        async;
     struct ev_io           io;
     struct sockaddr_in     local_addr;           /* if ip:port     socket                                                 */
     struct sockaddr_in     peer_addr;            /* if ip:port     socket                                                 */

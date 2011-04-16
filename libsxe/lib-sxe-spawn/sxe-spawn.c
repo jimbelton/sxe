@@ -25,10 +25,16 @@
 #include <limits.h>
 #include <unistd.h>             /* misc. UNIX functions         */
 
+#ifdef __APPLE__
+#include <spawn.h>
+#endif
+
 #include "sxe.h"
 #include "sxe-log.h"
 #include "sxe-spawn.h"
 #include "sxe-util.h"
+
+extern char **environ;
 
 SXE_RETURN
 sxe_spawn_init(void)
@@ -78,25 +84,55 @@ sxe_spawn(SXE                    * this,
 {
     SXE_RETURN         result      = SXE_RETURN_ERROR_INTERNAL;
     char               path[PATH_MAX];
-    struct sockaddr_in addr;
     int                sock;
-    int                ret;
+
+    SXE_UNUSED_PARAMETER(this);
 
     SXEE67I("sxe_spawn(that=%p, command=%s, arg1=%s, arg2=%s, in_event_connected=%p, in_event_read=%p, in_event_close=%p)",
                        that,    command,    arg1,    arg2,    in_event_connected,    in_event_read,    in_event_close);
 
     SXEL60I("creating socket pair");
 
-    if ((that->sxe = sxe_new_tcp(NULL, "INADDR_ANY", 0, in_event_connected, in_event_read, in_event_close)) == NULL)
+    if ((that->sxe = sxe_new_socketpair(NULL, &sock, in_event_connected, in_event_read, in_event_close)) == NULL)
+    {                                                                                   /* COVERAGE EXCLUSION */
+        SXEL21("Couldn't allocate SXE to spawn the '%s' command", command);             /* COVERAGE EXCLUSION */
+        goto SXE_ERROR_OUT;                                                             /* COVERAGE EXCLUSION */
+    }                                                                                   /* COVERAGE EXCLUSION */
+
+    /* Close SXE's end of the socket on exec, so that child process will exit
+     * when we sxe_close(that->sxe) */
+    fcntl(that->sxe->socket_as_fd, F_SETFD, 1);
+
+#ifdef __APPLE__
     {
-        SXEL21("Couldn't allocate SXE to spawn the '%s' command", command);
-        goto SXE_ERROR_OUT;
+        int err;
+        posix_spawn_file_actions_t fa;
+        const char *argv[] = { command, arg1, arg2, NULL };
+
+        posix_spawn_file_actions_init(&fa);
+        posix_spawn_file_actions_addclose(&fa, 0);
+        posix_spawn_file_actions_addclose(&fa, 1);
+        posix_spawn_file_actions_adddup2(&fa, sock, 0);
+        posix_spawn_file_actions_adddup2(&fa, sock, 1);
+        posix_spawn_file_actions_addclose(&fa, sock);
+
+        err = posix_spawnp(&that->pid, command, &fa, NULL, (char * const *)(intptr_t)argv, environ);
+        if (err != 0) {
+            SXEL13I("posix_spawnp failed to run '%s': %d:%s\n", command, err, strerror(err));
+            result = SXE_RETURN_ERROR_COMMAND_NOT_RUN;
+            SXE_EVENT_CLOSE(that->sxe) = NULL;
+            sxe_close(that->sxe);
+        }
+        else {
+            result = SXE_RETURN_OK;
+        }
+
+        posix_spawn_file_actions_destroy(&fa);
+
+        err = close(sock);
+        SXEA61I(err != -1, "Can't close socket to self: %s", strerror(errno));
     }
-
-    result = sxe_listen_oneshot(that->sxe);
-    SXEA62I(result == SXE_RETURN_OK, "One-shot listen on parent SXE %u failed: %s", SXE_ID(that->sxe), sxe_return_to_string(result));
-    SXEL61I("Listening for a one-shot SXE on port %hu", SXE_LOCAL_PORT(that->sxe));
-
+#else
     switch (that->pid = fork()) {
     case -1:
         SXEA10I(0, "Aborting: fork failed");    /* Intentionally aborting at level 1; don't change to level 6         */
@@ -104,14 +140,7 @@ sxe_spawn(SXE                    * this,
 
     case 0:
         SXEL60I("Spawned child process");
-        memcpy(&addr, SXE_LOCAL_ADDR(that->sxe), sizeof(addr));
         sxe_close(that->sxe);
-        SXEL62I("Connecting spawned child to %s:%hu", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
-        sock = socket(AF_INET, SOCK_STREAM, 0);
-        SXEA61I(sock != -1, "Unable to allocate a socket to complete connection: %s", strerror(errno));
-        ret  = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
-        SXEA61I(ret  != -1, "Can't connect back from child process: %s",              strerror(errno));
-        SXEL61I("Child process: redirect stdout/stderr to associated socket fd=%d", sock);
         close(0);    /* Should not need this (see dup2 manual page) */
         close(1);    /* Should not need this (see dup2 manual page) */
         SXEV61(dup2(sock, 0), == 0, "Couldn't duplicate child socket to STDIN: %s",  strerror(errno));
@@ -120,22 +149,29 @@ sxe_spawn(SXE                    * this,
         execlp(command, command, arg1, arg2, NULL);
         SXEL22I("Child process: failed to execute '%s' in directory '%s'", command, getcwd(path, sizeof(path)));
         exit(-1);
+
+    default:
+        result = SXE_RETURN_OK;
+        break;
     }
+#endif
 
-    strncpy(        path, command, sizeof(path) - 1);
+    if (result == SXE_RETURN_OK) {
+        strncpy(        path, command, sizeof(path) - 1);
 
-    if (arg1) {
-        strncat(    path, " ",     sizeof(path) - 1);
-        strncat(    path, arg1,    sizeof(path) - 1);
+        if (arg1) {
+            strncat(    path, " ",     sizeof(path) - 1);
+            strncat(    path, arg1,    sizeof(path) - 1);
 
-        if (arg2) {
-            strncat(path, " ",     sizeof(path) - 1);    /* Coverage exclusion - logging spawn of command with two arguments */
-            strncat(path, arg2,    sizeof(path) - 1);    /* Coverage exclusion - logging spawn of command with two arguments */
+            if (arg2) {
+                strncat(path, " ",     sizeof(path) - 1);    /* Coverage exclusion - logging spawn of command with two arguments */
+                strncat(path, arg2,    sizeof(path) - 1);    /* Coverage exclusion - logging spawn of command with two arguments */
+            }
         }
-    }
 
-    SXEL63I("Spawned '%s': pid %d (0x%x)", path, that->pid, that->pid);
-    SXE_USER_DATA_AS_INT(that->sxe) = that->pid;    /* Give SXE user access to the pid */
+        SXEL63I("Spawned '%s': pid %d (0x%x)", path, that->pid, that->pid);
+        SXE_USER_DATA_AS_INT(that->sxe) = that->pid;    /* Give SXE user access to the pid */
+    }
 
 SXE_EARLY_OR_ERROR_OUT:
     SXER61I("return %s", sxe_return_to_string(result));
