@@ -540,6 +540,7 @@ SXE_TRY_AND_READ_AGAIN:
                          this->path         = NULL;
                          this->flags       |=  SXE_FLAG_IS_STREAM;
 
+                         ev_async_init(&this->async, NULL);
                          ev_io_init(&this->io, sxe_io_cb_read, this->socket, EV_READ);
                          this->io.data = this;
                          ev_io_start(sxe_private_main_loop, &this->io);
@@ -831,6 +832,7 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
         memcpy(&that->peer_addr, &peer_addr, sizeof(that->peer_addr));
 
         SXEL82I("add accepted connection to watch list, socket==%d, socket_as_fd=%d", that_socket, that->socket_as_fd);
+        ev_async_init(&that->async, NULL);
         ev_io_init(&that->io, sxe_io_cb_read, that->socket_as_fd, EV_READ);
         that->io.data = that;
         ev_io_start(sxe_private_main_loop, &that->io);
@@ -1021,6 +1023,7 @@ sxe_listen_plus(SXE * this, unsigned flags)
     SXEL86I("connection id of new listen socket is %d, socket_as_fd=%d, backlog=%d, address=%s:%hu, path=%s", this->id,
             this->socket_as_fd, sxe_listen_backlog, inet_ntoa(this->local_addr.sin_addr), ntohs(this->local_addr.sin_port), this->path);
 
+    ev_async_init(&this->async, NULL);
     ev_io_init(&this->io, ((this->flags & SXE_FLAG_IS_STREAM) ? sxe_io_cb_accept : sxe_io_cb_read), this->socket_as_fd, EV_READ);
     this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
@@ -1182,6 +1185,7 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
      */
 
     SXEL82I("add connection to watch list, socket==%d, socket_as_fd=%d", that_socket, _open_osfhandle(that_socket, 0));
+    ev_async_init(&this->async, NULL);
     ev_io_init(&this->io, sxe_io_cb_connect, _open_osfhandle(that_socket, 0), EV_WRITE);
     this->io.data = this;
     ev_io_start(sxe_private_main_loop, &this->io);
@@ -1687,8 +1691,6 @@ sxe_socketpair_connected_cb(EV_P_ struct ev_async *w, int revents)
         (*this->in_event_connected)(this);
     }
 
-    ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
-    this->io.data = this;
     ev_io_start(EV_A_ &this->io);
 
     SXER80I("return");
@@ -1732,6 +1734,9 @@ sxe_new_socketpair(SXE                    * this              ,
         /* Arrange to call sxe_socketpair_connected_cb() at the next loop. */
         ev_async_init(&keeper->async, sxe_socketpair_connected_cb);
         keeper->async.data = keeper;
+        ev_io_init(&keeper->io, sxe_io_cb_read, keeper->socket_as_fd, EV_READ);
+        keeper->io.data = keeper;
+
         ev_async_start(sxe_private_main_loop, &keeper->async);
         ev_async_send(sxe_private_main_loop, &keeper->async);
     }
