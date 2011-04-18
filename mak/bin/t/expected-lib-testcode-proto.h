@@ -5,8 +5,26 @@
 extern "C" {
 #endif
 
+#if !defined(MOCK) && !defined(DEBUG)
 inline int inlines_need_prototypes(void * why_i_dont_know) ;
+#else if defined(DEBUG)
+inline int inlines_need_prototypes_wrap__(void * why_i_dont_know) ;
+#define inlines_need_prototypes inlines_need_prototypes_wrap__
+#else
+extern inline int (*inlines_need_prototypes_mock__)(void * why_i_dont_know) ;
+#define inlines_need_prototypes (*inlines_need_prototypes_mock__)
+#endif
+
+#if !defined(MOCK) && !defined(DEBUG)
 int real_function(void) ;
+#else if defined(DEBUG)
+int real_function_wrap__(void) ;
+#define real_function real_function_wrap__
+#else
+extern int (*real_function_mock__)(void) ;
+#define real_function (*real_function_mock__)
+#endif
+
 
 #ifdef __cplusplus
 }
