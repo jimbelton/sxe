@@ -234,6 +234,8 @@ main(void)
     offset = 0;
     is(sxe_sendfile(client, in_fd, &offset, test_buf_size, test_event_sendfile_complete), SXE_RETURN_ERROR_WRITE_FAILED,
        "sxe_sendfile() returns ERROR_WRITE_FAILED when sendfile fails");
+
+    unlink(tempfile);
 #endif
 
     return exit_status();
