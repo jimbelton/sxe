@@ -68,21 +68,6 @@ typedef void (*sxe_httpd_body_handler)(struct SXE_HTTPD_REQUEST *, const char *c
 typedef void (*sxe_httpd_respond_handler)(struct SXE_HTTPD_REQUEST *);
 typedef void (*sxe_httpd_close_handler)(struct SXE_HTTPD_REQUEST *);
 
-/* Invoked from sxe_http_header_parse(buffer, length, callback, user_data) for
- * each HTTP header found in buffer.
- *
- * NOTE: to stop the callback from being invoked again, return false. The
- * entire header block will still be checked, and MUST contain everything from
- * the first header to the last byte before the terminating \r\n\r\n.
- *
- * NOTE: the callback is invoked as valid headers are found. Later, the header
- * may be found to be invalid -- it is the caller's responsibility to undo any
- * damage if sxe_http_header_parse() returns false.
- */
-typedef bool (*sxe_http_header_handler)(const char *key, unsigned key_length,
-                                        const char *val, unsigned val_length,
-                                        void *user_data);
-
 /* This handler is invoked when sxe_httpd_response_sendfile() has finished
  * sending the requested amount of data.
  */
