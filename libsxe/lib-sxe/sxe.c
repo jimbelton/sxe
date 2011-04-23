@@ -1418,7 +1418,7 @@ sxe_io_cb_send(EV_P_ ev_io * io, int revents) /* Coverage Exclusion - todo: win3
         this->out_event_written = NULL;
     }
 
-SXE_EARLY_OUT:
+SXE_EARLY_OUT: /* Coverage Exclusion - todo: win32 coverage */
     SXER80I("return");
 } /* Coverage Exclusion - todo: win32 coverage */
 
