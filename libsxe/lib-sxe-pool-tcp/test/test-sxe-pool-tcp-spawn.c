@@ -222,7 +222,7 @@ test_case_initialization_succeeds(void)
     write_data = "echo\n";
     sxe_pool_tcp_queue_ready_to_write_event(pool);    /* Should not be called back */
     event = test_tap_ev_shift_wait(5);
-    this  = SXE_CAST(SXE *, tap_ev_arg(event, "this"));
+    this  = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
     is_eq(tap_ev_identifier(event), "test_event_read",                               "1st program sent data");
     is_strncmp(tap_ev_arg(event, "buf"), "\n", tap_ev_arg(event, "length"),          "1st program sent a newline");
     event = test_tap_ev_shift_wait(5);
@@ -232,7 +232,7 @@ test_case_initialization_succeeds(void)
     /* Mark both processes as initialized and make sure we can perform a transaction.
      */
     sxe_pool_tcp_initialized(this);
-    this  = SXE_CAST(SXE *, tap_ev_arg(event, "this"));
+    this  = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
     sxe_pool_tcp_initialized(this);
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_ready_to_write", "1st program is ready to write to");
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_read",           "1st program replied with echo");

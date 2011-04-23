@@ -101,7 +101,7 @@ main(int argc, char *argv[])
             SXEL11("Write text  #%2d - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -", j);
             is(result = sxe_write(connectors[j], message, 5), SXE_RETURN_OK,                    "wrote message to connector");
             is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_read",      "got a read event");
-            connectees[j] = SXE_CAST(SXE *, tap_ev_arg(event, "this"));
+            connectees[j] = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
             is(tap_ev_arg(event, "length")            , 5,                                      "read expected bytes");
             is_strncmp(SXE_BUF(connectees[j]), message, 5,                                      "message in buffer");
             SXE_BUF_CLEAR(connectees[j]);

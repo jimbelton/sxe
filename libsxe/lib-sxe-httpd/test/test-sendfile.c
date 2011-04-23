@@ -108,7 +108,7 @@ main(void)
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "client_connect",                   "Client connected to HTTPD");
     SXE_WRITE_LITERAL(c, "GET /file HTTP/1.1\r\n\r\n");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "http_respond",                     "HTTPD ready to respond");
-    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
+    request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
 
     {
         char readbuf[65536];

@@ -193,7 +193,7 @@ main(void)
     is_strncmp(buffer, "12345678\r\n", SXE_LITERAL_LENGTH("12345678\r\n"),                    "HTTPD: read correct body");
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",            "HTTPD: respond event");
-    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
+    request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     SXE_WRITE_LITERAL(c, "GET ");    /* Send the beginning of the next message           */
     test_ev_loop_wait(TEST_WAIT);    /* Try to make sure it's received before responding */
     sxe_httpd_response_simple(request, 200, "OK", "abcd", NULL);
@@ -213,7 +213,7 @@ main(void)
      */
     SXE_WRITE_LITERAL(c, "/this/is/a/URL HTTP/1.1\r\nConnection: whatever\r\nHost: interesting\r\nContent-Length: 10\r\n\r\n12345678\r\n");
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",            "HTTPD: respond event");
-    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
+    request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     sxe_httpd_response_raw(request, EXPECTED_RESPONSE, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE));
     sxe_httpd_response_end(request);
     test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, c, "client_read", buffer, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE), "client");

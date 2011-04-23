@@ -217,7 +217,7 @@ main(void)
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_request",                   "HTTPD got request event");
     is_strncmp(TEST_URL, (const char *)tap_ev_arg(ev, "url"), tap_ev_arg(ev, "url_len"),   "Got URL '" TEST_URL "'");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_respond",                   "HTTPD ready for response");
-    request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
+    request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     sxe_httpd_response_simple(request, 200, "OK", "Pong!\r\n", 0);
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",           "Client got read event");
     is_strncmp(tap_ev_arg(ev, "buf"), TEST_HTTP_RESPONSE, tap_ev_arg(ev, "used"),          "Got response '" TEST_HTTP_RESPONSE "'");

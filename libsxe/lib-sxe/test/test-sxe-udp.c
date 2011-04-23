@@ -134,7 +134,7 @@ test_case_sxe_udp_both_ends(void)
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_read", "Got a read event");
     is(tap_ev_arg(ev, "this"),   server,                                  "...on the server");
     is(tap_ev_arg(ev, "length"), SXE_LITERAL_LENGTH("HELo\n"),            "'length' is %u", (unsigned)SXE_LITERAL_LENGTH("HELo\n"));
-    is(SXE_CAST(unsigned, tap_ev_arg(ev, "used")),
+    is(SXE_CAST_NOCONST(unsigned, tap_ev_arg(ev, "used")),
                                  SXE_LITERAL_LENGTH("HELo\n"),            "'used' is %u",   (unsigned)SXE_LITERAL_LENGTH("HELo\n"));
     is_eq(tap_ev_arg(ev, "buf"), "HELo\n",                                "'buf' is 'HELo\\n'");
     is(tap_ev_length(), 0,                                                "No more events in the queue");

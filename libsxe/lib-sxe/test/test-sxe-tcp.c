@@ -108,7 +108,7 @@ main(int argc, char *argv[])
      */
     is(result = sxe_write(connector, "HELO", 4), SXE_RETURN_OK,                         "wrote 'HELO' to connector");
     is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_read",      "got a read event");
-    connectee = SXE_CAST(SXE *, tap_ev_arg(event, "this"));
+    connectee = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
     is(tap_ev_arg(event, "length"), 4,                                                  "read a four byte value");
     is(SXE_BUF_USED(connectee),     4,                                                  "four bytes in buffer");
     is_strncmp(SXE_BUF(connectee), "HELO", 4,                                           "'HELO' in buffer");
@@ -170,7 +170,7 @@ main(int argc, char *argv[])
     is(sxe_write(connector, "s test gets", SXE_LITERAL_LENGTH("s test gets")), SXE_RETURN_OK, "Sent 's test gets'");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &event), "test_event_read",            "Got a read event");
     is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("s test gets"),                  "Got %u characters", (unsigned)SXE_LITERAL_LENGTH("s test gets"));
-    connectee = SXE_CAST(SXE *, tap_ev_arg(event, "this"));
+    connectee = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
     buf       = tap_ev_arg(event, "buf");
     is(sxe_strnchr(buf, ' ', SXE_BUF_USED(connectee)), &buf[4],                         "Found a ' ' at offset 4");
     sxe_buf_consume(connectee, 5);

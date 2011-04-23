@@ -115,7 +115,7 @@ sxe_http_message_set_ignore_line(SXE_HTTP_MESSAGE * message) {
 
 static inline void
 sxe_http_message_buffer_shift_ignore_length(SXE_HTTP_MESSAGE * message) {
-    memmove(SXE_CAST(char *, message->buffer), message->buffer + message->ignore_length, message->buffer_length);
+    memmove(SXE_CAST_NOCONST(char *, message->buffer), message->buffer + message->ignore_length, message->buffer_length);
 }
 
 #include "lib-sxe-http-proto.h"
