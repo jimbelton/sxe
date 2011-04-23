@@ -109,6 +109,7 @@ main(void)
     tap_ev      ev;
     unsigned    x       = 0;
     char        counter = 0;
+    SXE_RETURN  send_result;
 
     sxe_log_level = SXE_LOG_LEVEL_LIBRARY_TRACE;
     plan_tests(31);
@@ -153,13 +154,13 @@ main(void)
     }
 
     test_buf_length = 0;
-#ifdef _WIN32
-    is(sxe_send(client, test_data_2, sizeof(test_data_2), test_event_send_complete), SXE_RETURN_OK,
-       "Second - sxe_send() sends the whole buffer in the first write");
-#else
-    is(sxe_send(client, test_data_2, sizeof(test_data_2), test_event_send_complete), SXE_RETURN_IN_PROGRESS,
-       "Second - sxe_send() can't send the whole buffer in the first write");
-#endif
+    send_result = sxe_send(client, test_data_2, sizeof(test_data_2), test_event_send_complete);
+    if (send_result != SXE_RETURN_OK && send_result != SXE_RETURN_IN_PROGRESS) {
+        fail("send_result neither 'OK' nor 'IN_PROGRESS': %s", sxe_return_to_string(send_result));
+    }
+    else {
+        pass("send_result either OK or IN_PROGRESS");
+    }
 
     x = 0;
     while (x < sizeof(test_data_2)) {
@@ -172,14 +173,14 @@ main(void)
     is(x, sizeof(test_data_2),                "Second - Received all the data");
     is(tap_ev_queue_length(tap_q_server),  0, "Second - There are no pending server events at this point");
 
-#ifdef _WIN32
-    ok(1, "No call back needed (windows only)");
-    ok(1, "No call back needed (windows only)");
-#else
-    is_eq(test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev), "test_event_send_complete",
-          "Second - Called back after sxe_send() completed");
-    is((SXE_RETURN)tap_ev_arg(ev, "sxe_return"), SXE_RETURN_OK, "Second - sxe_send() was successful");
-#endif
+    if (send_result == SXE_RETURN_OK) {
+        skip(2, "No call back needed: sxe_send() returned immediately");
+    }
+    else {
+        is_eq(test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev), "test_event_send_complete",
+              "Second - Called back after sxe_send() completed");
+        is((SXE_RETURN)tap_ev_arg(ev, "sxe_return"), SXE_RETURN_OK, "Second - sxe_send() was successful");
+    }
 
     is(tap_ev_queue_length(tap_q_client),  0, "Second - There are no pending client events at this point");
 
