@@ -49,6 +49,16 @@ typedef void (*SXE_IN_EVENT_CLOSE)(    struct SXE *            );
 typedef void (*SXE_IN_EVENT_CONNECTED)(struct SXE *            );
 typedef void (*SXE_OUT_EVENT_WRITTEN )(struct SXE *, SXE_RETURN);
 
+/* SXE_BUFFER object. Can be used to send multiple buffers in sequence using
+ * sxe_send_buffers(). Equivalent to calling sxe_write() on each buffer in
+ * turn, but allows the caller to prepare several buffers. */
+typedef struct SXE_BUFFER {
+    const char        * ptr;
+    size_t              len;
+    size_t              sent;
+    struct SXE_BUFFER * next;
+} SXE_BUFFER;
+
 /* SXE object. Used for "Accept Sockets", "Connection Sockets", and UDP ports.
  */
 typedef struct SXE {
@@ -73,9 +83,7 @@ typedef struct SXE {
     int                    sendfile_in_fd;
     unsigned               sendfile_bytes;
     off_t                * sendfile_offset;
-    const char           * send_buf;
-    unsigned               send_buf_len;
-    unsigned               send_buf_written;
+    SXE_BUFFER             send_buf;
     union {
        void            *   as_ptr;
        intptr_t            as_int;

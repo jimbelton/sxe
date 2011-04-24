@@ -1381,77 +1381,87 @@ SXE_EARLY_OR_ERROR_OUT:
 }
 
 static void
-sxe_io_cb_send(EV_P_ ev_io * io, int revents) /* Coverage Exclusion - todo: win32 coverage */
+sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents)
 {
-    SXE_RETURN result = SXE_RETURN_OK; /* Coverage Exclusion - todo: win32 coverage */
-    SXE * this = (SXE *)io->data; /* Coverage Exclusion - todo: win32 coverage */
+    SXE_RETURN result = SXE_RETURN_OK;
+    SXE * this = (SXE *)io->data;
     SXE_UNUSED_PARAMETER(revents);
 
 #if EV_MULTIPLICITY
     SXE_UNUSED_PARAMETER(loop);
 #endif
 
-    SXEE83I("sxe_io_cb_send(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    SXEE83I("sxe_io_cb_send_buffers(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    result = sxe_send_buffers(this, &this->send_buf, this->out_event_written);
 
-    if (this->send_buf_written != this->send_buf_len) { /* Coverage Exclusion - todo: win32 coverage */
-        result = sxe_write(this, (this->send_buf + this->send_buf_written), (this->send_buf_len - this->send_buf_written));
-        this->send_buf_written += this->last_write;
+    if (result != SXE_RETURN_IN_PROGRESS) {
+        SXEL80I("Re-enabling read events on this SXE");
+        ev_io_stop(sxe_private_main_loop, &this->io);
+        ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
+        this->io.data = this;
+        ev_io_start(sxe_private_main_loop, &this->io);
+
+        (*this->out_event_written)(this, result);
     }
 
-    if (result != SXE_RETURN_OK) {  /* Coverage Exclusion - todo: win32 coverage */
+    SXER80I("return");
+}
+
+SXE_RETURN
+sxe_send_buffers(SXE * this, SXE_BUFFER *buffers, SXE_OUT_EVENT_WRITTEN on_complete)
+{
+    SXE_RETURN result = SXE_RETURN_OK;
+
+    SXEE83I("sxe_send_buffers(buffers=%p,on_complete=%p) // socket=%d", buffers, on_complete, this->socket);
+    SXEA10I(buffers != NULL,     "sxe_send_buffers: buffers pointer can't be NULL");
+    SXEA10I(on_complete != NULL, "sxe_send_buffers: on_complete callback function pointer can't be NULL");
+
+    while (buffers) {
+        result = sxe_write(this, buffers->ptr + buffers->sent, buffers->len - buffers->sent);
+        buffers->sent += this->last_write;
+
+        if (buffers->sent == buffers->len) {
+            buffers = buffers->next;
+        }
+
         if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
-           SXEL82("Partial write, written %u bytes of %u", this->send_buf_written, this->send_buf_len);
-           goto SXE_EARLY_OUT; /* Coverage Exclusion - todo: win32 coverage */
+            result = SXE_RETURN_IN_PROGRESS;
+
+            SXEL82("sxe_write wrote %u bytes of %u; scheduling another write", buffers->sent, buffers->len);
+
+            this->send_buf = *buffers;
+            this->out_event_written = on_complete;
+
+            ev_io_stop(sxe_private_main_loop, &this->io);
+            ev_io_init(&this->io, sxe_io_cb_send_buffers, this->socket_as_fd, EV_WRITE);
+            this->io.data = this;
+            ev_io_start(sxe_private_main_loop, &this->io);
+            break;
+        }
+        else if (result != SXE_RETURN_OK) {
+            break;
         }
     }
 
-    SXEA10(this->send_buf_written == this->send_buf_len, "if sxe_write returns SXE_RETURN_OK then all data should be writen"); /* Coverage Exclusion - todo: win32 coverage */
-
-    SXEL80I("Re-enabling read events on this SXE");
-    ev_io_stop(sxe_private_main_loop, &this->io); /* Coverage Exclusion - todo: win32 coverage */
-    ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
-    this->io.data = this;
-    ev_io_start(sxe_private_main_loop, &this->io);
-
-    if (this->out_event_written) { /* Coverage Exclusion - todo: win32 coverage */
-        (*this->out_event_written)(this, result);
-        this->out_event_written = NULL;
-    }
-
-SXE_EARLY_OUT: /* Coverage Exclusion - todo: win32 coverage */
-    SXER80I("return");
-} /* Coverage Exclusion - todo: win32 coverage */
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
+}
 
 SXE_RETURN
 sxe_send(SXE * this, const void * buf, unsigned size, SXE_OUT_EVENT_WRITTEN on_complete)
 {
-    SXE_RETURN result = SXE_RETURN_OK;
+    SXE_RETURN result;
 
     SXEE83I("sxe_send(buf=%p, size=%u, on_complete=%p)", buf, size, on_complete);
     SXEA10I(on_complete != NULL, "sxe_send: on_complete callback function pointer can't be NULL");
 
-    this->send_buf          = (const char *)buf;
-    this->send_buf_len      = size;
-    this->send_buf_written  = 0;
+    this->send_buf.ptr  = (const char *)buf;
+    this->send_buf.len  = size;
+    this->send_buf.sent = 0;
+    this->send_buf.next = NULL;
 
-    result = sxe_write(this, (this->send_buf + this->send_buf_written), (this->send_buf_len - this->send_buf_written));
-    this->send_buf_written += this->last_write;
+    result = sxe_send_buffers(this, &this->send_buf, on_complete);
 
-    // Only partials need the EV_WRITE callback, even error cases just return...
-    if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
-        result = SXE_RETURN_IN_PROGRESS; /* Coverage Exclusion - todo: win32 coverage */
-        SXEL82("Initial sxe_write wrote %u bytes of %u", this->send_buf_written, this->send_buf_len);
-    } else {
-        goto SXE_EARLY_OUT;
-    }
-
-    this->out_event_written = on_complete; /* Coverage Exclusion - todo: win32 coverage */
-    ev_io_stop(sxe_private_main_loop, &this->io);
-    ev_io_init(&this->io, sxe_io_cb_send, this->socket_as_fd, EV_WRITE);
-    this->io.data = this;
-    ev_io_start(sxe_private_main_loop, &this->io);
-
-SXE_EARLY_OUT:
     SXER81I("return %s", sxe_return_to_string(result));
     return result;
 }
