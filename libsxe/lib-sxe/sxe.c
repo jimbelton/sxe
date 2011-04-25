@@ -1412,7 +1412,7 @@ sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents)
 static SXE_RETURN
 sxe_send_buffers_again(SXE * this)
 {
-    SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
+    SXE_RETURN result = SXE_RETURN_OK;
 
     SXEE82I("sxe_send_buffers_again(this=%p) // socket=%d", this, this->socket);
     SXE_BUFFER *buffers = sxe_list_walker_find(&this->send_list_walk);
@@ -1422,7 +1422,7 @@ sxe_send_buffers_again(SXE * this)
         buffers->sent += this->last_write;
 
         if (buffers->sent == buffers->len) {
-	    buffers = sxe_list_walker_step(&this->send_list_walk);
+            buffers = sxe_list_walker_step(&this->send_list_walk);
         }
 
         if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
@@ -1454,11 +1454,14 @@ sxe_send_buffers(SXE * this, SXE_LIST *buffers, SXE_OUT_EVENT_WRITTEN on_complet
     SXEA10I(buffers != NULL,     "sxe_send_buffers: buffers pointer can't be NULL");
     SXEA10I(on_complete != NULL, "sxe_send_buffers: on_complete callback function pointer can't be NULL");
 
+    SXEL81I("sxe_send_buffers(): preparing to send %u buffers", SXE_LIST_GET_LENGTH(buffers));
+
     sxe_list_walker_construct(&this->send_list_walk, buffers);
     sxe_list_walker_step(&this->send_list_walk); /* advance to the first entry */
     this->out_event_written = on_complete;
 
     result = sxe_send_buffers_again(this);
+
     SXER81I("return %s", sxe_return_to_string(result));
     return result;
 }

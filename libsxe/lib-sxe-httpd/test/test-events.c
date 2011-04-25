@@ -114,6 +114,17 @@ h_close(struct SXE_HTTPD_REQUEST *request)
 }
 
 static void
+h_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN result, void *user_data)
+{
+    SXE * this = sxe_httpd_request_get_sxe(request);
+    SXE_UNUSED_PARAMETER(this);
+    SXE_UNUSED_PARAMETER(user_data);
+    SXEE61I("%s()", __func__);
+    tap_ev_queue_push(q_httpd, __func__, 2, "request", request, "result", result);
+    SXER60I("return");
+}
+
+static void
 client_connect(SXE * this)
 {
     SXEE61I("%s()", __func__);
@@ -142,7 +153,7 @@ main(void)
     SXE                    * c;
     char                     buffer[1024];
 
-    tap_plan(25, TAP_FLAG_ON_FAILURE_EXIT, NULL);
+    tap_plan(27, TAP_FLAG_ON_FAILURE_EXIT, NULL);
     sxe_register(4, 0);        /* http listener and connections */
     sxe_register(8, 0);        /* http clients */
     sxe_init();
@@ -150,7 +161,7 @@ main(void)
     q_client = tap_ev_queue_new();
     q_httpd = tap_ev_queue_new();
 
-    sxe_httpd_construct(&httpd, 3, 0);
+    sxe_httpd_construct(&httpd, 3, 10, 512, 0);
 
     SXE_HTTPD_SET_HANDLER(&httpd, connect, h_connect);
     SXE_HTTPD_SET_HANDLER(&httpd, request, h_request);
@@ -196,7 +207,8 @@ main(void)
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     SXE_WRITE_LITERAL(c, "GET ");    /* Send the beginning of the next message           */
     test_ev_loop_wait(TEST_WAIT);    /* Try to make sure it's received before responding */
-    sxe_httpd_response_simple(request, 200, "OK", "abcd", NULL);
+    sxe_httpd_response_simple(request, h_sent, NULL, 200, "OK", "abcd", NULL);
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_sent",               "HTTPD: finished responding");
 
 #define EXPECTED_RESPONSE "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nabcd"
 
@@ -215,7 +227,8 @@ main(void)
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",            "HTTPD: respond event");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     sxe_httpd_response_raw(request, EXPECTED_RESPONSE, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE));
-    sxe_httpd_response_end(request);
+    sxe_httpd_response_end(request, h_sent, NULL);
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_sent",               "HTTPD: finished responding");
     test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, c, "client_read", buffer, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE), "client");
     is_strncmp(buffer, EXPECTED_RESPONSE, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE),              "Client received correct response");
 

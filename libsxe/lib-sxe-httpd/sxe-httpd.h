@@ -68,10 +68,11 @@ typedef void (*sxe_httpd_body_handler)(struct SXE_HTTPD_REQUEST *, const char *c
 typedef void (*sxe_httpd_respond_handler)(struct SXE_HTTPD_REQUEST *);
 typedef void (*sxe_httpd_close_handler)(struct SXE_HTTPD_REQUEST *);
 
-/* This handler is invoked when sxe_httpd_response_sendfile() has finished
- * sending the requested amount of data.
+/* This handler is invoked when any of the sxe_httpd_response_*() functions
+ * have sent the entire response or portion of the response; or when an I/O
+ * error occurs.
  */
-typedef void (*sxe_httpd_sendfile_handler)(struct SXE_HTTPD_REQUEST *, SXE_RETURN, void *);
+typedef void (*sxe_httpd_on_sent_handler)(struct SXE_HTTPD_REQUEST *, SXE_RETURN, void *);
 
 #define SXE_HTTPD_REQUEST_USER_DATA(request)                                  (request)->user_data
 #define SXE_HTTPD_REQUEST_USER_DATA_AS_UNSIGNED(request)  SXE_CAST(uintptr_t, (request)->user_data)
@@ -91,10 +92,13 @@ typedef struct SXE_HTTPD_REQUEST {
 
     /* Output: have we finished headers? */
     bool                       out_eoh;
+    SXE_LIST                   out_buffer_list;
 
-    /* Handle sendfile */
-    sxe_httpd_sendfile_handler sendfile_handler;
-    void *                     sendfile_userdata;
+    /* Handle sxe_send() and sxe_sendfile() */
+    sxe_httpd_on_sent_handler  on_sent_handler;
+    void *                     on_sent_userdata;
+    int                        sendfile_fd;
+    unsigned                   sendfile_length;
     off_t                      sendfile_offset;
 } SXE_HTTPD_REQUEST;
 
@@ -102,6 +106,8 @@ static inline SXE * sxe_httpd_request_get_sxe(SXE_HTTPD_REQUEST * request) { ret
 
 typedef struct SXE_HTTPD {
     SXE_HTTPD_REQUEST       * requests;
+    SXE_BUFFER              * buffers;
+    unsigned                  buffersize;
     void                    * user_data;
     sxe_httpd_connect_handler on_connect;
     sxe_httpd_request_handler on_request;

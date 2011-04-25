@@ -67,7 +67,6 @@ main(void)
 
     tap_ev       event;
 
-
     plan_tests(10);;
 
     sxe_register(1000, 0);
@@ -76,7 +75,7 @@ main(void)
 
     SXEA10(sxe_init() == SXE_RETURN_OK,                                                          "Failed to initialize SXE package");
 
-    sxe_httpd_construct(&httpd, 2, 0);
+    sxe_httpd_construct(&httpd, 2, 10, 512, 0);
     SXE_HTTPD_SET_HANDLER(&httpd, connect, evhttp_connect);
     SXE_HTTPD_SET_HANDLER(&httpd, close, evhttp_close);
     ok((listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0)) != NULL,                              "HTTPD listening");

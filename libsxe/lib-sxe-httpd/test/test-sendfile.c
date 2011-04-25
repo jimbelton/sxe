@@ -42,14 +42,15 @@ main(void)
 #else
 
 static void
-handle_sendfile_done(SXE_HTTPD_REQUEST *request, SXE_RETURN final, void *user_data)
+handle_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN final, void *user_data)
 {
     SXE * this = request->sxe;
     SXE_UNUSED_PARAMETER(this);
     SXE_UNUSED_PARAMETER(request);
     SXE_UNUSED_PARAMETER(final);
+    SXE_UNUSED_PARAMETER(user_data);
     SXEE62I("%s(final=%s)", __func__, sxe_return_to_string(final));
-    close(SXE_CAST(intptr_t, user_data));
+    tap_ev_push(__func__, 2, "request", request, "final", final);
     SXER60I("return");
 }
 
@@ -90,20 +91,19 @@ main(void)
     SXE *listener;
     SXE *c;
 
-    plan_tests(3);
+    plan_tests(5);
 
     sxe_register(4, 0);        /* http listener and connections */
     sxe_register(8, 0);        /* http clients */
     sxe_init();
 
-    sxe_httpd_construct(&httpd, 3, 0);
+    sxe_httpd_construct(&httpd, 3, 10, 512, 0);
     SXE_HTTPD_SET_HANDLER(&httpd, respond, http_respond);
 
     listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
 
     c = sxe_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, NULL);
     sxe_connect(c, "127.0.0.1", SXE_LOCAL_PORT(listener));
-
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "client_connect",                   "Client connected to HTTPD");
     SXE_WRITE_LITERAL(c, "GET /file HTTP/1.1\r\n\r\n");
@@ -119,15 +119,69 @@ main(void)
         SXEA11((fd = open("sxe-httpd-proto.h", O_RDONLY)) >= 0, "Failed to open sxe-httpd-proto.h: %s", strerror(errno));
         SXEA11(fstat(fd, &sb) >= 0, "Failed to fstat sxe-httpd-proto.h: %s", strerror(errno));
 
-        expected_length = sb.st_size + SXE_LITERAL_LENGTH("HTTP/1.1 200 OK\r\n\r\n");
+        /* NOTE: these numbers are carefully designed so that we'll hit the
+         * following conditions:
+         *
+         * 1. Ensure that we write > 512 bytes of headers, so that we'll test
+         *    the case of failing to append to the first out_buffer_list
+         *    entry.
+         *
+         * 2. Ensure that we *then* write 511 bytes of additional headers, so
+         *    that the attempt to append the final "\r\n" requires another
+         *    buffer.
+         */
+#define X_NAM "X-Header"
+#define X_V77 "abcdefghijklmnopqrstuvwxyz-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#define X_V49 "123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+        expected_length = SXE_LITERAL_LENGTH("HTTP/1.1 200 OK\r\n")                                 //   17 =   17      =   17
+                        + SXE_LITERAL_LENGTH("Content-Type: text/plain; charset=.UTF-8.\r\n")       // + 43 =   60      =   60
+                        + SXE_LITERAL_LENGTH("Content-Length: dddd\r\n")                            // + 22 =   82      =   82
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  159      =  159
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  236      =  236
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  313      =  313
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  390      =  390
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  467      =  467
+                        /* end of first buffer */
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =   77      =  544
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  154      =  621
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  231      =  698
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  308      =  775
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  385      =  852
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  462      =  929
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V49 "\r\n")                              // + 49 =  511      =  978
+                        /* end of second buffer */
+                        + SXE_LITERAL_LENGTH("\r\n")                                                // +  2 =    2      =  980
+                        /* end of headers; remainder is file */
+                        + sb.st_size;
 
         /* NOTE: sizeof readbuf just happens to be >> size of sxe-httpd-proto.h, so that's why we use it here */
         sxe_httpd_response_start(request, 200, "OK");
-        sxe_httpd_response_sendfile(request, fd, sb.st_size, handle_sendfile_done, &fd);
+        sxe_httpd_response_header(request, "Content-Type", "text/plain; charset=\"UTF-8\"", 0);
+        sxe_httpd_response_content_length(request, (int)sb.st_size);
+        sxe_httpd_response_header(request, X_NAM "1", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "2", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "3", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "4", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "5", X_V77, 0);
+        /* end of first buffer */
+        sxe_httpd_response_header(request, X_NAM "6", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "7", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "8", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "9", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "A", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "B", X_V77, 0);
+        sxe_httpd_response_header(request, X_NAM "C", X_V49, 0);
+        sxe_httpd_response_sendfile(request, fd, sb.st_size, handle_sent, NULL);
+        is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished sending");
+        close(fd);
+        sxe_httpd_response_end(request, handle_sent, NULL);
+        is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
 
         test_ev_wait_read(TEST_WAIT, &ev, c, "client_read", readbuf, expected_length, "client");
         /* TODO: actually test that we got the correct contents of buf */
     }
+
 
     return exit_status();
 }

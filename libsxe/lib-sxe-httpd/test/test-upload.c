@@ -55,6 +55,15 @@ test_event_httpd_respond(SXE_HTTPD_REQUEST *request)
 }
 
 static void
+test_event_httpd_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN result, void *user_data)
+{
+    SXE_UNUSED_PARAMETER(user_data);
+    SXEE62("%s(request=%p)", __func__, request);
+    tap_ev_queue_push(q_httpd, __func__, 2, "request", request, "result", result);
+    SXER60("return");
+}
+
+static void
 test_event_client_file_sent(SXE * this, SXE_RETURN final)
 {
     SXEE63I("%s(this=%p, final=%s)", __func__, this, sxe_return_to_string(final));
@@ -109,13 +118,13 @@ main(void)
     off_t               offset;
 
     q_httpd = tap_ev_queue_new();
-    tap_plan(18, TAP_FLAG_ON_FAILURE_EXIT | TAP_FLAG_DEBUG, NULL);
+    tap_plan(20, TAP_FLAG_ON_FAILURE_EXIT | TAP_FLAG_DEBUG, NULL);
 
     sxe_register(4, 0);        /* http listener and connections */
     sxe_register(8, 0);        /* http clients */
     sxe_init();
 
-    sxe_httpd_construct(  &httpd, 3, 0);
+    sxe_httpd_construct(  &httpd, 3, 10, 512, 0);
     SXE_HTTPD_SET_HANDLER(&httpd, request, test_event_httpd_request);
     SXE_HTTPD_SET_HANDLER(&httpd, respond, test_event_httpd_respond);
 
@@ -141,9 +150,10 @@ main(void)
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_file_sent", "Got a file-sent event");
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, 30, &ev), "test_event_httpd_respond", "Got a respond event");
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_respond", "Got a respond event");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
-    sxe_httpd_response_simple(request, 200, "OK", NULL, NULL);
+    sxe_httpd_response_simple(request, test_event_httpd_sent, NULL, 200, "OK", NULL, NULL);
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_sent", "Server finished sending");
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");
     is(SXE_CAST(int, tap_ev_arg(ev, "used")), (int)strlen(TEST_200_RESPONSE),        "POST response has expected length");
@@ -157,7 +167,8 @@ main(void)
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_respond", "Got a respond event");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
-    sxe_httpd_response_simple(request, 200, "OK", NULL, "Connection", "close", NULL);
+    sxe_httpd_response_simple(request, test_event_httpd_sent, NULL, 200, "OK", NULL, "Connection", "close", NULL);
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "test_event_httpd_sent", "Server finished sending");
     sxe_close(request->sxe);
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");

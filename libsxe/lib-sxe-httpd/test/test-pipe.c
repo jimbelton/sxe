@@ -60,7 +60,7 @@ evhttp_connect(SXE_HTTPD_REQUEST *request)
     SXE * this = request->sxe;
     SXE_UNUSED_PARAMETER(this);
     SXEE92I("%s(request=%p)", __func__, request);
-    tap_ev_push("evhttp_connect", 1, "request", request);
+    tap_ev_push(__func__, 1, "request", request);
     SXER90I("return");
 }
 
@@ -78,7 +78,7 @@ evhttp_request(SXE_HTTPD_REQUEST *request,
     SXE_UNUSED_PARAMETER(version_len);
     SXEE98I("%s(request=%p,method=[%.*s],url=[%.*s],version=[%.*s])", __func__, request,
             method_len, method, url_len, url, version_len, version);
-    tap_ev_push("evhttp_request", 3,
+    tap_ev_push(__func__, 3,
                 "request", request,
                 "url", tap_dup(url, url_len),
                 "url_len", url_len);
@@ -92,7 +92,7 @@ evhttp_respond(SXE_HTTPD_REQUEST *request)
     SXE_UNUSED_PARAMETER(this);
     SXE_UNUSED_PARAMETER(request);
     SXEE92I("%s(request=%p)", __func__, request);
-    tap_ev_push("evhttp_respond", 1, "request", request);
+    tap_ev_push(__func__, 1, "request", request);
     SXER90I("return");
 }
 
@@ -103,7 +103,18 @@ evhttp_close(SXE_HTTPD_REQUEST *request)
     SXE_UNUSED_PARAMETER(this);
     SXE_UNUSED_PARAMETER(request);
     SXEE92I("%s(request=%p)", __func__, request);
-    tap_ev_push("evhttp_close", 1, "request", request);
+    tap_ev_push(__func__, 1, "request", request);
+    SXER90I("return");
+}
+
+static void
+evhttp_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN result, void *user_data)
+{
+    SXE * this = request->sxe;
+    SXE_UNUSED_PARAMETER(this);
+    SXE_UNUSED_PARAMETER(user_data);
+    SXEE93I("%s(request=%p,result=%s)", __func__, request, sxe_return_to_string(result));
+    tap_ev_push(__func__, 2, "request", request, "result", result);
     SXER90I("return");
 }
 
@@ -180,7 +191,7 @@ main(void)
     SXE_HTTPD_REQUEST * request;
     tap_ev             ev;
 
-    plan_tests(8);
+    plan_tests(9);
     signal(SIGPIPE, SIG_IGN);
 
     sxe_register(4, 0);        /* http listener and connections */
@@ -192,7 +203,7 @@ main(void)
     snprintf(&pipe_name[sizeof(TEST_PIPE_NAME_PREFIX) - 1], TEST_PID_MAX_DIGITS + 1, "%d", getpid());
     (void)unlink(pipe_name);
 
-    sxe_httpd_construct(&httpd, 2, 0);
+    sxe_httpd_construct(&httpd, 2, 10, 512, 0);
     SXE_HTTPD_SET_HANDLER(&httpd, connect, evhttp_connect);
     SXE_HTTPD_SET_HANDLER(&httpd, request, evhttp_request);
     SXE_HTTPD_SET_HANDLER(&httpd, respond, evhttp_respond);
@@ -218,7 +229,8 @@ main(void)
     is_strncmp(TEST_URL, (const char *)tap_ev_arg(ev, "url"), tap_ev_arg(ev, "url_len"),   "Got URL '" TEST_URL "'");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_respond",                   "HTTPD ready for response");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
-    sxe_httpd_response_simple(request, 200, "OK", "Pong!\r\n", 0);
+    sxe_httpd_response_simple(request, evhttp_sent, NULL, 200, "OK", "Pong!\r\n", NULL);
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "evhttp_sent",                      "HTTPD finished responding");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",           "Client got read event");
     is_strncmp(tap_ev_arg(ev, "buf"), TEST_HTTP_RESPONSE, tap_ev_arg(ev, "used"),          "Got response '" TEST_HTTP_RESPONSE "'");
     sxe_close(tcp_client);

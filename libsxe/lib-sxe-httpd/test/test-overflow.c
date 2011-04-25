@@ -80,7 +80,7 @@ main(void)
     sxe_register(1000, 0);
     sxe_init();
 
-    sxe_httpd_construct(&httpd, 2, 0);
+    sxe_httpd_construct(&httpd, 2, 10, 512, 0);
     listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
     httpd.user_data = listener;
 
