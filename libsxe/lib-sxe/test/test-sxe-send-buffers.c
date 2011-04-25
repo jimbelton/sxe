@@ -80,7 +80,8 @@ main(int argc, char *argv[])
     SXE             * listener;
     SXE             * server;
     SXE_RETURN        result;
-    SXE_BUFFER        buflist[1024];
+    SXE_BUFFER        buffers[1024];
+    SXE_LIST          buflist;
     tap_ev_queue      q_client;
     tap_ev_queue      q_server;
     tap_ev            ev;
@@ -110,16 +111,18 @@ main(int argc, char *argv[])
     is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "test_event_connect", "Server connected");
     server = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
 
-    buflist[0].ptr  = "Hello";
-    buflist[0].len  = 5;
-    buflist[0].sent = 0;
-    buflist[0].next = &buflist[1];
-    buflist[1].ptr  = ", world!";
-    buflist[1].len  = 8;
-    buflist[1].sent = 0;
-    buflist[1].next = NULL;
+    buffers[0].ptr  = "Hello";
+    buffers[0].len  = 5;
+    buffers[0].sent = 0;
+    buffers[1].ptr  = ", world!";
+    buffers[1].len  = 8;
+    buffers[1].sent = 0;
 
-    result = sxe_send_buffers(client, buflist, test_event_sent);
+    SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
+    sxe_list_push(&buflist, &buffers[0]);
+    sxe_list_push(&buflist, &buffers[1]);
+
+    result = sxe_send_buffers(client, &buflist, test_event_sent);
     if (result == SXE_RETURN_IN_PROGRESS) {
         is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "test_event_sent", "Client send completed");
     }
@@ -143,16 +146,15 @@ main(int argc, char *argv[])
         tempbuf = calloc(TEST_COPIES, self.size);
         SXEA11(tempbuf != NULL, "failed to allocate %u bytes", TEST_COPIES * self.size);
 
+        SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
         for (i = 0; i < TEST_COPIES; i++) {
-            buflist[i].ptr = self.addr;
-            buflist[i].len = self.size;
-            buflist[i].sent = 0;
-            buflist[i].next = NULL;
-            if (i)
-                buflist[i - 1].next = &buflist[i];
+            buffers[i].ptr = self.addr;
+            buffers[i].len = self.size;
+            buffers[i].sent = 0;
+            sxe_list_push(&buflist, &buffers[i]);
         }
 
-        result = sxe_send_buffers(client, buflist, test_event_sent);
+        result = sxe_send_buffers(client, &buflist, test_event_sent);
         test_ev_queue_wait_read(q_server, TEST_WAIT, &ev, server, "test_event_read", tempbuf, TEST_COPIES * self.size, "server");
 
         if (result == SXE_RETURN_IN_PROGRESS) {

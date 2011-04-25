@@ -26,6 +26,7 @@
 
 #include "ev.h"
 #include "sxe-socket.h"
+#include "sxe-list.h"
 #include "sxe-util.h"
 
 #define SXE_BUF_SIZE    1500
@@ -53,10 +54,11 @@ typedef void (*SXE_OUT_EVENT_WRITTEN )(struct SXE *, SXE_RETURN);
  * sxe_send_buffers(). Equivalent to calling sxe_write() on each buffer in
  * turn, but allows the caller to prepare several buffers. */
 typedef struct SXE_BUFFER {
+    SXE_LIST_NODE       node;
     const char        * ptr;
     size_t              len;
     size_t              sent;
-    struct SXE_BUFFER * next;
+    char                space[1];   /* allows inline storage */
 } SXE_BUFFER;
 
 /* SXE object. Used for "Accept Sockets", "Connection Sockets", and UDP ports.
@@ -83,7 +85,9 @@ typedef struct SXE {
     int                    sendfile_in_fd;
     unsigned               sendfile_bytes;
     off_t                * sendfile_offset;
-    SXE_BUFFER             send_buf;
+    SXE_LIST               send_list;            /* Used by sxe_send_buffers().                                           */
+    SXE_LIST_WALKER        send_list_walk;       /* Used by sxe_send_buffers() to advance the buffer.                     */
+    SXE_BUFFER             send_buffer;          /* Placeholder buffer for sxe_send().                                    */
     union {
        void            *   as_ptr;
        intptr_t            as_int;

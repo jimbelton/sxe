@@ -1380,6 +1380,8 @@ SXE_EARLY_OR_ERROR_OUT:
     return result;
 }
 
+static SXE_RETURN sxe_send_buffers_again(SXE * this);
+
 static void
 sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents)
 {
@@ -1392,7 +1394,7 @@ sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents)
 #endif
 
     SXEE83I("sxe_io_cb_send_buffers(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
-    result = sxe_send_buffers(this, &this->send_buf, this->out_event_written);
+    result = sxe_send_buffers_again(this);
 
     if (result != SXE_RETURN_IN_PROGRESS) {
         SXEL80I("Re-enabling read events on this SXE");
@@ -1407,30 +1409,26 @@ sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents)
     SXER80I("return");
 }
 
-SXE_RETURN
-sxe_send_buffers(SXE * this, SXE_BUFFER *buffers, SXE_OUT_EVENT_WRITTEN on_complete)
+static SXE_RETURN
+sxe_send_buffers_again(SXE * this)
 {
-    SXE_RETURN result = SXE_RETURN_OK;
+    SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
 
-    SXEE83I("sxe_send_buffers(buffers=%p,on_complete=%p) // socket=%d", buffers, on_complete, this->socket);
-    SXEA10I(buffers != NULL,     "sxe_send_buffers: buffers pointer can't be NULL");
-    SXEA10I(on_complete != NULL, "sxe_send_buffers: on_complete callback function pointer can't be NULL");
+    SXEE82I("sxe_send_buffers_again(this=%p) // socket=%d", this, this->socket);
+    SXE_BUFFER *buffers = sxe_list_walker_find(&this->send_list_walk);
 
     while (buffers) {
         result = sxe_write(this, buffers->ptr + buffers->sent, buffers->len - buffers->sent);
         buffers->sent += this->last_write;
 
         if (buffers->sent == buffers->len) {
-            buffers = buffers->next;
+	    buffers = sxe_list_walker_step(&this->send_list_walk);
         }
 
         if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
             result = SXE_RETURN_IN_PROGRESS;
 
             SXEL82("sxe_write wrote %u bytes of %u; scheduling another write", buffers->sent, buffers->len);
-
-            this->send_buf = *buffers;
-            this->out_event_written = on_complete;
 
             ev_io_stop(sxe_private_main_loop, &this->io);
             ev_io_init(&this->io, sxe_io_cb_send_buffers, this->socket_as_fd, EV_WRITE);
@@ -1448,6 +1446,24 @@ sxe_send_buffers(SXE * this, SXE_BUFFER *buffers, SXE_OUT_EVENT_WRITTEN on_compl
 }
 
 SXE_RETURN
+sxe_send_buffers(SXE * this, SXE_LIST *buffers, SXE_OUT_EVENT_WRITTEN on_complete)
+{
+    SXE_RETURN result = SXE_RETURN_OK;
+
+    SXEE83I("sxe_send_buffers(buffers=%p,on_complete=%p) // socket=%d", buffers, on_complete, this->socket);
+    SXEA10I(buffers != NULL,     "sxe_send_buffers: buffers pointer can't be NULL");
+    SXEA10I(on_complete != NULL, "sxe_send_buffers: on_complete callback function pointer can't be NULL");
+
+    sxe_list_walker_construct(&this->send_list_walk, buffers);
+    sxe_list_walker_step(&this->send_list_walk); /* advance to the first entry */
+    this->out_event_written = on_complete;
+
+    result = sxe_send_buffers_again(this);
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
+}
+
+SXE_RETURN
 sxe_send(SXE * this, const void * buf, unsigned size, SXE_OUT_EVENT_WRITTEN on_complete)
 {
     SXE_RETURN result;
@@ -1455,12 +1471,14 @@ sxe_send(SXE * this, const void * buf, unsigned size, SXE_OUT_EVENT_WRITTEN on_c
     SXEE83I("sxe_send(buf=%p, size=%u, on_complete=%p)", buf, size, on_complete);
     SXEA10I(on_complete != NULL, "sxe_send: on_complete callback function pointer can't be NULL");
 
-    this->send_buf.ptr  = (const char *)buf;
-    this->send_buf.len  = size;
-    this->send_buf.sent = 0;
-    this->send_buf.next = NULL;
+    SXE_LIST_CONSTRUCT(&this->send_list, 0, SXE_BUFFER, node);
+    sxe_list_push(&this->send_list, &this->send_buffer);
 
-    result = sxe_send_buffers(this, &this->send_buf, on_complete);
+    this->send_buffer.ptr  = (const char *)buf;
+    this->send_buffer.len  = size;
+    this->send_buffer.sent = 0;
+
+    result = sxe_send_buffers(this, &this->send_list, on_complete);
 
     SXER81I("return %s", sxe_return_to_string(result));
     return result;
