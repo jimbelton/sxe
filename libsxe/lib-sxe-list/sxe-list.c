@@ -201,3 +201,36 @@ SXE_ERROR_OUT:
     SXER82("return object=%x%s", result, (result == 0) ? " // NULL" : "");
     return result;
 }
+
+/**
+ * Peek at the object at the tail of a list
+ */
+void *
+sxe_list_peek_tail(SXE_LIST * list)
+{
+    SXE_LIST_NODE * node;
+    void          * result;
+
+    SXEE81("sxe_list_peek_tail(list=%p)", list);
+
+    if (list->TAIL == SENTINEL_PTR_REL(list)) {
+        SXEA10(list->HEAD == SENTINEL_PTR_REL(list), "List tail is the sentinel but head is not the sentinel");
+        result = NULL;
+        goto SXE_ERROR_OUT;
+    }
+
+    SXEA10(list->HEAD                     != SENTINEL_PTR_REL(list), "List tail is not the sentinel but head is the sentinel");
+    SXEA10(NODE_PTR_FIX(list->TAIL)->next == SENTINEL_PTR_REL(list), "List's head object is not the last object");
+    node = NODE_PTR_FIX(list->TAIL);
+    SXEA84(node->id == list->sentinel.id,                            "Node %p on list %p has id %u but list has %u", node, list,
+           node->id, list->sentinel.id);
+
+    /* Catch a bug seen in pool testing.
+     */
+    SXEA60(NODE_PTR_FIX(list->HEAD)->prev == SENTINEL_PTR_REL(list), "List's head object is not the first object");
+    result = (char *)node - list->offset;
+
+SXE_ERROR_OUT:
+    SXER82("return object=%x%s", result, (result == 0) ? " // NULL" : "");
+    return result;
+}
