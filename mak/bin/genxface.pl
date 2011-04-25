@@ -830,9 +830,21 @@ sub docCommentParse
 
     foreach my $bit (@bits) {
         if ($bit =~ /^(\S+)\s+(.*)$/s) {
-            if (!defined($docComment->{$1})) {
-                my $description = $2;
+            my $description = $2;
 
+            if ($1 eq "param") {
+                if (!defined($docComment->{param})) {
+                    $docComment->{param} = {};
+                }
+
+                if ($description =~ m~^(.*?)\s+(\S.*)$~s) {
+                    $docComment->{param}->{$1} = $2;
+                }
+                else {
+                    warn("Function '$function': discarding empty doc comment \@param $1");
+                }
+            }
+            elsif (!defined($docComment->{$1})) {
                 if ($1 eq "brief") {
                     # If there's a blank line, what follows is part of the detailed description.
                     #
@@ -845,7 +857,7 @@ sub docCommentParse
                 $docComment->{$1} = $description;
             }
             else {
-                $docComment->{$1} .= "\n".$2;
+                $docComment->{$1} .= "\n".$description;
             }
         }
         else {
@@ -1104,9 +1116,9 @@ if (defined($opts{w})) {
         }
         else {
             print $html ("no description given\n");
-            print $html ("<br>\n");
         }
 
+        print $html ("<br>\n");
         my $params = protoGetParams($symbolTable{$function}->{prototype}, $function);
 
         if (scalar(@${params}) > 0) {
@@ -1115,7 +1127,16 @@ if (defined($opts{w})) {
             print $html ("<tr><th align=left>Parameter</th><th align=left>Type</th><th align=left>Description</th></tr>\n");
 
             foreach my $param (@${params}) {
-                print $html ("<tr><td>".$param->[1]."</td><td>".$param->[0]."</td><td>undocumented</td></tr>\n");
+                print $html ("<tr><td>".$param->[1]."</td><td>".$param->[0]."</td><td>");
+
+                if (defined($docComment->{param}->{$param->[1]})) {
+                    print $html ($docComment->{param}->{$param->[1]});
+                }
+                else {
+                    print $html ("undocumented");
+                }
+
+                 print $html ("</td></tr>\n");
             }
 
             print $html ("</table>");
@@ -1126,7 +1147,21 @@ if (defined($opts{w})) {
         if (my $return = protoGetReturn($symbolTable{$function}->{prototype}, $function) ne "void") {
             print $html ("<h3>Return Value</h3>\n");
             print $html ("<blockquote>\n");
-            print $html ("undocumented\n");
+
+            if (defined($docComment->{return})) {
+                print $ html ($docComment->{return});
+            }
+            else {
+                print $html ("undocumented\n");
+            }
+
+            print $html ("</blockquote>\n");
+        }
+
+        if (defined($docComment->{note})) {
+            print $html ("<h3>Notes</h3>\n");
+            print $html ("<blockquote>\n");
+            print $ html ($docComment->{note});
             print $html ("</blockquote>\n");
         }
     }
