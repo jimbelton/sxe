@@ -17,14 +17,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use strict;
-use warnings;
+
 use Carp;
 use Cwd;
 use File::Basename;
 use Getopt::Std;
 
 my $numBlocks = 0;
-my %opts      = ('w' => 1);
+my %opts      = ();
 
 sub getLine
 {
@@ -456,7 +456,7 @@ sub protoGetReturn
 {
     my ($proto, $func) = @_;
 
-    $proto =~ /^\s*(.*\S)\s*\b$func\s*\((.*)$/
+    $proto =~ /^\s*(.*\S)\s*\b$func\s*\((.*)$/s
         or die("Function $func: Invalid return type in prototype: $proto\n");
 
     my $type   = $1;
@@ -475,13 +475,13 @@ sub protoGetReturn
 
 sub getSimpleParam
 {
-    my ($def) = @_;
+    my ($def, $func, $comment) = @_;
 
-    if ($def =~ /^(.*?)\s*([A-Za-z_\$][A-Za-z0-9_\$]*)$/) {
-        return [$1, $2];
+    if ($def =~ /^(.*?)\s*([A-Za-z_\$][A-Za-z0-9_\$]*)\s*$/) {
+        return [$1, $2, $comment];
     }
 
-    die("Invalid parameter name in definition: '$def'");
+    die("Function $func: Invalid parameter name in definition: '$def'");
 }
 
 ##
@@ -497,29 +497,36 @@ sub protoGetParams
     my ($proto, $func) = @_;
 #    print "protoGetParams(proto='$proto',func='$func')\n";
 
-    $proto =~ /^.*\W$func\s*\((.*)\)\s*$/
-        or die("Invalid parameter list in prototype for function $func: "
-               .$proto."\n");
+    $proto =~ /^.*\W$func\s*\((.*)\)\s*$/s or die("Invalid parameter list in prototype for function $func: ".$proto."\n");
 
     my $def    = $1;
     my $params = [];
 
     # C special case (void) and C++ special case '()'
     #
-    if (($def =~ /^\s*void\s*$/) || ($def =~ /^\s*$/)) {
+    if (($def =~ /^\s*void\s*$/s) || ($def =~ /^\s*$/s)) {
         return $params;
     }
 
     # While there is more than one simple parameter
     #
-    while ($def =~ /^(.*?)([,\(])\s*(.*)/) {
+    while ($def =~ /^(.*?)([,\(])\s*(.*)/s) {
         my $type = $1;
+
+#        print "def='$def', type=$type, sep=$2, rest=$3\n";
 
         # If its a simple parameter, push it.
         #
         if ($2 eq ",") {
-            $def = $3;
-            push(@{$params}, getSimpleParam($type));
+            $def        = $3;
+            my $comment = undef;
+
+            if ($def =~ m~^/\*(.*?)\*/\s*(.*)$~s) {
+                $comment = $1;
+                $def     = $2;
+            }
+
+            push(@{$params}, getSimpleParam($type, $func, $comment));
             next;
         }
 
@@ -544,7 +551,7 @@ sub protoGetParams
         #
         do {
             $type .= "*";
-            $def =~ s/^\*\s*//;
+            $def  =~ s/^\*\s*//;
         } while (substr($def, 0, 1) eq "*");
 
         my $ident = getIdentifier(\$def);
@@ -569,8 +576,7 @@ sub protoGetParams
                     ." $type");
             }
 
-            warn("Function $func: '$type' in parameter list is not followed by"
-                 ." a function name");
+            warn("Function $func: '$type' in parameter list is not followed by a function name");
             $type .= $expr;
             next;
         }
@@ -579,8 +585,7 @@ sub protoGetParams
         $token = getToken(\$def);
 
         if ($token ne "(") {
-            warn("Function $func: '$type' in parameter list is not followed by"
-                 ." a parameter list");
+            warn("Function $func: '$type' in parameter list is not followed by a parameter list");
             $type .= $token;
             next;
         }
@@ -609,7 +614,7 @@ sub protoGetParams
         push(@{$params}, ["...", "..."]);
     }
     else {
-        push(@{$params}, getSimpleParam($def));
+        push(@{$params}, getSimpleParam($def, $func, undef));
     }
 
     return $params;
@@ -799,6 +804,58 @@ sub setFile
     print $out ("\n");
 }
 
+sub docCommentParse
+{
+    my ($comment, $function) = @_;
+    my $docComment = {};
+
+    if (!defined($comment)) {
+        warn("Function '$function' is not documented");
+        return $docComment;
+    }
+
+    $comment =~ s~/\*+[ \t\r]*(.*?)\s*\*/$~$1~s or die("Function $function comment is not a comment: '$comment'");
+    $comment =~ s~\n\s*?\*~\n~g;
+    $comment =~ s~\n\s+?\@~\n\@~g;
+
+    if (substr($comment, 0, 1) ne "\@") {
+        $comment =~ s~^\s+~~s;
+        $comment = "brief ".$comment;
+    }
+    else {
+        $comment = substr($comment, 1);
+    }
+
+    my @bits = split(/\n@/, $comment);
+
+    foreach my $bit (@bits) {
+        if ($bit =~ /^(\S+)\s+(.*)$/s) {
+            if (!defined($docComment->{$1})) {
+                my $description = $2;
+
+                if ($1 eq "brief") {
+                    # If there's a blank line, what follows is part of the detailed description.
+                    #
+                    if ($description =~ /^(.*)\n\s*\n(.*)$/) {
+                        $description          = $1;
+                        $docComment->{detail} = $2;
+                    }
+                }
+
+                $docComment->{$1} = $description;
+            }
+            else {
+                $docComment->{$1} .= "\n".$2;
+            }
+        }
+        else {
+            warn("Function '$function': discarding empty doc comment member \@$bit");
+        }
+    }
+
+    return $docComment;
+}
+
 # Main entry point.
 #
 
@@ -806,7 +863,7 @@ my $prefix     = "genxface.pl";
 my $input_file = "-";
 
 $SIG{'__WARN__'} = sub {
-    print STDERR ($prefix.":".$input_file.":".$..": ", @_) if $opts{w};
+    print STDERR ($prefix.":".$input_file.":".$..": ", @_) if !$opts{q};
 };
 
 if (!getopts('dehmo:qvw', \%opts)) {
@@ -815,10 +872,6 @@ if (!getopts('dehmo:qvw', \%opts)) {
 
 if ($opts{h}) {
     usage();
-}
-
-if ($opts{q}) {
-    $opts{w} = undef;
 }
 
 my $dirname;
@@ -964,7 +1017,7 @@ LINE:
                     next LINE;
                 }
 
-                $symbolTable{$lastIdent} = $lastLineNum;
+                $symbolTable{$lastIdent} = {file => $file, line => $lastLineNum, prototype => $prev, comment => $comment};
                 setFile($file);
 
                 if ($opts{m}) {
@@ -1025,3 +1078,58 @@ LINE:
 }
 
 setFile("");
+
+# If -w was specified, output documentation files
+#
+if (defined($opts{w})) {
+    my $html;
+
+    -d "doc" or mkdir("doc")          or die($prefix.": failed to create 'doc' directory: $!");
+    open($html, "> doc/package.html") or die($prefix.": failed to create 'doc/package.html': $!");
+
+    foreach my $function (sort(keys(%symbolTable))) {
+        my $docComment = docCommentParse($symbolTable{$function}->{comment}, $function);
+
+        print $html ("<h2>".$function."</h2>\n");
+        print $html ("<h3>Synopsis</h3>\n");
+        print $html ("<blockquote><code>\n");
+        print $html ($symbolTable{$function}->{prototype});
+        print $html ("</code></blockquote>\n");
+
+        print $html ("<h3>Description</h3>\n");
+        print $html ("<blockquote>\n");
+
+        if (defined($docComment->{brief})) {
+            print $html ($docComment->{brief});
+        }
+        else {
+            print $html ("no description given\n");
+            print $html ("<br>\n");
+        }
+
+        my $params = protoGetParams($symbolTable{$function}->{prototype}, $function);
+
+        if (scalar(@${params}) > 0) {
+            print $html ("<br>\n");
+            print $html ("<table border=1 style=\"border-style:solid;borderwidth:1\">\n");
+            print $html ("<tr><th align=left>Parameter</th><th align=left>Type</th><th align=left>Description</th></tr>\n");
+
+            foreach my $param (@${params}) {
+                print $html ("<tr><td>".$param->[1]."</td><td>".$param->[0]."</td><td>undocumented</td></tr>\n");
+            }
+
+            print $html ("</table>");
+        }
+
+        print $html ("</blockquote>\n");
+
+        if (my $return = protoGetReturn($symbolTable{$function}->{prototype}, $function) ne "void") {
+            print $html ("<h3>Return Value</h3>\n");
+            print $html ("<blockquote>\n");
+            print $html ("undocumented\n");
+            print $html ("</blockquote>\n");
+        }
+    }
+
+    close($html);
+}
