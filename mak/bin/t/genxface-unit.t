@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 27;
+use Test::More tests => 28;
 
 require "genxface.pl";
 
@@ -58,5 +58,10 @@ $proto = "List List_vnew(unsigned number, List_type elem, ...)";
 $params = protoGetParams($proto, "List_vnew");
 is(scalar(@{$params}), 3,     "List_vnew has 3 parameters");
 is($params->[2]->[0],  "...", "3rd parameter type is ...");
+
+my $comment = "/* A brief description\n * \nLonger description, blah, blah.\n * \@param parameter description of parameter\n".
+              "* \@param par2 = Another parameter \n \@return 10 \@ a time\n \@note This is a note\n */";
+my $docComment = docCommentParse($comment, "function");
+is($docComment->{brief}, "A brief description", "Doc comment's brief description is 'A brief description'");
 
 exit(0);

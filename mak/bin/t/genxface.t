@@ -17,10 +17,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use strict;
-use warnings;
+
+use Cwd;
 use File::Path;
 use FindBin qw($Bin);
-use Test::More tests => 6;
+use Test::More tests => 8;
 
 my $slash = ($^O eq "MSWin32") ? "\\" : "/";
 chdir($Bin);
@@ -36,5 +37,11 @@ is(system("diff expected-list-proto.h libperlike/list-proto.h"),                
 
 chdir("lib-testcode");
 rmtree("build-linux-release");
-is(system("$Bin$slash..${slash}genxface.pl -d -o build-linux-release"),                      0, "Ran genxface.pl -d -o on lib-testcode");
+is(system("$Bin$slash..${slash}genxface.pl -dm -o build-linux-release"),                     0, "Ran genxface.pl -dm -o on lib-testcode");
 is(system("diff ../expected-lib-testcode-proto.h build-linux-release/lib-testcode-proto.h"), 0, "lib-testcode-proto.h as expected");
+is(system("diff ../expected-testcode_mock__.c testcode_mock__.c"),                           0, "testcode_mock__.c as expected");
+
+chdir("../lib-sxe") or die("Couldn't chdir to ../lib-sxe from ".cwd()."\n");
+rmtree("build-linux-release");
+is(system("$Bin$slash..${slash}genxface.pl -dw -o build-linux-release"),                     0, "Ran genxface.pl -dw -o on lib-sxe");
+#is(system("diff ../expected-lib-sxe-public.h build-linux-release/lib-sxe-proto.h"),          0, "lib-sxe-public.h as expected");

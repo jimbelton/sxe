@@ -6,34 +6,54 @@ extern "C" {
 #endif
 
 EV_INLINE struct ev_loop * ev_default_loop_uc (void) ;
+
+/* you can call this as often as you like */
 EV_INLINE struct ev_loop * ev_default_loop (unsigned int flags) ;
+
+/* returns true when successful */
 EV_INLINE ev_tstamp ev_now (void) ;
 EV_INLINE int ev_is_default_loop (EV_P) ;
 void ev_set_syserr_cb (void (*cb)(const char *msg)) ;
 void ev_set_allocator (void *(*cb)(void *ptr, long size)) ;
 inline_speed void * ev_realloc (void *ptr, long size) ;
+
+/*****************************************************************************/
 ev_tstamp ev_time (void) ;
 ev_tstamp inline_size get_clock (void) ;
 void ev_sleep (ev_tstamp delay) ;
 int inline_size array_nextsize (int elem, int cur, int cnt) ;
+
+/*****************************************************************************/
 void noinline ev_feed_event (EV_P_ void *w, int revents) ;
 void inline_speed queue_events (EV_P_ W *events, int eventcnt, int type) ;
+
+/*****************************************************************************/
 void inline_speed fd_event (EV_P_ int fd, int revents) ;
 void ev_feed_fd_event (EV_P_ int fd, int revents) ;
 void inline_size fd_reify (EV_P) ;
 void inline_size fd_change (EV_P_ int fd, int flags) ;
 void inline_speed fd_kill (EV_P_ int fd) ;
 int inline_size fd_valid (int fd) ;
+
+/* away from the root */
 void inline_speed downheap (ANHE *heap, int N, int k) ;
+
+/* towards the root */
 void inline_speed upheap (ANHE *heap, int k) ;
 void inline_size adjustheap (ANHE *heap, int N, int k) ;
+
+/* rebuild the heap: this function is used only once and executed rarely */
 void inline_size reheap (ANHE *heap, int N) ;
+
+/*****************************************************************************/
 void inline_speed fd_intern (int fd) ;
 void inline_size evpipe_write (EV_P_ EV_ATOMIC_T *flag) ;
 void noinline ev_feed_signal_event (EV_P_ int signum) ;
 void inline_speed child_reap (EV_P_ int chain, int pid, int status) ;
 int ev_version_major (void) ;
 int ev_version_minor (void) ;
+
+/* return true if we are running with elevated privileges and should ignore env variables */
 int inline_size enable_secure (void) ;
 unsigned int ev_supported_backends (void) ;
 unsigned int ev_recommended_backends (void) ;
@@ -49,6 +69,8 @@ void ev_loop_fork (EV_P) ;
 void ev_loop_verify (EV_P) ;
 void ev_default_destroy (void) ;
 void ev_default_fork (void) ;
+
+/*****************************************************************************/
 void ev_invoke (EV_P_ void *w, int revents) ;
 void inline_speed call_pending (EV_P) ;
 void inline_size idle_reify (EV_P) ;
@@ -60,6 +82,8 @@ void ev_unref (EV_P) ;
 void ev_now_update (EV_P) ;
 void ev_loop (EV_P_ int flags) ;
 void ev_unloop (EV_P_ int how) ;
+
+/*****************************************************************************/
 void inline_size wlist_add (WL *head, WL elem) ;
 void inline_size wlist_del (WL *head, WL elem) ;
 void inline_speed clear_pending (EV_P_ W w) ;
@@ -67,6 +91,8 @@ int ev_clear_pending (EV_P_ void *w) ;
 void inline_size pri_adjust (EV_P_ W w) ;
 void inline_speed ev_start (EV_P_ W w, int active) ;
 void inline_size ev_stop (EV_P_ W w) ;
+
+/*****************************************************************************/
 void noinline ev_io_start (EV_P_ ev_io *w) ;
 void noinline ev_io_stop (EV_P_ ev_io *w) ;
 void noinline ev_timer_start (EV_P_ ev_timer *w) ;
