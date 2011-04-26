@@ -1134,10 +1134,9 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
         /* todo: position in code to implement equivalent to unix domain socket / fd passing on winnt */
         pipe_address.sun_family = AF_UNIX;
         strcpy(pipe_address.sun_path, this->path);
-        pipe_address.sun_len = SUN_LEN(&pipe_address);
 
         peer_address        = (struct sockaddr *)&pipe_address;
-        peer_address_length = pipe_address.sun_len;
+        peer_address_length = SUN_LEN(&pipe_address);
     }
     else
 #endif
