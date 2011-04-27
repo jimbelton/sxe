@@ -477,7 +477,7 @@ sub getSimpleParam
 {
     my ($def, $func, $comment) = @_;
 
-    if ($def =~ /^(.*?)\s*([A-Za-z_\$][A-Za-z0-9_\$]*)\s*$/) {
+    if ($def =~ /^\s*(.*?)\s*([A-Za-z_\$][A-Za-z0-9_\$]*)\s*$/s) {
         return [$1, $2, $comment];
     }
 
@@ -539,19 +539,23 @@ sub protoGetParams
         # Not '(*'
         #
         if (substr($def, 0, 1) ne "*") {
-            ($expr = getExpr(\$def)) or die("Function $func: Unmatched '(' in parameter list");
+            my $calling_convention;
 
-            warn("Function $func: '(' in parameter list is not followed by"
-                 ." a function pointer");
-            $type .= $expr;
-            next;
+            if (($calling_convention = getIdentifier(\$def)) eq "" || $def !~ m~^\s*\*~s) {
+                ($expr = getExpr(\$def)) or die("Function $func: Unmatched '(' in parameter list");
+                warn("Function $func: '(' in parameter list is not followed by a function pointer");
+                $type .= $expr;
+                next;
+            }
+
+            $type .= $calling_convention." ";
         }
 
         # Any number of '*'s allowed.
         #
         do {
             $type .= "*";
-            $def  =~ s/^\*\s*//;
+            $def  =~ s/^\s*\*\s*//s;
         } while (substr($def, 0, 1) eq "*");
 
         my $ident = getIdentifier(\$def);
