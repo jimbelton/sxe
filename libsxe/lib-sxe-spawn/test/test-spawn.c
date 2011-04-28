@@ -155,7 +155,7 @@ main(int argc, char ** argv)
 #ifdef WIN32
     plan_tests(2);
 #else
-    plan_tests(26);
+    plan_tests(29);
 #endif
 
     sxe_register(1, 0);   /* One SXE object to allow only a single simultaneous spawn in this test */
@@ -167,9 +167,10 @@ main(int argc, char ** argv)
 #else
     /* Tests with a non-existent command */
     result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
-#ifdef __APPLE__
-    is(result,                              SXE_RETURN_ERROR_COMMAND_NOT_RUN, "'Succeeded' in spawning non-existent-command");
 
+#ifdef __APPLE__
+    is(result,                              SXE_RETURN_ERROR_COMMAND_NOT_RUN, "Failed to spawn non-existent-command");
+    skip(3,                                                                   "Failed to spawn non-existent-command");
 #else
     is(result,                              SXE_RETURN_OK,                    "'Succeeded' in spawning non-existent-command");
 

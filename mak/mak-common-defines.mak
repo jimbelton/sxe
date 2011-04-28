@@ -131,6 +131,7 @@ define COPYFILES2DIR_SUB
 				printf qq[`$(OSPC)s` -> `$(OSPC)s/`\n], $$src, $$dst; \
 				unlink $$dst; \
 				File::Copy::copy ( $$src, $$dst ) || die qq[$$!]; \
+				utime File::stat::stat($$src)->mtime, File::stat::stat($$src)->mtime, $$dst; \
 			} \
 		} \
 		return 0; \
@@ -157,6 +158,8 @@ $(PERL) -e $(OSQUOTE) \
 	$$gcov_cmd = qq[cd $$dst_dir && gcov *.c 2>&1]; \
 	printf qq[MAKE_PERL_COVERAGE_CHECK: running gcov; $$gcov_cmd\n] if ( $(MAKE_DEBUG) ); \
 	$$gcov_output .=  `$$gcov_cmd`; \
+	$$gcov_output  =~ s~`~\x27~g; \
+	$$gcov_output  =~ s~^/.*~~gm; \
 	$$gcov_output  =~ s~[^\s]+\.h:cannot open source file[\r\n]+~~gs; \
 	$$gcov_output  =~ s~File [^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~Lines executed:[^\r\n]+[\r\n]+~~gs; \

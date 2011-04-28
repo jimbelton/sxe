@@ -24,7 +24,7 @@
 CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wchar-subscripts -Wcomment                   \
 		-Wformat -Wimplicit  -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wparentheses -Wpointer-arith     \
 		-Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch  -Wtrigraphs         \
-		-Wwrite-strings
+		-Wwrite-strings $(CFLAGS_EXTRA)
 
 # See http://gcc.gnu.org/onlinedocs/gcc-3.0/gcc_8.html#SEC135
 # "...but if you want to prove that every single line in your program
@@ -33,7 +33,7 @@ CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wcha
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
 CFLAGS += -O0 -Wunused
 else ifneq ($(filter debug,$(MAKECMDGOALS)),)
-CFLAGS += -O -Wuninitialized -Wno-unused
+CFLAGS += -O0 -Wno-unused
 else
 CFLAGS += -O -Wuninitialized -Wunused
 endif

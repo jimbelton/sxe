@@ -19,49 +19,33 @@
  * THE SOFTWARE.
  */
 
-#include <assert.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <unistd.h>   /* For snprintf on Windows */
+#include <errno.h>
+#include <string.h>
 
-#include "sxe-log.h"
+#include "sxe-util.h"
 
-char *
-sxe_strn_encode(char * buffer, unsigned size, const char * string, unsigned length)
+SXE_STAT *
+sxe_stat(SXE_STAT * status, const char * file)
 {
-    unsigned i;
-    unsigned j;
+    SXEE83("%s(status=%p,file=%s", __func__, status, file);
 
-    SXEE85("sxe_strn_encode(buffer=%p,size=%u,string='%.*s',length=%u)", buffer, size, length, string, length);
-
-    for (i = 0, j = 0; (j < length) && (string[j] != '\0'); j++) {
-        if (string[j] == ' ') {
-            buffer[i++] = '_';
-        }
-        else if ((string[j] == '_') || (string[j] == '=') || isspace(string[j]) || !isprint(string[j])) {
-            if (i + 3 >= size) {
-                break;
-            }
-
-            snprintf(&buffer[i], 4, "=%02X", string[j]);
-            i += 3;
-        }
-        else {
-            buffer[i++] = string[j];
-        }
-
-        if (i == size - 1) {
-            break;
-        }
+    if (stat(file, status) < 0) {
+        SXEL43("%s: warning: can't stat file '%s': %s", __func__, file, strerror(errno));
+        status = NULL;
     }
 
-    assert(i < size);
-    buffer[i] = '\0';
+    SXER81("return status=%p // 0 on error", status);
+    return status;
+}
 
-    if ((j < length) && (string[j] != '\0')) {
-        buffer = NULL;
-    }
+time_t
+sxe_stat_get_time_modification(SXE_STAT * status)
+{
+    return status != NULL ? status->st_mtime : 0;
+}
 
-    SXER81("return buffer=%s", buffer);
-    return buffer;
+off_t
+sxe_stat_get_file_size(SXE_STAT * status)
+{
+    return status != NULL ? status->st_size : 0;
 }

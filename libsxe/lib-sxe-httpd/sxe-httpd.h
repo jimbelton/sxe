@@ -28,6 +28,10 @@
 #include "sxe-list.h"
 #include "sxe-util.h"
 
+#define HTTPD_CONTENT_LENGTH          "Content-Length"
+#define HTTPD_CONNECTION_CLOSE_HEADER "Connection"
+#define HTTPD_CONNECTION_CLOSE_VALUE  "close"
+
 /* NOTE: Order of states is important! */
 typedef enum {
     SXE_HTTPD_CONN_FREE = 0,           /* not connected */
@@ -108,6 +112,7 @@ typedef struct SXE_HTTPD {
     SXE_HTTPD_REQUEST       * requests;
     SXE_BUFFER              * buffers;
     unsigned                  buffersize;
+    unsigned                  buffercount;
     void                    * user_data;
     sxe_httpd_connect_handler on_connect;
     sxe_httpd_request_handler on_request;

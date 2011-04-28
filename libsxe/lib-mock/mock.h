@@ -34,6 +34,7 @@
 
 #ifndef WINDOWS_NT
 # include <netdb.h>
+# include <syslog.h>
 # ifdef __APPLE__
 #  include <sys/uio.h>
 # else /* !defined(__APPLE__) */
@@ -97,10 +98,16 @@ extern MOCK_SSIZE_T (             * mock_write)       (int, const void *, MOCK_S
 
 #ifdef WINDOWS_NT
 extern DWORD        (MOCK_STDCALL * mock_timeGetTime) (void);
-#elif defined(__APPLE__)
+extern int          (             * mock_mkdir)       (const char * pathname);
+#else /* UNIX */
+# if defined(__APPLE__)
 extern int          (MOCK_STDCALL * mock_sendfile)    (int, int, off_t, off_t *, struct sf_hdtr *, int);
-#else
+# else /* !APPLE */
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendfile)    (int, int, off_t *, size_t);
+# endif
+extern int          (             * mock_mkdir)       (const char * pathname, mode_t mode);
+extern void         (             * mock_openlog)     (const char * ident, int option, int facility);
+extern void         (             * mock_syslog)      (int priority, const char *format, ...);
 #endif
 
 #ifndef MOCK_IMPL
@@ -120,10 +127,16 @@ extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendfile)    (int, int, off_t *, size_t
 #define send(fd, buf, len, flags)                (*mock_send)        ((fd), (buf), (len), (flags))
 #ifdef WINDOWS_NT
 #define timeGetTime()                            (*mock_timeGetTime) ()
-#elif __APPLE__
-#define sendfile(in_fd, out_fd, off, len, hdr, _r) (*mock_sendfile)  ((in_fd), (out_fd), (off), (len), (hdr), (_r))
+#define mkdir(pathname)                          (*mock_mkdir)       (pathname)
 #else
-#define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
+# if defined(__APPLE__)
+# define sendfile(in_fd, out_fd, off, len, hdr, _r) (*mock_sendfile)  ((in_fd), (out_fd), (off), (len), (hdr), (_r))
+# else
+# define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
+# endif
+#define mkdir(pathname, mode)                    (*mock_mkdir)       ((pathname), (mode))
+#define openlog(ident, option, facility)         (*mock_openlog)     ((ident), (option), (facility))
+#define syslog(priority, ...)                    (*mock_syslog)      ((priority), __VA_ARGS__)
 #endif
 #define sendto(fd, buf, len, flags, to, tolen)   (*mock_sendto)      ((fd), (buf), (len), (flags), (to), (tolen))
 #define socket(dom, typ, pro)                    (*mock_socket)      ((dom), (typ), (pro))

@@ -151,6 +151,7 @@ sxe_spawn(SXE                    * this,
         exit(-1);
 
     default:
+        close(sock);
         result = SXE_RETURN_OK;
         break;
     }

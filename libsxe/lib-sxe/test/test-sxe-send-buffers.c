@@ -26,7 +26,6 @@
 #include "mock.h"
 #include "sxe.h"
 #include "sxe-log.h"
-#include "sxe-mmap.h"
 #include "sxe-socket.h"
 #include "sxe-test.h"
 #include "sxe-util.h"
@@ -34,6 +33,14 @@
 
 #define TEST_WAIT          2
 #define TEST_COPIES        10
+
+#define ALPHABET           "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~`!@#$%^&*()-_=+[]{}\\|;:'\",<.>/?12345"                                                          // 100
+#define ALPHABET_SOUP      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET                           // 1,000
+#define SOUP_KITCHEN       ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP                      // 10,000
+#define KITCHEN_SINK       SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN                       // 100,000
+#define LARGE_BUFFER       KITCHEN_SINK
+//#define SINK_HOLE          KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK                       // 1,000,000
+//#define LARGE_BUFFER       SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE                          // 10,000,000
 
 static void
 test_event_connect(SXE * this)
@@ -74,7 +81,7 @@ test_event_sent(SXE * this, SXE_RETURN sxe_return)
 }
 
 int
-main(int argc, char *argv[])
+main(void)
 {
     SXE             * client;
     SXE             * listener;
@@ -87,9 +94,7 @@ main(int argc, char *argv[])
     tap_ev            ev;
     char              readbuf[1024];
 
-    SXE_UNUSED_PARAMETER(argc);
-
-    sxe_log_level = SXE_LOG_LEVEL_LIBRARY_TRACE;
+    sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);
     plan_tests(7);
     sxe_register(3, 0);
 
@@ -137,25 +142,23 @@ main(int argc, char *argv[])
     /* Now send the current binary file TEST_COPIES times. That ought to require
      * multiple attempts! */
     {
+        const char sendbuf[] = LARGE_BUFFER;
         char *tempbuf;
-        SXE_MMAP self;
         int i;
 
-        sxe_mmap_open(&self, argv[0]);
-
-        tempbuf = calloc(TEST_COPIES, self.size);
-        SXEA11(tempbuf != NULL, "failed to allocate %u bytes", TEST_COPIES * self.size);
+        tempbuf = calloc(TEST_COPIES, sizeof sendbuf);
+        SXEA11(tempbuf != NULL, "failed to allocate %u bytes", TEST_COPIES * sizeof sendbuf);
 
         SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
         for (i = 0; i < TEST_COPIES; i++) {
-            buffers[i].ptr = self.addr;
-            buffers[i].len = self.size;
+            buffers[i].ptr = sendbuf;
+            buffers[i].len = sizeof sendbuf;
             buffers[i].sent = 0;
             sxe_list_push(&buflist, &buffers[i]);
         }
 
         result = sxe_send_buffers(client, &buflist, test_event_sent);
-        test_ev_queue_wait_read(q_server, TEST_WAIT, &ev, server, "test_event_read", tempbuf, TEST_COPIES * self.size, "server");
+        test_ev_queue_wait_read(q_server, TEST_WAIT, &ev, server, "test_event_read", tempbuf, TEST_COPIES * sizeof sendbuf, "server");
 
         if (result == SXE_RETURN_IN_PROGRESS) {
             is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "test_event_sent", "Client send completed");
@@ -164,7 +167,7 @@ main(int argc, char *argv[])
             is(result, SXE_RETURN_OK, "sxe_send_buffers sent all data at once");
         }
 
-        sxe_mmap_close(&self);
+        free(tempbuf);
     }
 
     return exit_status();

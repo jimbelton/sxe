@@ -19,49 +19,42 @@
  * THE SOFTWARE.
  */
 
-#include <assert.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <unistd.h>   /* For snprintf on Windows */
+/* These must be separate functions from main and eachother so they have their own "frame" objects; see the SXEE## macros.
+ * In addition, they are separated into this helper module to give them a separate sxe_log_control object.
+ */
+
+#if SXE_DEBUG != 0
+#define LOCAL_SXE_DEBUG 1
+#endif
+
+#undef   SXE_DEBUG      /* Since we are testing diagnostic functions, this test program forces debug mode */
+#define  SXE_DEBUG 1
 
 #include "sxe-log.h"
+#include "tap.h"
 
-char *
-sxe_strn_encode(char * buffer, unsigned size, const char * string, unsigned length)
+void test_level_six(SXE_LOG_LEVEL level);
+
+static void
+test_level_eight(SXE_LOG_LEVEL level)
 {
-    unsigned i;
-    unsigned j;
+    SXEE81("test_level_eight(level=%u)", level);
 
-    SXEE85("sxe_strn_encode(buffer=%p,size=%u,string='%.*s',length=%u)", buffer, size, length, string, length);
-
-    for (i = 0, j = 0; (j < length) && (string[j] != '\0'); j++) {
-        if (string[j] == ' ') {
-            buffer[i++] = '_';
-        }
-        else if ((string[j] == '_') || (string[j] == '=') || isspace(string[j]) || !isprint(string[j])) {
-            if (i + 3 >= size) {
-                break;
-            }
-
-            snprintf(&buffer[i], 4, "=%02X", string[j]);
-            i += 3;
-        }
-        else {
-            buffer[i++] = string[j];
-        }
-
-        if (i == size - 1) {
-            break;
-        }
+    if (level == SXE_LOG_LEVEL_LIBRARY_DUMP) {
+        SXEL20("No indent");
+        sxe_log_set_level(SXE_LOG_LEVEL_DEBUG);
+        SXEL20("Indented by 2");
     }
 
-    assert(i < size);
-    buffer[i] = '\0';
+    sxe_log_set_level(level);
+    SXEL21("Set log level to %u", level);
+    SXER80("return // eight");
+}
 
-    if ((j < length) && (string[j] != '\0')) {
-        buffer = NULL;
-    }
-
-    SXER81("return buffer=%s", buffer);
-    return buffer;
+void
+test_level_six(SXE_LOG_LEVEL level)
+{
+    SXEE61("test_level_six(level=%u)", level);
+    test_level_eight(level);
+    SXER60("return // six");
 }

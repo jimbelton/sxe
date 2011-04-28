@@ -112,12 +112,18 @@ main(void)
 
     {
         char readbuf[65536];
+        SXE_BUFFER buffer, buffer2;
         struct stat sb;
         unsigned expected_length;
         int fd;
 
         SXEA11((fd = open("sxe-httpd-proto.h", O_RDONLY)) >= 0, "Failed to open sxe-httpd-proto.h: %s", strerror(errno));
         SXEA11(fstat(fd, &sb) >= 0, "Failed to fstat sxe-httpd-proto.h: %s", strerror(errno));
+
+        buffer.ptr  = "Hello, world";
+        buffer.len  = strlen(buffer.ptr);
+        buffer.sent = 0;
+        buffer2     = buffer;
 
         /* NOTE: these numbers are carefully designed so that we'll hit the
          * following conditions:
@@ -152,7 +158,11 @@ main(void)
                         + SXE_LITERAL_LENGTH(X_NAM "x: " X_V49 "\r\n")                              // + 49 =  511      =  978
                         /* end of second buffer */
                         + SXE_LITERAL_LENGTH("\r\n")                                                // +  2 =    2      =  980
-                        /* end of headers; remainder is file */
+                        /* end of headers - rest is body */
+                        + buffer.len                                                                // + 12 =   14      =  992
+                        + buffer.len                                                                // + 12 =   26      = 1004
+                        + buffer.len                                                                // + 12 =   38      = 1016
+                        /* remainder is file */
                         + sb.st_size;
 
         /* NOTE: sizeof readbuf just happens to be >> size of sxe-httpd-proto.h, so that's why we use it here */
@@ -172,6 +182,9 @@ main(void)
         sxe_httpd_response_header(request, X_NAM "A", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "B", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "C", X_V49, 0);
+        sxe_httpd_response_copy_body_data(request, "Hello, world", 0);
+        sxe_httpd_response_add_body_buffer(request, &buffer);
+        sxe_httpd_response_add_raw_buffer(request, &buffer2);
         sxe_httpd_response_sendfile(request, fd, sb.st_size, handle_sent, NULL);
         is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished sending");
         close(fd);
@@ -181,7 +194,6 @@ main(void)
         test_ev_wait_read(TEST_WAIT, &ev, c, "client_read", readbuf, expected_length, "client");
         /* TODO: actually test that we got the correct contents of buf */
     }
-
 
     return exit_status();
 }

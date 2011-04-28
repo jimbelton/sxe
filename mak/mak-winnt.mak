@@ -202,4 +202,4 @@ CFLAGS.more += -D__func__=__FUNCTION__
 
 endif
 
-CFLAGS += $(CFLAGS.base) $(CFLAGS.more)
+CFLAGS += $(CFLAGS.base) $(CFLAGS.more) $(CFLAGS_EXTRA)

@@ -31,24 +31,20 @@
 #include "sxe-util.h"
 #include "tap.h"
 
-#define TEST_WAIT          2
-#define SXE_MTU_SIZE       1500
+#define TEST_WAIT                                2
+#define SXE_MTU_SIZE                             1500
 #define MTU_COUNTS_FOR_LARGER_THEN_SOCKET_BUFFER 200
+#define TEST_DATA                                "TEST_DATA1234"
+#define TEST_DATA_LENGTH                         (sizeof(TEST_DATA) - 1)
+#define TEST_DATA_3                              "1234_TEST_DATA_3"
+#define TEST_DATA_3_LENGTH                       (sizeof(TEST_DATA_3) - 1)
 
-#define TEST_DATA          "TEST_DATA1234"
-#define TEST_DATA_LENGTH   (sizeof(TEST_DATA) - 1)
-
-static char test_data_2[SXE_MTU_SIZE * MTU_COUNTS_FOR_LARGER_THEN_SOCKET_BUFFER]; // Large amount of data
-
-#define TEST_DATA_3        "1234_TEST_DATA_3"
-#define TEST_DATA_3_LENGTH (sizeof(TEST_DATA_3) - 1)
-
-static char     test_buf[SXE_MTU_SIZE * MTU_COUNTS_FOR_LARGER_THEN_SOCKET_BUFFER];
-static unsigned test_buf_length = 0;
-SXE *           server_side_connected_sxe;
-tap_ev_queue    tap_q_client;
-tap_ev_queue    tap_q_server;
-
+static unsigned char test_data[SXE_MTU_SIZE * MTU_COUNTS_FOR_LARGER_THEN_SOCKET_BUFFER]; // Large amount of data
+static unsigned char test_buf[ SXE_MTU_SIZE * MTU_COUNTS_FOR_LARGER_THEN_SOCKET_BUFFER];
+static unsigned      test_buf_length = 0;
+static SXE *         server_side_connected_sxe;
+static tap_ev_queue  tap_q_client;
+static tap_ev_queue  tap_q_server;
 
 static void
 test_event_connected_server(SXE * this)
@@ -104,14 +100,13 @@ test_event_sxe_is_writable(SXE * this, SXE_RETURN sxe_return)
 int
 main(void)
 {
-    SXE       * client;
-    SXE       * server;
-    tap_ev      ev;
-    unsigned    x       = 0;
-    char        counter = 0;
+    SXE    * client;
+    SXE    * server;
+    tap_ev   ev;
+    unsigned counter;
     SXE_RETURN  send_result;
 
-    sxe_log_level = SXE_LOG_LEVEL_LIBRARY_TRACE;
+    sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);
     plan_tests(31);
     sxe_register(3, 0);
     tap_q_client = tap_ev_queue_new();
@@ -130,8 +125,6 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
 
-
-    /////////////////////////////////////
     /* basic case (less then 1 buffer) */
 
     is(sxe_send(client, TEST_DATA, TEST_DATA_LENGTH, test_event_send_complete), SXE_RETURN_OK,
@@ -144,17 +137,16 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
 
-
-    //////////////////////////////////////////////////
     /* send more then can fit in the sockets buffer */
 
-    while (x < sizeof(test_data_2)) {
-        // Prepopulate the data with known values
-        test_data_2[x++] = counter++;
+    /* Prepopulate the data with known values
+     */
+    for (counter = 0; counter < sizeof(test_data); counter++) {
+        test_data[counter] = counter;
     }
 
     test_buf_length = 0;
-    send_result = sxe_send(client, test_data_2, sizeof(test_data_2), test_event_send_complete);
+    send_result = sxe_send(client, test_data, sizeof(test_data), test_event_send_complete);
     if (send_result != SXE_RETURN_OK && send_result != SXE_RETURN_IN_PROGRESS) {
         fail("send_result neither 'OK' nor 'IN_PROGRESS': %s", sxe_return_to_string(send_result));
     }
@@ -162,16 +154,15 @@ main(void)
         pass("send_result either OK or IN_PROGRESS");
     }
 
-    x = 0;
-    while (x < sizeof(test_data_2)) {
+    for (counter = 0; counter < sizeof(test_data); counter += SXE_CAST(unsigned, tap_ev_arg(ev, "length"))) {
         if (strcmp(test_tap_ev_queue_identifier_wait(tap_q_server, 1, &ev), "test_event_read_server") != 0) {
             fail("Unexpected server event %s", (const char *)tap_ev_identifier(ev));
             break;
         }
-        x += SXE_CAST_NOCONST(unsigned, tap_ev_arg(ev, "length"));
     }
-    is(x, sizeof(test_data_2),                "Second - Received all the data");
-    is(tap_ev_queue_length(tap_q_server),  0, "Second - There are no pending server events at this point");
+
+    is(counter,                            sizeof(test_data), "Second - Received all the data");
+    is(tap_ev_queue_length(tap_q_server),  0,                 "Second - There are no pending server events at this point");
 
     if (send_result == SXE_RETURN_OK) {
         skip(2, "No call back needed: sxe_send() returned immediately");
@@ -184,21 +175,16 @@ main(void)
 
     is(tap_ev_queue_length(tap_q_client),  0, "Second - There are no pending client events at this point");
 
-    x = 0;
-    counter = 0;
-    while (x < sizeof(test_data_2)) {
-        // Verify the data that was read
-        if (test_buf[x] != counter) {
-            printf("sxe_send() data is corrupted!, Got '%c', Expected '%c'\n", test_buf[x], counter);
-            is(test_buf[x], counter, "sxe_send() data is corrupted!");
-            exit(-1);
+    /* Verify the data that was read
+     */
+    for (counter = 0; counter < sizeof(test_data); counter++) {
+        if (test_buf[counter] != (unsigned char)counter) {
+            printf("sxe_send() data is corrupted: Got 0x%02x, expected 0x%02x\n", test_buf[counter], (unsigned char)counter);
+            is(test_buf[counter], (unsigned char)counter, "sxe_send() data is corrupted!");
+            exit(1);
         }
-        counter++;
-        x++;
     }
 
-
-    /////////////////////////////////////////////////
     /* the sxe_send(er) can now still recieve data */
 
     test_buf_length = 0;
@@ -208,8 +194,6 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
 
-
-    ///////////////////////////////////////////
     /* simple test for sxe_notify_writable() */
 
     // Note: this is really just testing that EV works...
@@ -223,9 +207,7 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
 
-
-    ////////////////////////
-    // sxe_send() failure */
+    /* sxe_send() failure */
 
     sxe_close(client);
     is(sxe_send(client, TEST_DATA, TEST_DATA_LENGTH, test_event_send_complete), SXE_RETURN_ERROR_NO_CONNECTION,
@@ -233,7 +215,6 @@ main(void)
 
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
-
     return exit_status();
 }
 

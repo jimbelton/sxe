@@ -28,8 +28,8 @@
 #include "tap.h"
 
 #define TEST_WAIT               5.0
-#define TEST_200_RESPONSE       "HTTP/1.1 200 OK\r\n\r\n"
-#define TEST_200_CLOSE_RESPONSE "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n"
+#define TEST_200_RESPONSE       "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+#define TEST_200_CLOSE_RESPONSE "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
 
 tap_ev_queue q_httpd;
 

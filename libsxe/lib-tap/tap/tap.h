@@ -29,7 +29,7 @@
 #ifndef __TAP_H__
 #define __TAP_H__
 
-#include <stdlib.h>
+#include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
 

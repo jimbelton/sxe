@@ -25,6 +25,10 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "sxe-log.h"
 
@@ -55,6 +59,11 @@ typedef struct SXE_SHA1 {
 extern unsigned char sxe_rot13_char[];
 
 #define SXE_BOOL_TO_STR(bool_val) (bool_val) ? "true" : "false"
+
+/* Definitions for sxe-stat (wierd formatting due to requirement that our structure tags are upper case
+ */
+typedef struct \
+    stat SXE_STAT;
 
 #include "lib-sxe-util-proto.h"
 

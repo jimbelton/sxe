@@ -44,11 +44,9 @@ main(void)
     unsigned      id;
     unsigned      bucket;
     int           counter[MAX_BUCKET_INDEX];
-    SXE_LOG_LEVEL old_log_level;
 
     plan_tests(2);
-    old_log_level = sxe_log_level;
-    sxe_log_level = SXE_LOG_LEVEL_DEBUG;
+    sxe_log_set_level(SXE_LOG_LEVEL_DEBUG);
 
     memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
     hash = sxe_hash_new("test-hash", HASH_SIZE);
@@ -93,7 +91,5 @@ main(void)
     }
 
     is(i, HASH_SIZE, "%u items lookup3 hashed and no bucket has more that %u entries", i, MAX_ALLOWED_PER_BUCKET_INDEX + 1);
-
-    sxe_log_level = old_log_level;
     return exit_status();
 }

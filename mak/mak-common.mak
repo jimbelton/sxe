@@ -163,6 +163,9 @@ endif
 
 DEP.includes := $(foreach PACKAGE, $(DEP.lib_pkgs) $(DEP.dll_pkgs), $(COM.dir)/$(PACKAGE))
 
+TOP.path    = $(realpath $(TOP.dir))/
+# CUR.dir is the path to the current directory with the path to the top of the project removed, leaving e.g. "libsxe/lib-sxe"
+CUR.dir     = $(subst $(TOP.path),,$(realpath .))
 IFLAGS      = $(CC_INC). \
               $(CC_INC)$(OS_class) \
               $(foreach DIR,$(DEP.includes),$(CC_INC)$(DIR)) \
@@ -170,7 +173,7 @@ IFLAGS      = $(CC_INC). \
 # TODO: Export lib-tap headers with libsxe.a or have a way of automatically adding lib-tap (below)
 IFLAGS_TEST = $(CC_INC)./test \
               $(CC_INC)$(COM.dir)/../libsxe/lib-tap/$(DST.dir)
-CFLAGS     += -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir)
+CFLAGS     += -DSXE_FILE=\"$(CUR.dir)/$<\" -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir)
 CFLAGS_TEST+= $(IFLAGS_TEST)
 SRC.c      := $(wildcard *.c) $(subst $(OS_class)/,,$(wildcard $(OS_class)/*.c))
 DST.d      += $(SRC.c:%.c=$(DST.dir)/%.d) $(patsubst %,$(DST.dir)/%,$(subst .c,.d,$(wildcard test/*.c)))
@@ -218,6 +221,7 @@ $(info make[$(MAKELEVEL)]: debug: COVERAGE...............: $(COVERAGE))
 $(info make[$(MAKELEVEL)]: debug: RELEASE_TYPE...........: $(RELEASE_TYPE))
 $(info make[$(MAKELEVEL)]: debug: TOP.dir................: $(TOP.dir))
 $(info make[$(MAKELEVEL)]: debug: COM.dir................: $(COM.dir))
+$(info make[$(MAKELEVEL)]: debug: CUR.dir................: $(CUR.dir))
 $(info make[$(MAKELEVEL)]: debug: SRC.c..................: $(SRC.c))
 $(info make[$(MAKELEVEL)]: debug: OS_class...............: $(OS_class))
 $(info make[$(MAKELEVEL)]: debug: OS_name................: $(OS_name))

@@ -138,7 +138,7 @@ main(void)
     char        buffer[4096];
     off_t       offset;
 
-    sxe_log_level = SXE_LOG_LEVEL_LIBRARY_TRACE;
+    sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);
     plan_tests(22);
     sxe_register(3, 0);
 
