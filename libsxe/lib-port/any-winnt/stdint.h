@@ -25,7 +25,15 @@
 #define __SXE_STDINT_H
 
 #ifdef MAKE_MINGW
-#include <_mingw.h>
+#   include <_mingw.h>
+#   include <io.h> // for intptr_t (but not uintptr_t)
+#   ifdef _WIN64
+    typedef unsigned __int64 uintptr_t;
+#   else
+    typedef unsigned __int32 uintptr_t;
+#   endif
+#else
+#   include <stddef.h>    /* For [u]intptr_t */
 #endif
 
 typedef          __int8  int8_t       ;

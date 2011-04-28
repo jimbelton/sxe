@@ -1417,11 +1417,12 @@ sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents)
 static SXE_RETURN
 sxe_send_buffers_again(SXE * this)
 {
-    SXE_RETURN result = SXE_RETURN_OK;
+    SXE_RETURN   result = SXE_RETURN_OK;
+    SXE_BUFFER * buffers;
 
     SXEE82I("sxe_send_buffers_again(this=%p) // socket=%d", this, this->socket);
-    SXE_BUFFER *buffers = sxe_list_walker_find(&this->send_list_walk);
 
+    buffers = sxe_list_walker_find(&this->send_list_walk);
     while (buffers) {
         result = sxe_write(this, buffers->ptr + buffers->sent, buffers->len - buffers->sent);
         buffers->sent += this->last_write;

@@ -88,8 +88,10 @@ main(void)
 #ifdef _WIN32
     plan_skip_all("- skip this test program on Windows until lib-sxe can support named pipes");
     (void)test_event_pipe_connected;
+    (void)test_event_connected;
     (void)test_event_read;
     (void)test_event_close;
+    (void)client_connected;
 #else
     char           path[64];
     char           buffer[4096];

@@ -27,14 +27,13 @@
 
 #ifdef __APPLE__
 #include <spawn.h>
+extern char **environ;
 #endif
 
 #include "sxe.h"
 #include "sxe-log.h"
 #include "sxe-spawn.h"
 #include "sxe-util.h"
-
-extern char **environ;
 
 SXE_RETURN
 sxe_spawn_init(void)

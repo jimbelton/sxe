@@ -111,8 +111,8 @@ static inline SXE * sxe_httpd_request_get_sxe(SXE_HTTPD_REQUEST * request) { ret
 typedef struct SXE_HTTPD {
     SXE_HTTPD_REQUEST       * requests;
     SXE_BUFFER              * buffers;
-    unsigned                  buffersize;
-    unsigned                  buffercount;
+    unsigned                  buffer_size;
+    unsigned                  buffer_count;
     void                    * user_data;
     sxe_httpd_connect_handler on_connect;
     sxe_httpd_request_handler on_request;

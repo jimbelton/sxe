@@ -29,9 +29,12 @@
 #ifndef __TAP_H__
 #define __TAP_H__
 
-#include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+
+#if !defined(_WIN32) || defined(MAKE_MINGW)
+#   include <stdint.h>    /* For uintptr_t, which Windows puts in <stddef.h>; Windows doesn't have <stdint.h> */
+#endif
 
 /**
  * plan_tests - announce the number of tests you plan to run

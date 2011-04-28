@@ -32,15 +32,12 @@
 #include "tap.h"
 
 #define TEST_WAIT          2
-#define TEST_COPIES        10
+#define TEST_COPIES        16
 
 #define ALPHABET           "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~`!@#$%^&*()-_=+[]{}\\|;:'\",<.>/?12345"                                                          // 100
 #define ALPHABET_SOUP      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET      ALPHABET                           // 1,000
 #define SOUP_KITCHEN       ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP ALPHABET_SOUP                      // 10,000
-#define KITCHEN_SINK       SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN  SOUP_KITCHEN                       // 100,000
-#define LARGE_BUFFER       KITCHEN_SINK
-//#define SINK_HOLE          KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK  KITCHEN_SINK                       // 1,000,000
-//#define LARGE_BUFFER       SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE     SINK_HOLE                          // 10,000,000
+#define LARGE_BUFFER       SOUP_KITCHEN SOUP_KITCHEN SOUP_KITCHEN SOUP_KITCHEN SOUP_KITCHEN SOUP_KITCHEN                                                                                    // 60,000 (< 65535 limit in cl.exe)
 
 static void
 test_event_connect(SXE * this)

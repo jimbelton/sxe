@@ -40,6 +40,8 @@
 # else /* !defined(__APPLE__) */
 #  include <sys/sendfile.h>
 # endif
+#else
+# include <direct.h>
 #endif
 
 /* CONVENTION EXCLUSION: system functions mocked using #define */
