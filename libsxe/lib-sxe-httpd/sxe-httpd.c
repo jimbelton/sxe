@@ -814,7 +814,8 @@ sxe_httpd_response_header(SXE_HTTPD_REQUEST * request, const char *header, const
     int          len;
 
     SXEE84I("sxe_httpd_response_header(request=%p,header=%s,value=%.*s)", request, header, vlen, value);
-    SXEA80I(!SXE_LIST_IS_EMPTY(&request->out_buffer_list), "sxe_httpd_response_header() called before sxe_httpd_response_start()");
+    SXEA80I(!request->out_eoh, "sxe_httpd_response_header() called after EOH");
+    SXEA81I(!SXE_LIST_IS_EMPTY(&request->out_buffer_list), "%s() called before sxe_httpd_response_start()", __func__);
 
     /* Try to write the header into the existing buffer */
     buffer = sxe_list_peek_tail(&request->out_buffer_list);
@@ -878,7 +879,7 @@ sxe_httpd_response_eoh(SXE_HTTPD_REQUEST *request)
             buffer->space[buffer->len + 0] = '\r';
             buffer->space[buffer->len + 1] = '\n';
             buffer->len += 2;
-            SXEL82I("sxe_httpd_response_header(): wrote EOF to buffer %u: now u bytes", SXE_LIST_GET_LENGTH(&request->out_buffer_list), buffer->len);
+            SXEL82I("sxe_httpd_response_header(): wrote EOF to buffer %u: now %u bytes", SXE_LIST_GET_LENGTH(&request->out_buffer_list), buffer->len);
             goto SXE_SUCCESS_OUT;
         }
     }
@@ -982,7 +983,7 @@ sxe_httpd_response_copy_body_data(SXE_HTTPD_REQUEST *request, const char *chunk,
     SXE_UNUSED_PARAMETER(this);
 
     SXEE84I("%s(request=%p, chunk=%p, length=%u)", __func__, request, chunk, length);
-    SXEA81I(!SXE_LIST_IS_EMPTY(&request->out_buffer_list), "%s() called before sxe_httpd_response_start()", __func__);
+    SXEA81I(request->out_eoh || !SXE_LIST_IS_EMPTY(&request->out_buffer_list), "%s() called before sxe_httpd_response_start()", __func__);
 
     SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
     result = copy_data_to_buffer_list(request, &buflist, chunk, length);
@@ -1067,9 +1068,11 @@ SXE_EARLY_OUT:
  *
  * @note The buffer is appended to the response queue, so the data in the
  *       buffer must not be modified until the data has been sent. A callback
- *       can be passed to sxe_httpd_response_end() to notify the application
- *       that the buffer has been sent. Any application-added buffers will be
- *       left in request->out_buffer_list during the callback.
+ *       can be passed to sxe_httpd_response_sendfile() or
+ *       sxe_httpd_response_end() to notify the application that the buffer
+ *       has been sent. Only application-added buffers will be left in
+ *       request->out_buffer_list during the callback, and will be
+ *       automatically removed after the callback.
  */
 SXE_RETURN
 sxe_httpd_response_add_body_buffer(SXE_HTTPD_REQUEST *request, SXE_BUFFER *buffer)
@@ -1080,7 +1083,7 @@ sxe_httpd_response_add_body_buffer(SXE_HTTPD_REQUEST *request, SXE_BUFFER *buffe
     SXE_UNUSED_PARAMETER(this);
 
     SXEE83I("%s(request=%p, buffer=%p)", __func__, request, buffer);
-    SXEA81I(!SXE_LIST_IS_EMPTY(&request->out_buffer_list), "%s() called before sxe_httpd_response_start()", __func__);
+    SXEA81I(request->out_eoh || !SXE_LIST_IS_EMPTY(&request->out_buffer_list), "%s() called before sxe_httpd_response_start()", __func__);
 
     if (!request->out_eoh) {
         if (sxe_httpd_response_eoh(request) != SXE_RETURN_OK) {
@@ -1138,6 +1141,19 @@ sxe_httpd_event_sendfile_done(SXE * this, SXE_RETURN final_result)
     if (request->on_sent_handler) {
         (*request->on_sent_handler)(request, final_result, request->on_sent_userdata);
     }
+
+    /* The callback may have added more buffers. Remove elements from the
+     * beginning of the list until all the sent buffers are gone. */
+    while (!SXE_LIST_IS_EMPTY(&request->out_buffer_list)) {
+        SXE_BUFFER * buffer = sxe_list_peek_head(&request->out_buffer_list);
+        if (buffer->sent == buffer->len) {
+            sxe_list_remove(&request->out_buffer_list, buffer);
+        }
+        else {
+            break;          /* Coverage Exclusion: todo: test adding more buffers during the on_sent_handler callback */
+        }
+    }
+
     SXER80I("return");
 }
 
@@ -1163,7 +1179,7 @@ sxe_httpd_response_sendfile(SXE_HTTPD_REQUEST *request, int fd, unsigned length,
     SXE        * this   = request->sxe;
 
     SXEE86I("%s(request=%p,fd=%d,length=%u,handler=%p,user_data=%p)", __func__, request, fd, length, handler, user_data);
-    SXEA80I(!SXE_LIST_IS_EMPTY(&request->out_buffer_list), "sxe_httpd_response_sendfile() called before sxe_httpd_response_start()");
+    SXEA81I(request->out_eoh || !SXE_LIST_IS_EMPTY(&request->out_buffer_list), "%s() called before sxe_httpd_response_start()", __func__);
 
     request->on_sent_handler  = handler;
     request->on_sent_userdata = user_data;

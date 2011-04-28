@@ -112,7 +112,7 @@ main(void)
 
     {
         char readbuf[65536];
-        SXE_BUFFER buffer, buffer2;
+        SXE_BUFFER buffer, buffer2, buffer3;
         struct stat sb;
         unsigned expected_length;
         int fd;
@@ -124,6 +124,7 @@ main(void)
         buffer.len  = strlen(buffer.ptr);
         buffer.sent = 0;
         buffer2     = buffer;
+        buffer3     = buffer;
 
         /* NOTE: these numbers are carefully designed so that we'll hit the
          * following conditions:
@@ -163,7 +164,10 @@ main(void)
                         + buffer.len                                                                // + 12 =   26      = 1004
                         + buffer.len                                                                // + 12 =   38      = 1016
                         /* remainder is file */
-                        + sb.st_size;
+                        + sb.st_size
+                        + buffer.len
+                        + buffer.len
+                        ;
 
         /* NOTE: sizeof readbuf just happens to be >> size of sxe-httpd-proto.h, so that's why we use it here */
         sxe_httpd_response_start(request, 200, "OK");
@@ -188,6 +192,8 @@ main(void)
         sxe_httpd_response_sendfile(request, fd, sb.st_size, handle_sent, NULL);
         is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished sending");
         close(fd);
+        sxe_httpd_response_copy_body_data(request, "Hello, world", 0);
+        sxe_httpd_response_add_body_buffer(request, &buffer3);
         sxe_httpd_response_end(request, handle_sent, NULL);
         is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
 

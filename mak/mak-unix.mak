@@ -33,7 +33,7 @@ CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wcha
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
 CFLAGS += -O0 -Wunused
 else ifneq ($(filter debug,$(MAKECMDGOALS)),)
-CFLAGS += -O0 -Wno-unused
+CFLAGS += -O -Wuninitialized -Wno-unused
 else
 CFLAGS += -O -Wuninitialized -Wunused
 endif
