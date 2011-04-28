@@ -1529,7 +1529,7 @@ sxe_log_get_indent_maximum(void)
     }
     return (unsigned)(uintptr_t)pthread_getspecific(sxe_log_indent_maximum_key);
 #else
-    return sxe_log_stack_top;
+    return sxe_log_indent_maximum;
 #endif
 }
 
