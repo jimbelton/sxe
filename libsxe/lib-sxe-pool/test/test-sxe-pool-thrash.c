@@ -111,8 +111,8 @@ test_walker_thread(void * state_as_ptr)
         }
     }
 
+    SXER80("return 0");
     return 0;
-
 }
 
 int

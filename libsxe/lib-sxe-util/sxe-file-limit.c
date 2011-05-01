@@ -19,49 +19,43 @@
  * THE SOFTWARE.
  */
 
-#include <assert.h>
-#include <ctype.h>
+#include <errno.h>
+#include <string.h>
+
+#ifdef WIN32
 #include <stdio.h>
-#include <unistd.h>   /* For snprintf on Windows */
+#else
+#include <sys/time.h>
+#include <sys/resource.h>
+#endif
 
-#include "sxe-log.h"
+#include "sxe-util.h"
 
-char *
-sxe_strn_encode(char * buffer, unsigned size, const char * string, unsigned length)
+SXE_RETURN
+sxe_set_file_limit(const unsigned limit)
 {
-    unsigned i;
-    unsigned j;
+    SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
 
-    SXEE85("sxe_strn_encode(buffer=%p,size=%u,string='%.*s',length=%u)", buffer, size, length, string, length);
+#ifndef _WIN32
+    struct rlimit rt;
+    rt.rlim_max = limit;
+    rt.rlim_cur = limit;
+#endif
 
-    for (i = 0, j = 0; (j < length) && (string[j] != '\0'); j++) {
-        if (string[j] == ' ') {
-            buffer[i++] = '_';
-        }
-        else if ((string[j] == '_') || (string[j] == '=') || isspace(string[j]) || !isprint(string[j])) {
-            if (i + 3 >= size) {
-                break;
-            }
-
-            snprintf(&buffer[i], 4, "=%02X", string[j]);
-            i += 3;
-        }
-        else {
-            buffer[i++] = string[j];
-        }
-
-        if (i == size - 1) {
-            break;
-        }
+    if
+#ifdef _WIN32
+       (_setmaxstdio(limit) == -1)
+#else
+       (setrlimit(RLIMIT_NOFILE, &rt) == -1)
+#endif
+    {
+        SXEL91("Failed to set file limit to '%u'", limit);
+        goto SXE_ERROR_OUT; /* COVERAGE EXCLUSION - TODO: WIN32 COVERAGE */
     }
 
-    assert(i < size);
-    buffer[i] = '\0';
+    result = SXE_RETURN_OK;
 
-    if ((j < length) && (string[j] != '\0')) {
-        buffer = NULL;
-    }
-
-    SXER81("return buffer=%s", buffer);
-    return buffer;
+SXE_ERROR_OUT:
+    return result;
 }
+

@@ -462,6 +462,8 @@ sxe_io_cb_read(EV_P_ ev_io * io, int revents)
 SXE_TRY_AND_READ_AGAIN:
         if (this->path) {
 #ifndef _WIN32
+            memset(&message_header, 0, sizeof message_header);
+
             io_vector[0].iov_base =        this->in_buf  + this->in_total;
             io_vector[0].iov_len  = sizeof(this->in_buf) - this->in_total;
             message_header.msg_control    = &control_message_buf;
@@ -498,28 +500,32 @@ SXE_TRY_AND_READ_AGAIN:
                 }
 
                 if (this->next_socket >= 0) {
-                     if (ioctl(this->socket, SIOCINQ, &input_data_left) < 0) {
-                         SXEL22("sxe_io_cb_read(): ioctl(socket=%d,SIOCINQ) failed: %s", this->socket,    /* Coverage Exclusion: TODO */
-                                sxe_socket_error_as_str(errno));                                          /* Coverage Exclusion: TODO */
-                     }
-                     else if (input_data_left == 0) {
-                         SXEL81I("No more data on pipe: closing pipe socket=%d", this->socket);
-                         close(this->socket);
-#ifdef EV_MULTIPLICITY
-                         ev_io_stop(sxe_private_main_loop, &this->io);
-#else
-                         ev_io_stop(&this->io);
-#endif
-                         this->socket       = this->next_socket;
-                         this->socket_as_fd = this->next_socket;    /* Same thing, since pipes are UNIX only    */
-                         this->next_socket  = -1;                   /* Won't be used again, but clear it anyway */
-                         this->path         = NULL;
-                         this->flags       |=  SXE_FLAG_IS_STREAM;
+                    getpeername(this->next_socket, (struct sockaddr *)&this->peer_addr, &peer_addr_size);
+                    SXEA81I(peer_addr_size == sizeof(this->peer_addr), "Peer address is not an IPV4 address (peer_addr_size=%d)",
+                            peer_addr_size);
 
-                         ev_io_init((struct ev_io*)&this->io, sxe_io_cb_read, this->socket, EV_READ);
-                         ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
-                         SXEL81I("Set connection to use received TCP socket=%d", this->socket);
-                     }
+                    if (ioctl(this->socket, SIOCINQ, &input_data_left) < 0) {
+                        SXEL22("sxe_io_cb_read(): ioctl(socket=%d,SIOCINQ) failed: %s", this->socket,    /* Coverage Exclusion: TODO */
+                               sxe_socket_error_as_str(errno));                                          /* Coverage Exclusion: TODO */
+                    }
+                    else if (input_data_left == 0) {
+                        SXEL81I("No more data on pipe: closing pipe socket=%d", this->socket);
+                        close(this->socket);
+#ifdef EV_MULTIPLICITY
+                        ev_io_stop(sxe_private_main_loop, &this->io);
+#else
+                        ev_io_stop(&this->io);
+#endif
+                        this->socket       = this->next_socket;
+                        this->socket_as_fd = this->next_socket;    /* Same thing, since pipes are UNIX only    */
+                        this->next_socket  = -1;                   /* Won't be used again, but clear it anyway */
+                        this->path         = NULL;
+                        this->flags       |=  SXE_FLAG_IS_STREAM;
+
+                        ev_io_init((struct ev_io*)&this->io, sxe_io_cb_read, this->socket, EV_READ);
+                        ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
+                        SXEL81I("Set connection to use received TCP socket=%d", this->socket);
+                    }
                 }
             }
 #endif
@@ -1203,6 +1209,8 @@ sxe_write_pipe(SXE * this, const void * buf, unsigned size, int fd_to_send)
     SXEE84I("sxe_write_pipe(this=%p,size=%u,fd_to_send=%d) // socket=%d", this, size, fd_to_send, this->socket);
     SXED90I(buf, size);
 
+    memset(&message_header, 0, sizeof message_header);
+
     /* This may be the worst API yet: move over Windows.
      */
     io_vector[0].iov_base                  = (void *)(long)buf;
@@ -1278,6 +1286,7 @@ sxe_write(SXE * this, const void * buf, unsigned size)
 {
     SXE_RETURN  result = SXE_RETURN_ERROR_INTERNAL;
     int         ret;
+    int         socket_error;
 
     SXEA80I(this != NULL,                       "SXE pointer is NULL");
     SXEA80I((this->flags & SXE_FLAG_IS_STREAM), "SXE is not a stream SXE");
@@ -1310,16 +1319,17 @@ sxe_write(SXE * this, const void * buf, unsigned size)
             result = SXE_RETURN_WARN_WOULD_BLOCK; /* Coverage Exclusion - todo: win32 coverage */
         }
         else {
-            SXEL23I("sxe_write(): Error writing to socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+            socket_error = sxe_socket_get_last_error();
+            SXEL23I("sxe_write(): Error writing to socket=%d: (%d) %s", this->socket, socket_error, sxe_socket_get_last_error_as_str());
             this->last_write = 0;
 
-            if ((sxe_socket_get_last_error() == SXE_SOCKET_ERROR(ECONNRESET  ))
-             || (sxe_socket_get_last_error() == SXE_SOCKET_ERROR(ECONNREFUSED))
-             || (sxe_socket_get_last_error() == SXE_SOCKET_ERROR(ENOTCONN)))        /* Windows */
+            if ((socket_error == SXE_SOCKET_ERROR(ECONNRESET  ))
+             || (socket_error == SXE_SOCKET_ERROR(ECONNREFUSED))
+             || (socket_error == SXE_SOCKET_ERROR(ENOTCONN)))        /* Windows */
             {
                 result = SXE_RETURN_ERROR_NO_CONNECTION;
             }
-            else if (sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EWOULDBLOCK)) {
+            else if (socket_error == SXE_SOCKET_ERROR(EWOULDBLOCK)) {
                 result = SXE_RETURN_WARN_WOULD_BLOCK;
             }
         }
@@ -1355,8 +1365,8 @@ sxe_io_cb_send(EV_P_ ev_io * io, int revents) /* Coverage Exclusion - todo: win3
 
     if (result != SXE_RETURN_OK) {  /* Coverage Exclusion - todo: win32 coverage */
         if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
-           SXEL82("Partial write, written %u bytes of %u", this->send_buf_written, this->send_buf_len);
-           goto SXE_EARLY_OUT; /* Coverage Exclusion - todo: win32 coverage */
+            SXEL82("Partial write, written %u bytes of %u", this->send_buf_written, this->send_buf_len);
+            goto SXE_EARLY_OUT; /* Coverage Exclusion - todo: win32 coverage */
         }
     }
 

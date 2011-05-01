@@ -19,49 +19,15 @@
  * THE SOFTWARE.
  */
 
-#include <assert.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <unistd.h>   /* For snprintf on Windows */
+#ifndef __SXE_DIRWATCH_H__
+#define __SXE_DIRWATCH_H__
 
-#include "sxe-log.h"
+/* TODO: implement sxe_dirwatch on windows */
 
-char *
-sxe_strn_encode(char * buffer, unsigned size, const char * string, unsigned length)
-{
-    unsigned i;
-    unsigned j;
+#define SXE_DIRWATCH_CREATED      1        /* file was created (or moved into directory via rename) */
+#define SXE_DIRWATCH_MODIFIED     2        /* file was modified */
+#define SXE_DIRWATCH_DELETED      4        /* file was deleted (or moved out of diretory via rename) */
 
-    SXEE85("sxe_strn_encode(buffer=%p,size=%u,string='%.*s',length=%u)", buffer, size, length, string, length);
+#include "sxe-dirwatch-proto.h"
 
-    for (i = 0, j = 0; (j < length) && (string[j] != '\0'); j++) {
-        if (string[j] == ' ') {
-            buffer[i++] = '_';
-        }
-        else if ((string[j] == '_') || (string[j] == '=') || isspace(string[j]) || !isprint(string[j])) {
-            if (i + 3 >= size) {
-                break;
-            }
-
-            snprintf(&buffer[i], 4, "=%02X", string[j]);
-            i += 3;
-        }
-        else {
-            buffer[i++] = string[j];
-        }
-
-        if (i == size - 1) {
-            break;
-        }
-    }
-
-    assert(i < size);
-    buffer[i] = '\0';
-
-    if ((j < length) && (string[j] != '\0')) {
-        buffer = NULL;
-    }
-
-    SXER81("return buffer=%s", buffer);
-    return buffer;
-}
+#endif  /* __SXE_DIRWATCH_H__ */

@@ -23,6 +23,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#if SXE_DEBUG != 0
+#define LOCAL_SXE_DEBUG 1
+#endif
+
 #undef  SXE_DEBUG      /* Since we are testing diagnostic functions, the test program forces debug mode */
 #define SXE_DEBUG 1
 
@@ -31,6 +35,10 @@
 #include "tap.h"
 
 #define TEST_YIELD_MAX 1000000
+
+//#ifndef LOCAL_SXE_DEBUG
+//__thread unsigned        sxe_log_indent_maximum = ~0U;
+//#endif
 
 SXE_LOG_LEVEL     test_log_level;
 SXE_SPINLOCK      ping;

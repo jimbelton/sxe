@@ -51,8 +51,12 @@ MOCK_DEF(MOCK_SSIZE_T, CDECL,   write,       (int, const void *, MOCK_SIZE_T));
 
 #ifdef WINDOWS_NT
 MOCK_DEF(DWORD,        STDCALL, timeGetTime, (void));
+MOCK_DEF(int,          CDECL,   mkdir,       (const char * pathname));
 #else
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, sendfile,    (int, int, off_t *, size_t));
+MOCK_DEF(int,          CDECL,   mkdir,       (const char * pathname, mode_t mode));
+MOCK_DEF(void,         CDECL,   openlog,     (const char * ident, int option, int facility));
+MOCK_DEF(void,         CDECL,   syslog,      (int priority, const char * format, ...));
 #endif
 
 /* The following mock was removed because the function that it mocks cannot be linked statically with the debian version of glibc.

@@ -7,8 +7,8 @@
 #include "tap.h"
 
 #define TEST_WAIT 2
-#define TEST_400  "HTTP/1.1 400 Bad request\r\n\r\n"
-#define TEST_414  "HTTP/1.1 414 Request-URI too large\r\n\r\n"
+#define TEST_400  "HTTP/1.1 400 Bad request\r\n"           "Connection: close\r\n" "Content-Length: 0\r\n\r\n"
+#define TEST_414  "HTTP/1.1 414 Request-URI too large\r\n" "Connection: close\r\n" "Content-Length: 0\r\n\r\n"
 #define A100      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 #define A1000     A100 A100 A100 A100 A100 A100 A100 A100 A100 A100
 #define TEST_CASES (sizeof(cases)/sizeof(cases[0]))

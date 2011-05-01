@@ -35,6 +35,9 @@
 #ifndef WINDOWS_NT
 #include <netdb.h>
 #include <sys/sendfile.h>
+#include <syslog.h>
+#else
+#include <direct.h>
 #endif
 
 /* CONVENTION EXCLUSION: system functions mocked using #define */
@@ -90,6 +93,11 @@ extern MOCK_SSIZE_T (             * mock_write)       (int, const void *, MOCK_S
 
 #ifdef WINDOWS_NT
 extern DWORD        (MOCK_STDCALL * mock_timeGetTime) (void);
+extern int          (             * mock_mkdir)       (const char * pathname);
+#else  /* UNIX */
+extern int          (             * mock_mkdir)       (const char * pathname, mode_t mode);
+extern void         (             * mock_openlog)     (const char * ident, int option, int facility);
+extern void         (             * mock_syslog)      (int priority, const char *format, ...);
 #endif
 
 #ifndef MOCK_IMPL
@@ -109,8 +117,12 @@ extern DWORD        (MOCK_STDCALL * mock_timeGetTime) (void);
 #define send(fd, buf, len, flags)                (*mock_send)        ((fd), (buf), (len), (flags))
 #ifdef WINDOWS_NT
 #define timeGetTime()                            (*mock_timeGetTime) ()
+#define mkdir(pathname)                          (*mock_mkdir)       (pathname)
 #else
 #define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
+#define mkdir(pathname, mode)                    (*mock_mkdir)       ((pathname), (mode))
+#define openlog(ident, option, facility)         (*mock_openlog)     ((ident), (option), (facility))
+#define syslog(priority, ...)                    (*mock_syslog)      ((priority), __VA_ARGS__)
 #endif
 #define sendto(fd, buf, len, flags, to, tolen)   (*mock_sendto)      ((fd), (buf), (len), (flags), (to), (tolen))
 #define socket(dom, typ, pro)                    (*mock_socket)      ((dom), (typ), (pro))

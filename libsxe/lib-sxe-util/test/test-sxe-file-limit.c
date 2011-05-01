@@ -19,49 +19,27 @@
  * THE SOFTWARE.
  */
 
-#include <assert.h>
-#include <ctype.h>
-#include <stdio.h>
-#include <unistd.h>   /* For snprintf on Windows */
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
 
-#include "sxe-log.h"
+#include "sxe-util.h"
+#include "tap.h"
 
-char *
-sxe_strn_encode(char * buffer, unsigned size, const char * string, unsigned length)
+int
+main(void)
 {
-    unsigned i;
-    unsigned j;
+    plan_tests(2);
 
-    SXEE85("sxe_strn_encode(buffer=%p,size=%u,string='%.*s',length=%u)", buffer, size, length, string, length);
+    is(sxe_set_file_limit(200),  SXE_RETURN_OK,             "Succesfully set the file limit");
 
-    for (i = 0, j = 0; (j < length) && (string[j] != '\0'); j++) {
-        if (string[j] == ' ') {
-            buffer[i++] = '_';
-        }
-        else if ((string[j] == '_') || (string[j] == '=') || isspace(string[j]) || !isprint(string[j])) {
-            if (i + 3 >= size) {
-                break;
-            }
+#ifdef _WIN32
+    is(1, 1, "A bad file limit on windows causes an abort.");
+#else
+    is(sxe_set_file_limit(-1U), SXE_RETURN_ERROR_INTERNAL, "Succesfully failed to set the file limit");
+#endif
 
-            snprintf(&buffer[i], 4, "=%02X", string[j]);
-            i += 3;
-        }
-        else {
-            buffer[i++] = string[j];
-        }
-
-        if (i == size - 1) {
-            break;
-        }
-    }
-
-    assert(i < size);
-    buffer[i] = '\0';
-
-    if ((j < length) && (string[j] != '\0')) {
-        buffer = NULL;
-    }
-
-    SXER81("return buffer=%s", buffer);
-    return buffer;
+    return exit_status();
 }
+
+

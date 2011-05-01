@@ -116,7 +116,7 @@ main(void)
     unsigned    bytes_compared;
     char        buffer[4096];
 
-    sxe_log_level = SXE_LOG_LEVEL_LIBRARY_TRACE;
+    sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);
     plan_tests(22);
     SXEA10((in_fd = open("test-sxe-sendfile.t", O_RDONLY)) >= 0,         "Failed to open 'test-sxe-sendfile.t'");
     SXEA10(stat("test-sxe-sendfile.t", &in_stat) >= 0,                   "Failed to stat 'test-sxe-sendfile.t'");

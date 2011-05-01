@@ -32,22 +32,32 @@
 #include <time.h>
 #include <winsock2.h> /* For MAX_PATH */
 
-#define _CRT_NONSTDC_NO_DEPRECATE 1    /* Don't complain about POSIX functions */
+#define _CRT_NONSTDC_NO_DEPRECATE 1                     /* Don't complain about POSIX functions                             */
+#define __func__                  __FUNCTION__          /* Emulate __func__ magic variable with __FUNCTION__ magic constant */
 
 #define PIPE_BUF      4096
 
-#ifdef MAKE_MINGW
+/* If not using mingw (minimal GNU for Windows)
+ */
+#ifndef MAKE_MINGW
+#   define PATH_MAX      MAX_PATH
+#   define STDERR_FILENO fileno(stderr)
+#   define STDOUT_FILENO fileno(stdout)
+#   define __thread      __declspec(thread) /* Storage specifier for thread local storage */
 #else
-#define PATH_MAX      MAX_PATH
-#define STDERR_FILENO fileno(stderr)
-#define STDOUT_FILENO fileno(stdout)
-#endif
+#   include <limits.h>    /* For PATH_MAX */
+#endif /* !MAKE_MINGW */
+
+/* Emulate GCC builtin atomic operations with Windows equivalents; Note that MINGW doesn't support the GCC builtins yet
+ */
+#define __sync_val_compare_and_swap(dest, comperand, exchange) InterlockedCompareExchangePointer(dest, exchange, comperand)
+#define __sync_add_and_fetch(       addend, value)             InterlockedExchangeAdd(           addend, value)
 
 #define ftruncate(fd, size)     _chsize((fd), (size))
 #define sleep(t)                Sleep((t) * 1000)
 #define usleep(t)               Sleep((t) / 1000)
 
-/* Signal emulation - Windows seems to be consistent for the signal numbers it defines
+/* Signal emulation - Windows seems to be consistent with Linux for the signal numbers it defines
  */
 #define EINTR         4      /* Interrupted system call */
 #define SIGKILL       9
@@ -58,14 +68,15 @@
 #define flockfile(file)
 #define funlockfile(file)
 
+/* UNIX work-alikes
+ */
 #define getpid()                 _getpid()
 #define pclose(stream)           _pclose(stream)
 #define pipe(phandles)           _pipe((phandles), PIPE_BUF, _O_BINARY)
 #define popen(command, modes)    _popen((command), (modes))
 #define snprintf                 _snprintf
 #define strncasecmp(s1, s2, n)   _strnicmp((s1), (s2), (n))
-
-#define __func__ __FUNCTION__
+#define unsetenv(variable)       (SetEnvironmentVariable((variable), NULL) ? 0 : -1)
 
 /* These should be in <sys/types.h>, but they're not. Thanks, Bill :)
  */

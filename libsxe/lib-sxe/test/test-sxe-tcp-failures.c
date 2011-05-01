@@ -182,6 +182,7 @@ test_mock_send(SXE_SOCKET sock, const MOCK_SOCKET_VOID *buf, MOCK_SOCKET_SSIZE_T
     SXEL66("tap_ev_push(%s=%d, sock=%p, buf=%p, count=%d, flags=%d);", __func__, 4, sock, tap_dup(buf, count), count, flags);
     tap_ev_push(__func__, 4, "sock", sock, "buf", tap_dup(buf, count), "count", count, "flags", flags);
     sxe_socket_set_last_error(test_mock_send_error);
+    SXER60("return -1");
     return -1;
 }
 

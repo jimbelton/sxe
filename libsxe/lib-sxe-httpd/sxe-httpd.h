@@ -27,6 +27,10 @@
 #include "sxe-http.h"
 #include "sxe-list.h"
 
+#define HTTPD_CONTENT_LENGTH          "Content-Length"
+#define HTTPD_CONNECTION_CLOSE_HEADER "Connection"
+#define HTTPD_CONNECTION_CLOSE_VALUE  "close"
+
 /* NOTE: Order of states is important! */
 typedef enum {
     SXE_HTTPD_CONN_FREE = 0,           /* not connected */

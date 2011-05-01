@@ -32,8 +32,8 @@
 #define SXE_TIME_FROM_TIMEVAL(tv)               (((SXE_TIME)(tv)->tv_sec  << SXE_TIME_BITS_IN_FRACTION) \
                                                 + ((SXE_TIME)(tv)->tv_usec * (1ULL << 32) / 1000000))
 
-#define SXE_TIME_FROM_MSEC(msec)                (((SXE_TIME)(msec / 1000) << SXE_TIME_BITS_IN_FRACTION) \
-                                                + ((SXE_TIME)(msec * 1000) * (1ULL << 32) / 1000000))
+#define SXE_TIME_FROM_MSEC(msec)                (  ((SXE_TIME)(msec / 1000) << SXE_TIME_BITS_IN_FRACTION) \
+                                                + (((SXE_TIME)(msec % 1000) << SXE_TIME_BITS_IN_FRACTION) / 1000))
 
 #define SXE_TIME_TO_TIMEVAL(sxe_time, tv)       do { \
                                                     uint64_t sxe_time_lo32 = (unsigned)sxe_time; \

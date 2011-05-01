@@ -100,7 +100,7 @@ static struct timeval test_mock_gettimeofday_timeval;
 static int
 test_mock_gettimeofday(struct timeval * SXE_SOCKET_RESTRICT tv, struct timezone * SXE_SOCKET_RESTRICT tz)
 {
-    /* Note: It's safe to use log functions here because they don't use gettimeofday() :-) */
+    /* Note: It's safe to use log functions here because they don't use mocked versions of gettimeofday() :-) */
     SXEE63("%s(tv=%p, tz=%p)", __func__, tv, tz);
     SXEA60(tv != NULL, "tv must never contain NULL");
     SXE_UNUSED_PARAMETER(tz);
@@ -192,7 +192,7 @@ main(void)
            sxe_time_to_string(oldtime, timestamp, sizeof(timestamp)));
         oldest_index = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED);
         ok(oldtime == sxe_pool_get_element_time_by_index(pool, oldest_index), "Get time by index matches get time by oldest element");
-        
+
         is(TEST_POOL_GET_NUMBER_FREE(pool),  2  ,                             "Pool state is now: 2 free");
         is(TEST_POOL_GET_NUMBER_USED(pool),  2  ,                             "Pool state is now: 2 used");
 
