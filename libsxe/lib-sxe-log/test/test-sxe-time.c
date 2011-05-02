@@ -142,11 +142,11 @@ main(void)
     test_timeval_conversions(6,   4294, 6,   4293, 6.00, 6.01); /* rounds down; challenge for you, figure out why! */
     test_timeval_conversions(7,   4295, 7,   4294, 7.00, 7.01); /* rounds down; challenge for you, figure out why! */
 
-    ok(SXE_TIME_FROM_MSEC(1)    ==    1 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(1)   =0x%" PRIx64 ",expected 0x%llx",
+    ok(SXE_TIME_FROM_MSEC(1)    ==    1 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(1)   =0x%" PRIx64 ",expected 0x%" PRIx64,
        SXE_TIME_FROM_MSEC(1),         1 * 0x100000000ULL / 1000);
-    ok(SXE_TIME_FROM_MSEC(3000) == 3000 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(3000)=0x%" PRIx64 ",expected 0x%llx",
+    ok(SXE_TIME_FROM_MSEC(3000) == 3000 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(3000)=0x%" PRIx64 ",expected 0x%" PRIx64,
        SXE_TIME_FROM_MSEC(3000),   3000 * 0x100000000ULL / 1000);
-    ok(SXE_TIME_FROM_MSEC(3010) == 3010 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(3010)=0x%" PRIx64 ",expected 0x%llx",
+    ok(SXE_TIME_FROM_MSEC(3010) == 3010 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(3010)=0x%" PRIx64 ",expected 0x%" PRIx64,
        SXE_TIME_FROM_MSEC(3010),   3010 * 0x100000000ULL / 1000);
     return exit_status();
 }

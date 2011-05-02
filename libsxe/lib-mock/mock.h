@@ -32,16 +32,16 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifndef WINDOWS_NT
-# include <netdb.h>
-# include <syslog.h>
-# ifdef __APPLE__
-#  include <sys/uio.h>
-# else /* !defined(__APPLE__) */
-#  include <sys/sendfile.h>
-# endif
+#ifdef WINDOWS_NT
+#   include <direct.h>
 #else
-# include <direct.h>
+#   include <netdb.h>
+#   include <syslog.h>
+#   ifdef __APPLE__
+#       include <sys/uio.h>
+#   else
+#       include <sys/sendfile.h>
+#   endif
 #endif
 
 /* CONVENTION EXCLUSION: system functions mocked using #define */

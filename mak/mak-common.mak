@@ -138,6 +138,7 @@ all : convention_usage
 	@echo $(ECHOQUOTE)usage: note: check:          mingw   mingw mingw $(ECHOESCAPE)<- winnt: gcc$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: check:          linux   linux linux $(ECHOESCAPE)<- linux: gcc$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: check:          rhes5   rhes5 rhes5 $(ECHOESCAPE)<- rhes5: gcc$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set CFLAGS_EXTRA="<flags>" to add custom flags to the make$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: set MAKE_DEBUG=1 for make file instrumentation$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: set MAKE_PEER_DEPENDENTS=0 for no recursive make$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: set SXE_LOG_LEVEL=7 to filter lib-sxe-* logging$(ECHOQUOTE)
@@ -173,7 +174,7 @@ IFLAGS      = $(CC_INC). \
 # TODO: Export lib-tap headers with libsxe.a or have a way of automatically adding lib-tap (below)
 IFLAGS_TEST = $(CC_INC)./test \
               $(CC_INC)$(COM.dir)/../libsxe/lib-tap/$(DST.dir)
-CFLAGS     += -DSXE_FILE=\"$(CUR.dir)/$<\" -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir)
+CFLAGS     += -DSXE_FILE=\"$(CUR.dir)/$<\" -DMOCK=1 $(IFLAGS) $(CC_INC)$(DST.dir) $(CFLAGS_EXTRA)
 CFLAGS_TEST+= $(IFLAGS_TEST)
 SRC.c      := $(wildcard *.c) $(subst $(OS_class)/,,$(wildcard $(OS_class)/*.c))
 DST.d      += $(SRC.c:%.c=$(DST.dir)/%.d) $(patsubst %,$(DST.dir)/%,$(subst .c,.d,$(wildcard test/*.c)))
