@@ -101,6 +101,24 @@ test_mock_sendfile(int in_fd, int out_fd, off_t offset, off_t *len, struct sf_hd
     SXER60("return -1 // errno=EBADF");
     return -1;
 }
+#elif defined(__FreeBSD__)
+static int
+test_mock_sendfile(int out_fd, int in_fd, off_t offset, size_t count, struct sf_hdtr *hdr, off_t *sent, int flags)
+{
+    SXE_UNUSED_ARGUMENT(out_fd);
+    SXE_UNUSED_ARGUMENT(in_fd);
+    SXE_UNUSED_ARGUMENT(offset);
+    SXE_UNUSED_ARGUMENT(count);
+    SXE_UNUSED_ARGUMENT(hdr);
+    SXE_UNUSED_ARGUMENT(sent);
+    SXE_UNUSED_ARGUMENT(flags);
+    SXEE67("test_mock_sendfile(out_fd=%d, in_fd=%d, offset=%p, count=%lu, hdr=%p, sent=%p, flags=%u)", out_fd, in_fd, offset, count, hdr, sent, flags);
+
+    errno = EBADF;
+
+    SXER60("return -1 // errno=EBADF");
+    return -1;
+}
 #else /* !__APPLE__ */
 static ssize_t
 test_mock_sendfile(int out_fd, int in_fd, off_t *offset, size_t count)

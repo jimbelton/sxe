@@ -38,21 +38,6 @@ else
 CFLAGS += -O -Wuninitialized -Wunused
 endif
 
-# FreeBSD platform specific compiler flags.
-# Additional to Tank flags: -O, pedantic, std=gnu99 Waggregate-return Wall Wcomment Wformat Wimplicit Wmissing-declarations
-#                           Wparentheses Wtrigraphs Wuninitialized Wunused
-# Removed  from Tank flags: -Wno-format-y2k -Wno-unused-parameter
-#
-ifeq ($(OS), freebsd)
-CFLAGS+=        -Wsystem-headers
-
-# Linux: extra flag in GCC 4
-#
-else
-# Once we upgrade to Lenny, we can add the -fstack-protector-all flag back in
-#CFLAGS+=        -fstack-protector-all
-endif
-
 PERL               = perl
 MKDIR              = mkdir -p
 PWD                = pwd
@@ -81,7 +66,6 @@ COV_INIT           = $(DEL) $(DST.dir)/*.gcda $(DST.dir)/*.ok
 CXX                = g++
 LINK               = gcc
 LINK_OUT           = -o $(EMPTY)
-LINK_FLAGS        += -ldl
 # -lm needed by ev; ceil()
 LINK_FLAGS        += -g -lm
 LIB_CMD            = $(MAKE_PERL_LIB)
@@ -92,7 +76,26 @@ OSPC               = %
 OS_class		   = any-unix
 OS_name            = $(if $(findstring el5,$(shell uname -r)),rhes5,$(shell uname -s | tr '[:upper:]' '[:lower:]'))
 OS_bits			   = $(shell uname -a | $(PERL) -lane '$$o.=$$_;sub END{printf qq[%d], $$o =~ m~_64~s ? 64 : 32;}')
+# syntax engine workaround ' (a.k.a. VIM)
 TEST_ENV_VARS      = LIBC_FATAL_STDERR_=1
+
+ifneq ($(OS_name), freebsd)
+LINK_FLAGS        += -ldl
+endif
+# FreeBSD platform specific compiler flags.
+# Additional to Tank flags: -O, pedantic, std=gnu99 Waggregate-return Wall Wcomment Wformat Wimplicit Wmissing-declarations
+#                           Wparentheses Wtrigraphs Wuninitialized Wunused
+# Removed  from Tank flags: -Wno-format-y2k -Wno-unused-parameter
+#
+ifeq ($(OS_name), freebsd)
+CFLAGS+=        -Wsystem-headers
+
+# Linux: extra flag in GCC 4
+#
+else
+# Once we upgrade to Lenny, we can add the -fstack-protector-all flag back in
+#CFLAGS+=        -fstack-protector-all
+endif
 
 
 # note: -march=i486 for __sync_val_compare_and_swap gcc builtin used by sxe-mmap
@@ -106,7 +109,6 @@ else
 	CFLAGS		  += -march=x86-64
 endif
 
-# syntax engine workaround ' (a.k.a. VIM)
 ECHOQUOTE          = $(OSQUOTE)
 ECHOESCAPE         =
 CAT                = cat
@@ -119,6 +121,9 @@ PROVE              = prove
 #   - --verbose             explain what is being done
 #   - --preserve=timestamps make copies the same age as the sources
 ifeq ($(OS_name), darwin)
+COPYDIR            = cp -pPRfv
+COPYFILES2DIR      = cp -pPfv
+else ifeq ($(OS_name), freebsd)
 COPYDIR            = cp -pPRfv
 COPYFILES2DIR      = cp -pPfv
 else

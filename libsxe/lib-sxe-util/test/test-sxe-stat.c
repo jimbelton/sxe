@@ -48,7 +48,7 @@ main(void)
     fclose(file_ptr);
     is(sxe_stat(&status, TEST_FILE),              &status,      "After creation, able to stat '" TEST_FILE "'");
     ok(sxe_stat_get_time_modification(&status) >= current_time, "Modification time of file is %lu (program time %lu)",
-                                                                sxe_stat_get_time_modification(&status), current_time);
+                                                                (unsigned long)sxe_stat_get_time_modification(&status), (unsigned long)current_time);
     is(sxe_stat_get_file_size(&status), 0,                      "It's an empty file, 0 bytes");
     SXEA11((file_ptr = fopen(TEST_FILE, "w"))  != NULL,         "Can't create '" TEST_FILE "': %s", strerror(errno));
     fwrite("foobar", 1, 6, file_ptr);

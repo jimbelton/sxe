@@ -253,7 +253,7 @@ main(void)
         is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)), node_a, "The oldest is node A");
         oldtime = sxe_pool_get_oldest_element_time(pool, TEST_STATE_USED);
         ok(oldtime >= ((SXE_TIME)time_0 << 32),                               "Oldest time %s >= start time %lu",
-           sxe_time_to_string(oldtime, timestamp, sizeof(timestamp)), time_0);
+           sxe_time_to_string(oldtime, timestamp, sizeof(timestamp)), (unsigned long)time_0);
         sxe_pool_touch_indexed_element(pool, node_a);
         is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)), node_b, "The oldest is now node B");
         is(TEST_POOL_GET_NUMBER_FREE(pool), 2,                                "Pool state is now: 2 free");

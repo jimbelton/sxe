@@ -24,7 +24,7 @@
 #include <stdarg.h>
 #include <sys/time.h>
 
-#if !defined(WINDOWS_NT) && !defined(__APPLE__)
+#if !defined(WINDOWS_NT) && !defined(__APPLE__) && !defined(__FreeBSD__)
 #define  _GNU_SOURCE /* Required for _IO_cookie_io_functions_t  */
 #include <libio.h>   /* Required by __USE_GNU <stdio.h>         */
 #define  __USE_GNU   /* Required for vasprintf on Linux         */

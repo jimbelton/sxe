@@ -37,7 +37,7 @@
 #else
 #   include <netdb.h>
 #   include <syslog.h>
-#   ifdef __APPLE__
+#   if defined(__APPLE__) || defined(__FreeBSD__)
 #       include <sys/uio.h>
 #   else
 #       include <sys/sendfile.h>
@@ -72,6 +72,8 @@
 
 # ifdef __APPLE__
 #  define __timezone_ptr_t  void *
+# elif defined(__FreeBSD__)
+#  define __timezone_ptr_t  struct timezone *
 # endif
 
 #endif
@@ -104,7 +106,9 @@ extern int          (             * mock_mkdir)       (const char * pathname);
 #else /* UNIX */
 # if defined(__APPLE__)
 extern int          (MOCK_STDCALL * mock_sendfile)    (int, int, off_t, off_t *, struct sf_hdtr *, int);
-# else /* !APPLE */
+# elif defined(__FreeBSD__)
+extern int          (MOCK_STDCALL * mock_sendfile)    (int, int, off_t, size_t, struct sf_hdtr *, off_t *, int);
+# else /* not __APPLE__ and not __FreeBSD__ */
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendfile)    (int, int, off_t *, size_t);
 # endif
 extern int          (             * mock_mkdir)       (const char * pathname, mode_t mode);
@@ -133,6 +137,8 @@ extern void         (             * mock_syslog)      (int priority, const char 
 #else
 # if defined(__APPLE__)
 # define sendfile(in_fd, out_fd, off, len, hdr, _r) (*mock_sendfile)  ((in_fd), (out_fd), (off), (len), (hdr), (_r))
+# elif defined(__FreeBSD__)
+# define sendfile(in_fd, out_fd, off, nbytes, hdr, sbytes, flags) (*mock_sendfile)  ((in_fd), (out_fd), (off), (nbytes), (hdr), (sbytes), (flags))
 # else
 # define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
 # endif

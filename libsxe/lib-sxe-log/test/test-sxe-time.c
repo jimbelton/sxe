@@ -77,13 +77,13 @@ main(void)
 
     time(&expected);
     actual = (time_t)sxe_get_time_in_seconds();
-    ok((actual == expected) || (actual == expected + 1), "Actual time (%lu) is as expected (%lu)", actual, expected);
+    ok((actual == expected) || (actual == expected + 1), "Actual time (%lu) is as expected (%lu)", (unsigned long)actual, (unsigned long)expected);
 
     time(&expected);
     sxe_time = sxe_time_get();
     actual   = sxe_time_to_unix_time(sxe_time);
     ok((actual == expected) || (actual == expected + 1), "Whole part %lu of SXE time (%" PRIu64 ") is as expected (%lu)",
-        actual, sxe_time, expected);
+        (unsigned long)actual, sxe_time, (unsigned long)expected);
 
     is_eq(sxe_time_to_string((SXE_TIME)987654321, buffer, sizeof(buffer)), "19700101000000.987",
           "Formatted SXE time as expected (%s)", buffer);
@@ -128,7 +128,7 @@ main(void)
     ok(sxe_time_from_double_seconds(double_time_got) == sxe_time, "Double time converted back to the same SXE time");
 
     actual = sxe_time_to_unix_time((sxe_time_from_double_seconds(1.9) - sxe_time_from_double_seconds(1.1)) * 1000);
-    ok((actual > 798) && (actual < 802), "Difference 0.%03lu between 1.9 and 1.1 is > 0.798 and < 0.802", actual);
+    ok((actual > 798) && (actual < 802), "Difference 0.%03lu between 1.9 and 1.1 is > 0.798 and < 0.802", (unsigned long)actual);
 
     sxe_time        = sxe_time_from_double_seconds(0.13);
     double_time_got = sxe_time_to_double_seconds(sxe_time);

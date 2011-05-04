@@ -44,7 +44,14 @@ main(int argc, char ** argv)
     sxe_socket_init();
 
     ok   ((sock = socket(AF_INET,  SOCK_STREAM, 0)) != SXE_SOCKET_INVALID       , "Allocated a socket"             );
-    is_eq(sxe_socket_get_last_error_as_str()        ,  success                  , "Last error is '%s'", success    );
+
+#ifdef __FreeBSD__
+    (void)success;
+    skip(1, "On FreeBSD, errno is set to seemingly random values on successful calls");
+#else
+    is_eq(sxe_socket_get_last_error_as_str()        ,  success                  , "Last error is '%s' (%d)", success, sxe_socket_get_last_error());
+#endif
+
     ok   (sxe_socket_set_nonblock(sock, 1)          != SXE_SOCKET_ERROR_OCCURRED, "Set socket to non blocking mode");
 
     sxe_socket_set_last_error(-1);

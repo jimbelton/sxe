@@ -48,6 +48,10 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 
+#ifdef __FreeBSD__
+#include <sys/thr.h>
+#endif
+
 /* The following inline function is based on ReactOS; the license in the source file is MIT
  * See: http://www.google.com/codesearch/p?hl=en#S3vzerue4i0/trunk/reactos/include/crt/mingw32/intrin_x86.h
  */
@@ -70,6 +74,15 @@ InterlockedExchangeAdd(long volatile * Addend, long Value)
 
 #ifdef __APPLE__
 #define SXE_GETTID() syscall(SYS_thread_selfid)
+#elif defined(__FreeBSD__)
+static inline long
+sxe_gettid(void)
+{
+    long tid;
+    thr_self(&tid);
+    return tid;
+}
+#define SXE_GETTID() sxe_gettid()
 #else
 #define SXE_GETTID() syscall(SYS_gettid)
 #endif

@@ -55,6 +55,8 @@ MOCK_DEF(int,          CDECL,   mkdir,       (const char * pathname));
 #else
 # if defined(__APPLE__)
 MOCK_DEF(int         , STDCALL, sendfile,    (int, int, off_t, off_t *, struct sf_hdtr *, int));
+# elif defined(__FreeBSD__)
+MOCK_DEF(int         , STDCALL, sendfile,    (int, int, off_t, size_t, struct sf_hdtr *, off_t *, int));
 # else
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, sendfile,    (int, int, off_t *, size_t));
 # endif

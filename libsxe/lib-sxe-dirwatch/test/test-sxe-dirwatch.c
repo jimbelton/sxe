@@ -12,7 +12,13 @@
 
 #define TEST_WAIT 5
 
-#if !defined(__WIN32) && !defined(__APPLE__)
+#if !defined(__WIN32) && !defined(__APPLE__) && !defined(__FreeBSD__)
+#define TEST_DIRWATCH 1
+#else
+#define TEST_DIRWATCH 0
+#endif
+
+#if TEST_DIRWATCH
 static void
 test_dirwatch_event(EV_P_ const char *chfile, int chflags, void * user_data)
 {
@@ -30,9 +36,10 @@ int
 main(void)
 {
 
-#if defined(__WIN32) || defined(__APPLE__)
+#if !TEST_DIRWATCH
 /* TODO: Implement sxe_dirwatch() on Windows */
 /* TODO: Implement sxe_dirwatch() on Apple */
+/* TODO: Implement sxe_dirwatch() on FreeBSD */
 #else
 
     char tempdir1[] = "tmp-XXXXXX";

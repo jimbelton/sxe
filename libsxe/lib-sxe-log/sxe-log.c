@@ -34,6 +34,9 @@
 #include <syslog.h>          /* for openlog(), syslog()              */
 #include <sys/syscall.h>     /* for syscall(), SYS_gettid            */
 #include <sys/time.h>        /* for gettimeofday()                   */
+#ifdef __FreeBSD__
+#   include <sys/thr.h>
+#endif
 #include <unistd.h>          /* for getpid()                         */
 #include "mock.h"            /* allow mocking openlog() and syslog() */
 #endif
@@ -182,9 +185,14 @@ sxe_log_prefix_default(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
 #else
     struct timeval   mytv;
     struct tm        mytm;
-    pid_t            ThreadId;
 #   if defined(__APPLE__)
+    pid_t            ThreadId;
     pid_t            ProcessId;
+#   elif defined(__FreeBSD__)
+    long             ThreadId;
+    pid_t            ProcessId;
+#else
+    pid_t            ThreadId;
 #endif
 #endif
 
@@ -201,6 +209,11 @@ sxe_log_prefix_default(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
     ThreadId = syscall(SYS_thread_selfid);
     ProcessId = getpid();
     snprintf(log_buffer, SXE_LOG_BUFFER_SIZE, "%04d%02d%02d %02d%02d%02d.%03ld P% 10d T% 10d ", mytm.tm_year + 1900, mytm.tm_mon+1,
+             mytm.tm_mday, mytm.tm_hour, mytm.tm_min, mytm.tm_sec, (long)mytv.tv_usec / 1000, ProcessId, ThreadId);
+#   elif defined(__FreeBSD__)
+    thr_self(&ThreadId);
+    ProcessId = getpid();
+    snprintf(log_buffer, SXE_LOG_BUFFER_SIZE, "%04d%02d%02d %02d%02d%02d.%03ld P% 10d T% 10ld ", mytm.tm_year + 1900, mytm.tm_mon+1,
              mytm.tm_mday, mytm.tm_hour, mytm.tm_min, mytm.tm_sec, (long)mytv.tv_usec / 1000, ProcessId, ThreadId);
 #else
     ThreadId = syscall(SYS_gettid);
@@ -732,14 +745,20 @@ static unsigned
 sxe_log_buffer_prefix_syslog(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
 {
     unsigned length;
-    pid_t    ThreadId;
-#ifdef __APPLE__
-    ThreadId = syscall(SYS_thread_selfid);
-#else
-    ThreadId = syscall(SYS_gettid);
-#endif
+#if defined(__APPLE__)
+    pid_t    ThreadId = syscall(SYS_thread_selfid);
 
     snprintf(log_buffer, SXE_LOG_BUFFER_SIZE, "T=%d ", ThreadId);
+#elif defined(__FreeBSD__)
+    long     ThreadId;
+    thr_self(&ThreadId);
+
+    snprintf(log_buffer, SXE_LOG_BUFFER_SIZE, "T=%ld ", ThreadId);
+#else
+    pid_t ThreadId = syscall(SYS_gettid);
+
+    snprintf(log_buffer, SXE_LOG_BUFFER_SIZE, "T=%d ", ThreadId);
+#endif
 
     if (id == ~0U || id == (~0U - 1)) {
         strcat(log_buffer, "------ ");

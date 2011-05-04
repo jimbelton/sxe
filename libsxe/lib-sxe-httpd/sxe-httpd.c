@@ -24,11 +24,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
-#ifdef __APPLE__
-#include <alloca.h>    /* For alloca() under Mac OS X */
-#else
-#include <malloc.h>    /* For alloca() under Windows */
-#endif
 
 #include "sxe-httpd.h"
 #include "sxe-log.h"

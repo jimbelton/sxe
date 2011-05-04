@@ -46,9 +46,13 @@
 #include <signal.h>
 #endif
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__FreeBSD__)
 #define sighandler_t sig_t
+#endif
+#if defined(__APPLE__)
 #define _NSIG        __DARWIN_NSIG
+#elif defined(__FreeBSD__)
+#define _NSIG        NSIG
 #endif
 
 #include "tap.h"

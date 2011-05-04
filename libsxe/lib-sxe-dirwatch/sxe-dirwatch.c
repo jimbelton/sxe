@@ -23,6 +23,8 @@
 /* TODO: Implement sxe_dirwatch() on Windows */
 #elif defined(__APPLE__)
 /* TODO: Implement sxe_dirwatch() on Apple */
+#elif defined(__FreeBSD__)
+/* TODO: Implement sxe_dirwatch() on FreeBSD */
 #else
 
 #include <sys/inotify.h>

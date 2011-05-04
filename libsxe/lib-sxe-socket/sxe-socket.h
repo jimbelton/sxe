@@ -29,6 +29,10 @@
 #endif
 
 #include <sys/socket.h>
+#ifdef __FreeBSD__
+#include <netinet/in.h>
+#endif
+
 
 #include "mock.h"
 #include "sxe-log.h"

@@ -21,7 +21,7 @@
 
 /* Under Linux, request _GNU_SOURCE extensions to support ucred structure
  */
-#if !defined(_WIN32) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__FreeBSD__)
 #define _GNU_SOURCE
 #include <features.h>
 #endif
@@ -42,7 +42,7 @@
 
 #else /* UNIX */
 
-#ifdef __APPLE__ /* Apple */
+#if defined(__APPLE__) || defined(__FreeBSD__)
 # include <sys/uio.h>          /* For sendfile */
 # include <sys/sysctl.h>       /* To find out the maximum socket buffer size */
 # undef   EV_ERROR             /* remove duplicate definition from <sys/event.h> - conflicts with ev.h */
@@ -57,12 +57,6 @@
 #include <sys/ioctl.h>
 #include <sys/un.h>           /* For pipes (AKA UNIX domain sockets) on UNIX                                 */
 
-#define PIPE_PATH_MAX sizeof(((struct sockaddr_un *)NULL)->sun_path)    /* Maximum size of a UNIX pipe path  */
-
-typedef union SXE_CONTROL_MESSAGE_FD {
-    struct cmsghdr alignment;
-    char           control[CMSG_SPACE(sizeof(int))];
-} SXE_CONTROL_MESSAGE_FD;
 #endif
 
 #include "mock.h"
@@ -72,6 +66,14 @@ typedef union SXE_CONTROL_MESSAGE_FD {
 #include "sxe-socket.h"
 #include "sxe-util.h"
 
+#ifndef _WIN32
+#define PIPE_PATH_MAX sizeof(((struct sockaddr_un *)NULL)->sun_path)    /* Maximum size of a UNIX pipe path  */
+
+typedef union SXE_CONTROL_MESSAGE_FD {
+    struct cmsghdr alignment;
+    char           control[CMSG_SPACE(sizeof(int))];
+} SXE_CONTROL_MESSAGE_FD;
+#endif
 /* TODO: change sxld so that the udp packet is read only once by sxld (and not sxe and sxld) */
 
 #define SXE_WANT_CALLER_READS_UDP 0
@@ -423,6 +425,8 @@ sxe_set_socket_options(SXE * this, int sock)
 
 #ifdef __APPLE__
 # define SXE_UDP_SO_RCVBUF_SIZE (     1024 * 1024)
+#elif defined(__FreeBSD__)
+# define SXE_UDP_SO_RCVBUF_SIZE (      256 * 1024) /* There *MUST* be a sysctl for this!? */
 #else
 # define SXE_UDP_SO_RCVBUF_SIZE (32 * 1024 * 1024)
 #endif
@@ -774,7 +778,7 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
 #if SXE_DEBUG
 #ifndef _WIN32
         if (this->path) {
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__FreeBSD__)
             uid_t euid;
             gid_t egid;
 
@@ -1553,14 +1557,19 @@ sxe_sendfile(SXE * this, int in_fd, off_t * offset, unsigned total_bytes, SXE_OU
     this->sendfile_offset   = offset;
     this->out_event_written = on_complete;
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__FreeBSD__)
     {
         off_t len = (off_t)total_bytes;
         int   res;
 
+#ifdef __APPLE__
         SXEL84I("apple:sendfile(in=%u, s=%u, off=%lu, total_bytes=%u, ...)", in_fd, this->socket, (unsigned long)*offset, total_bytes);
-
         res = sendfile(in_fd, this->socket, *offset, &len, /* No preamble or postamble data */NULL, /* reserved */0);
+#else /* FreeBSD */
+        SXEL84I("bsd:sendfile(in=%u, s=%u, off=%u, total_bytes=%u, ...)", in_fd, this->socket, (unsigned)*offset, total_bytes);
+        res = sendfile(in_fd, this->socket, *offset, total_bytes, /* No preamble or postamble data*/NULL, &len, /* no flags */0);
+#endif
+
         if (res < 0) {
             if (errno == EAGAIN) {
                 *offset += len;
@@ -1591,7 +1600,7 @@ sxe_sendfile(SXE * this, int in_fd, off_t * offset, unsigned total_bytes, SXE_OU
     }
 
     if ((sent > 0) && ((unsigned)sent < total_bytes)) {
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__FreeBSD__)
 SXE_PARTIAL_WRITE:
 #endif
         SXEL82I("sendfile() sent %d bytes of %u, filling send buffer", sent, total_bytes);

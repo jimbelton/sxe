@@ -27,8 +27,10 @@
 #include <syslog.h>
 #endif
 
-#ifdef __APPLE__
+#if defined(__APPLE__)
 #include <sys/syscall.h>
+#elif defined(__FreeBSD__)
+#include <sys/thr.h>
 #endif
 
 #undef   SXE_DEBUG      /* Since we are testing diagnostic functions, the test program forces debug mode */
@@ -96,10 +98,13 @@ main(int argc, char *argv[]) {
     struct object   self;
     struct object * this = &self;
     char            expected[1024];
+#if defined(__FreeBSD__)
+    long            tid;
+    thr_self(&tid);
+#elif defined(__APPLE__)
+    pid_t           tid = syscall(SYS_thread_selfid);
+#else
     pid_t           tid = getpid();
-
-#ifdef __APPLE__
-    tid = syscall(SYS_thread_selfid);
 #endif
 
     plan_tests(28);
@@ -116,42 +121,42 @@ main(int argc, char *argv[]) {
     is((int)(uintptr_t)tap_ev_arg(ev, "facility"), LOG_USER,            "sxe_log_use_syslog() calls openlog() with correct 'facility' parameter");
 
     SXEL10("SXEL10");
-    snprintf(expected, sizeof expected, "T=%d ------ 1 - SXEL10\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld ------ 1 - SXEL10\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL10() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_ERR,             "SXEL10() maps to LOG_ERR syslog level");
     is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL10() is logged correctly");
 
     SXEL21("SXEL21(%s)", "arg1");
-    snprintf(expected, sizeof expected, "T=%d ------ 2 - SXEL21(arg1)\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld ------ 2 - SXEL21(arg1)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL21() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_WARNING,         "SXEL21() maps to LOG_WARNING syslog level");
     is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL21() is logged correctly");
 
     SXEL32("SXEL32(%s,%d)", "arg1", 22);
-    snprintf(expected, sizeof expected, "T=%d ------ 3 - SXEL32(arg1,22)\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld ------ 3 - SXEL32(arg1,22)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL32() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_NOTICE,          "SXEL32() maps to LOG_NOTICE syslog level");
     is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL32() is logged correctly");
 
     SXEL43("SXEL43(%s,%d,%u)", "arg1", 22, 44);
-    snprintf(expected, sizeof expected, "T=%d ------ 4 - SXEL43(arg1,22,44)\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld ------ 4 - SXEL43(arg1,22,44)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL43() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_INFO,            "SXEL43() maps to LOG_INFO syslog level");
     is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL43() is logged correctly");
 
     SXEL54("SXEL54(%s,%d,%u,%x)", "arg1", 22, 44, 64);
-    snprintf(expected, sizeof expected, "T=%d ------ 5 - SXEL54(arg1,22,44,40)\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld ------ 5 - SXEL54(arg1,22,44,40)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL54() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL54() maps to LOG_DEBUG syslog level");
     is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL54() is logged correctly");
 
     SXEL65("SXEL65(%s,%d,%u,%x,%.2f)", "arg1", 22, 44, 64, 3.1415926);
-    snprintf(expected, sizeof expected, "T=%d ------ 6 - SXEL65(arg1,22,44,40,3.14)\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld ------ 6 - SXEL65(arg1,22,44,40,3.14)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL65() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL65() maps to LOG_DEBUG syslog level");
@@ -159,7 +164,7 @@ main(int argc, char *argv[]) {
 
     this->id = 99;
     SXEL10I("SXEL10I");
-    snprintf(expected, sizeof expected, "T=%d     99 1 - SXEL10I\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld     99 1 - SXEL10I\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL10I() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_ERR,             "SXEL10I() maps to LOG_ERR syslog level");
@@ -167,7 +172,7 @@ main(int argc, char *argv[]) {
 
     this->id = 98;
     SXEL65I("SXEL65I(%s,%d,%u,%x,%.2f)", "arg1", 22, 44, 64, 3.1415926);
-    snprintf(expected, sizeof expected, "T=%d     98 6 - SXEL65I(arg1,22,44,40,3.14)\n", tid);
+    snprintf(expected, sizeof expected, "T=%ld     98 6 - SXEL65I(arg1,22,44,40,3.14)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
     is_eq(tap_ev_identifier(ev), "syslog",              "SXEL65I() calls syslog()");
     is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL65I() maps to LOG_DEBUG syslog level");
