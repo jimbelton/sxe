@@ -81,6 +81,8 @@ sxe_pool_index_to_state(void * array, unsigned id)
     unsigned        state;
 
     SXEE82("sxe_pool_index_to_state(name=%s,id=%u)", pool->name, id);
+    SXEA13(id < pool->number, "sxe_pool_index_to_state(pool=%s,id=%u): Index is too big for pool (max index=%u)",
+           pool->name, id, pool->number);
     state = SXE_LIST_NODE_GET_ID(&SXE_POOL_NODES(pool)[id].list_node);
     SXER81("return %s", (*pool->state_to_string)(state));
     return state;

@@ -189,6 +189,7 @@ main(void)
     sxe_http_message_construct(&message, "HTTP/1.1 200 ", strlen("HTTP/1.1 200 "));
     is(sxe_http_message_parse_next_line_element(&message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), SXE_RETURN_WARN_WOULD_BLOCK,
                                                                                       "Would block on rest of response line");
+
     return exit_status();
 }
 

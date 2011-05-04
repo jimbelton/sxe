@@ -112,20 +112,14 @@ main(void)
     is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "test_event_connect", "Client connected");
     is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "test_event_connect", "Server connected");
     server = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
-
-    buffers[0].ptr  = "Hello";
-    buffers[0].len  = 5;
-    buffers[0].sent = 0;
-    buffers[1].ptr  = ", world!";
-    buffers[1].len  = 8;
-    buffers[1].sent = 0;
+    sxe_buffer_construct_const(&buffers[0], "Hello",    SXE_LITERAL_LENGTH("Hello"   ));
+    sxe_buffer_construct_const(&buffers[1], ", world!", SXE_LITERAL_LENGTH(", world!"));
 
     SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
     sxe_list_push(&buflist, &buffers[0]);
     sxe_list_push(&buflist, &buffers[1]);
 
-    result = sxe_send_buffers(client, &buflist, test_event_sent);
-    if (result == SXE_RETURN_IN_PROGRESS) {
+    if ((result = sxe_send_buffers(client, &buflist, test_event_sent)) == SXE_RETURN_IN_PROGRESS) {
         is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "test_event_sent", "Client send completed");
     }
     else {
@@ -140,17 +134,15 @@ main(void)
      * multiple attempts! */
     {
         const char sendbuf[] = LARGE_BUFFER;
-        char *tempbuf;
-        int i;
+        char     * tempbuf;
+        int        i;
 
         tempbuf = calloc(TEST_COPIES, sizeof sendbuf);
-        SXEA11(tempbuf != NULL, "failed to allocate %u bytes", TEST_COPIES * sizeof sendbuf);
-
+        SXEA11(tempbuf != NULL, "failed to allocate %u bytes", TEST_COPIES * sizeof(sendbuf));
         SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
+
         for (i = 0; i < TEST_COPIES; i++) {
-            buffers[i].ptr = sendbuf;
-            buffers[i].len = sizeof sendbuf;
-            buffers[i].sent = 0;
+            sxe_buffer_construct_const(&buffers[i], sendbuf, sizeof(sendbuf));
             sxe_list_push(&buflist, &buffers[i]);
         }
 

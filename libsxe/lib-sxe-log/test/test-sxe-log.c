@@ -147,10 +147,15 @@ log_line(SXE_LOG_LEVEL level, const char * line_ro)
 
     case 12:
         is(level, SXE_LOG_LEVEL_FATAL, "Assertions are logged at level FATAL");
-        ok((strstr(line, "ERROR: assertion 'this != &self' failed at test/test-sxe-log.c") != NULL) ||
-           (strstr(line, "ERROR: assertion 'this != &self' failed at libsxe/lib-sxe-log/test/test-sxe-log.c") != NULL) ||
-           (strstr(line, "ERROR: assertion 'this != &self' failed at ../libsxe/lib-sxe-log/test/test-sxe-log.c") != NULL),
+        ok(strstr(line, "ERROR: assertion 'this != &self' failed at libsxe/lib-sxe-log/test/test-sxe-log.c") != NULL,
            "Assertion line includes expected stringized test: '%s'", line);
+        break;
+
+    case 13:
+        is(level, SXE_LOG_LEVEL_FATAL, "Second line of assertion is also logged at level FATAL");
+        ok(strstr(line, "in function main() at libsxe/lib-sxe-log/test/test-sxe-log.c:") != NULL,
+           "Second assertion line has expected function 'main()' and file name 'libsxe/lib-sxe-log/test/test-sxe-log.c': '%s'",
+           line);
 #ifdef WINDOWS_NT
         diag("info: You can expect and ignore a message saying:");
         diag("    > This application has requested the Runtime to terminate it in an unusual way.");
@@ -170,7 +175,7 @@ static void
 test_abort_handler(int sig)
 {
     (void)sig;
-    is(test_state, 13, "All log lines/signals received");
+    is(test_state, 14, "All log lines/signals received");
     exit(exit_status());
 }
 
@@ -181,7 +186,7 @@ main(void) {
     struct object   self;
     struct object * this = &self;
 
-    plan_tests(47);
+    plan_tests(49);
 
     /* Test sxe_return_to_string()
      */
@@ -234,7 +239,7 @@ main(void) {
     is(sxe_log_decrease_level(SXE_LOG_LEVEL_TRACE),       SXE_LOG_LEVEL_INFORMATION, "Level was INFO, TRACE is not a decrease");
 
 #if defined(_WIN32) && defined(LOCAL_SXE_DEBUG)
-    skip(3, "Can't test aborts in a Windows debug build, due to pop up Window stopping the build");
+    skip(5, "Can't test aborts in a Windows debug build, due to pop up Window stopping the build");
 #else
     SXEA60(this != &self, "This is not self");  /* Abort - must be the last thing we do*/
     fail("Did not catch an abort signal");

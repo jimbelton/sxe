@@ -100,14 +100,13 @@ main(void)
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
 
     {
-        char readbuf[65536];
-        SXE_BUFFER buffer, buffer2;
-        unsigned expected_length;
+        char       readbuf[65536];
+        SXE_BUFFER buffer;
+        SXE_BUFFER buffer2;
+        unsigned   expected_length;
 
-        buffer.ptr  = "Hello, world";
-        buffer.len  = strlen(buffer.ptr);
-        buffer.sent = 0;
-        buffer2     = buffer;
+        sxe_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"));
+        buffer2 = buffer;
 
         /* NOTE: these numbers are carefully designed so that we'll hit the
          * following conditions:

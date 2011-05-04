@@ -19,10 +19,9 @@
  * THE SOFTWARE.
  */
 
-/* TODO: Variadic wrappers to eliminate parameter counting                                                           */
-/* TODO: Autodetect leading '(' on entry call and add the function name automatically, eliminating SXEE##T[I] macros */
-/* TODO: Have exit automatically use the same level as entry, or error on missmatch                                  */
-/* TODO: Auto add "return " on exit calls if not already there?                                                      */
+/* TODO: Variadic wrappers to eliminate parameter counting                                  */
+/* TODO: Have exit automatically use the same level as entry, or error on missmatch         */
+/* TODO: Auto add "return " on exit calls if not already there?                             */
 
 #ifndef __SXE_LOG_H__
 #define __SXE_LOG_H__
@@ -107,12 +106,14 @@ typedef struct SXE_LOG_CONTROL {
     volatile struct SXE_LOG_CONTROL * next;
 } SXE_LOG_CONTROL;
 
-/* Private type used to declare space for the log package on the stack of each function that calls SXEE## in a debug build
+/* Private type used to declare space for the log package on the stack of each function that calls SXEE##
  */
 typedef struct SXE_LOG_FRAME {
     struct SXE_LOG_FRAME * caller;
     unsigned               indent;
     SXE_LOG_LEVEL          level;
+    const char *           file;
+    unsigned               line;
     const char *           function;
 } SXE_LOG_FRAME;
 
@@ -235,7 +236,10 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #   define SXE_FILE __FILE__    /* Normally, the make system defines this as <component>/<package>/<file>.c */
 #endif
 
-#define SXE_LOG_NO &sxe_log_control, SXE_FILE, ~0U, __LINE__
+#define SXE_LOG_FRAME_CREATE(entry_level)               SXE_LOG_FRAME frame; frame.level=(entry_level); frame.file=SXE_FILE;   \
+                                                        frame.line=__LINE__; frame.function=__func__
+#define SXE_LOG_NO                                      &sxe_log_control, SXE_FILE, ~0U, __LINE__
+#define SXE_LOG_FRAME_NO                                &frame, &sxe_log_control, ~0U
 
 #define SXEL10(fmt)                                     SXE_IF_LEVEL_GE(1) {sxe_log(SXE_LOG_NO,1,fmt                           );}
 #define SXEL11(fmt,a1)                                  SXE_IF_LEVEL_GE(1) {sxe_log(SXE_LOG_NO,1,fmt,a1                        );}
@@ -407,16 +411,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL67(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(6) {sxe_log      (SXE_LOG_NO,6,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL68(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(6) {sxe_log      (SXE_LOG_NO,6,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL69(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(6) {sxe_log      (SXE_LOG_NO,6,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE60(fmt)                                     {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE61(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE62(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE63(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE64(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE65(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE66(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE67(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE68(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE69(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_NO,6,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE60(fmt)                                     {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE61(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE62(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE63(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE64(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE65(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE66(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE67(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE68(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE69(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_NO,6,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER60(fmt)                                     SXE_IF_LEVEL_GE(6) {sxe_log(SXE_LOG_NO,6,fmt                           ); sxe_log_return(SXE_LOG_NO,6);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER61(fmt,a1)                                  SXE_IF_LEVEL_GE(6) {sxe_log(SXE_LOG_NO,6,fmt,a1                        ); sxe_log_return(SXE_LOG_NO,6);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER62(fmt,a1,a2)                               SXE_IF_LEVEL_GE(6) {sxe_log(SXE_LOG_NO,6,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_NO,6);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -459,16 +463,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL77(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(7) {sxe_log      (SXE_LOG_NO,7,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL78(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(7) {sxe_log      (SXE_LOG_NO,7,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL79(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(7) {sxe_log      (SXE_LOG_NO,7,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE70(fmt)                                     {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE71(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE72(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE73(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE74(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE75(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE76(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE77(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE78(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE79(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_NO,7,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE70(fmt)                                     {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE71(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE72(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE73(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE74(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE75(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE76(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE77(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE78(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE79(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_NO,7,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER70(fmt)                                     SXE_IF_LEVEL_GE(7) {sxe_log(SXE_LOG_NO,7,fmt                           ); sxe_log_return(SXE_LOG_NO,7);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER71(fmt,a1)                                  SXE_IF_LEVEL_GE(7) {sxe_log(SXE_LOG_NO,7,fmt,a1                        ); sxe_log_return(SXE_LOG_NO,7);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER72(fmt,a1,a2)                               SXE_IF_LEVEL_GE(7) {sxe_log(SXE_LOG_NO,7,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_NO,7);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -511,16 +515,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL87(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(8) {sxe_log      (SXE_LOG_NO,8,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL88(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(8) {sxe_log      (SXE_LOG_NO,8,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL89(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(8) {sxe_log      (SXE_LOG_NO,8,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE80(fmt)                                     {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE81(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE82(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE83(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE84(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE85(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE86(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE87(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE88(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE89(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_NO,8,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE80(fmt)                                     {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE81(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE82(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE83(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE84(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE85(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE86(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE87(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE88(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE89(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_NO,8,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER80(fmt)                                     SXE_IF_LEVEL_GE(8) {sxe_log(SXE_LOG_NO,8,fmt                           ); sxe_log_return(SXE_LOG_NO,8);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER81(fmt,a1)                                  SXE_IF_LEVEL_GE(8) {sxe_log(SXE_LOG_NO,8,fmt,a1                        ); sxe_log_return(SXE_LOG_NO,8);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER82(fmt,a1,a2)                               SXE_IF_LEVEL_GE(8) {sxe_log(SXE_LOG_NO,8,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_NO,8);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -563,16 +567,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL97(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(9) {sxe_log      (SXE_LOG_NO,9,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL98(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(9) {sxe_log      (SXE_LOG_NO,9,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL99(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(9) {sxe_log      (SXE_LOG_NO,9,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE90(fmt)                                     {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE91(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE92(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE93(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE94(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE95(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE96(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE97(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE98(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE99(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_NO,9,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE90(fmt)                                     {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE91(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE92(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE93(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE94(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE95(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE96(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE97(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE98(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE99(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_NO,9,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER90(fmt)                                     SXE_IF_LEVEL_GE(9) {sxe_log(SXE_LOG_NO,9,fmt                           ); sxe_log_return(SXE_LOG_NO,9);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER91(fmt,a1)                                  SXE_IF_LEVEL_GE(9) {sxe_log(SXE_LOG_NO,9,fmt,a1                        ); sxe_log_return(SXE_LOG_NO,9);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER92(fmt,a1,a2)                               SXE_IF_LEVEL_GE(9) {sxe_log(SXE_LOG_NO,9,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_NO,9);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -814,16 +818,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXED90(ptr,len)
 #endif
 
-#define SXEE50(fmt)                                      {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE51(fmt,a1)                                   {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE52(fmt,a1,a2)                                {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE53(fmt,a1,a2,a3)                             {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE54(fmt,a1,a2,a3,a4)                          {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE55(fmt,a1,a2,a3,a4,a5)                       {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE56(fmt,a1,a2,a3,a4,a5,a6)                    {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE57(fmt,a1,a2,a3,a4,a5,a6,a7)                 {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE58(fmt,a1,a2,a3,a4,a5,a6,a7,a8)              {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE59(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)           {SXE_LOG_FRAME frame; frame.level=5; frame.function=__func__; SXE_IF_LEVEL_GE(5) {sxe_log_entry(&frame,SXE_LOG_NO,5,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE50(fmt)                                      {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE51(fmt,a1)                                   {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE52(fmt,a1,a2)                                {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE53(fmt,a1,a2,a3)                             {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE54(fmt,a1,a2,a3,a4)                          {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE55(fmt,a1,a2,a3,a4,a5)                       {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE56(fmt,a1,a2,a3,a4,a5,a6)                    {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE57(fmt,a1,a2,a3,a4,a5,a6,a7)                 {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE58(fmt,a1,a2,a3,a4,a5,a6,a7,a8)              {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE59(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)           {SXE_LOG_FRAME_CREATE(5); SXE_IF_LEVEL_GE(5) {sxe_log_entry(SXE_LOG_FRAME_NO,5,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER50(fmt)                                      SXE_IF_LEVEL_GE(5) {sxe_log(SXE_LOG_NO,5,fmt                           ); sxe_log_return(SXE_LOG_NO,5);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER51(fmt,a1)                                   SXE_IF_LEVEL_GE(5) {sxe_log(SXE_LOG_NO,5,fmt,a1                        ); sxe_log_return(SXE_LOG_NO,5);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER52(fmt,a1,a2)                                SXE_IF_LEVEL_GE(5) {sxe_log(SXE_LOG_NO,5,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_NO,5);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -835,7 +839,8 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXER58(fmt,a1,a2,a3,a4,a5,a6,a7,a8)              SXE_IF_LEVEL_GE(5) {sxe_log(SXE_LOG_NO,5,fmt,a1,a2,a3,a4,a5,a6,a7,a8   ); sxe_log_return(SXE_LOG_NO,5);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER59(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)           SXE_IF_LEVEL_GE(5) {sxe_log(SXE_LOG_NO,5,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9); sxe_log_return(SXE_LOG_NO,5);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 
-#define SXE_LOG_ID &sxe_log_control, SXE_FILE, ((this) != NULL ? (this)->id : ~0U), __LINE__
+#define SXE_LOG_ID       &sxe_log_control, SXE_FILE, ((this) != NULL ? (this)->id : ~0U), __LINE__
+#define SXE_LOG_FRAME_ID &frame, &sxe_log_control, ((this) != NULL ? (this)->id : ~0U)
 
 #define SXEL10I(fmt)                                     SXE_IF_LEVEL_GE(1) {sxe_log(SXE_LOG_ID,1,fmt                           );}
 #define SXEL11I(fmt,a1)                                  SXE_IF_LEVEL_GE(1) {sxe_log(SXE_LOG_ID,1,fmt,a1                        );}
@@ -1007,16 +1012,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL67I(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(6) {sxe_log      (SXE_LOG_ID,6,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL68I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(6) {sxe_log      (SXE_LOG_ID,6,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL69I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(6) {sxe_log      (SXE_LOG_ID,6,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE60I(fmt)                                     {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE61I(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE62I(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE63I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE64I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE65I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE66I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE67I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE68I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE69I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=6; frame.function=__func__; SXE_IF_LEVEL_GE(6) {sxe_log_entry(&frame,SXE_LOG_ID,6,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE60I(fmt)                                     {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE61I(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE62I(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE63I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE64I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE65I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE66I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE67I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE68I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE69I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(6); SXE_IF_LEVEL_GE(6) {sxe_log_entry(SXE_LOG_FRAME_ID,6,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER60I(fmt)                                     SXE_IF_LEVEL_GE(6) {sxe_log(SXE_LOG_ID,6,fmt                           ); sxe_log_return(SXE_LOG_ID,6);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER61I(fmt,a1)                                  SXE_IF_LEVEL_GE(6) {sxe_log(SXE_LOG_ID,6,fmt,a1                        ); sxe_log_return(SXE_LOG_ID,6);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER62I(fmt,a1,a2)                               SXE_IF_LEVEL_GE(6) {sxe_log(SXE_LOG_ID,6,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_ID,6);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -1059,16 +1064,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL77I(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(7) {sxe_log      (SXE_LOG_ID,7,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL78I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(7) {sxe_log      (SXE_LOG_ID,7,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL79I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(7) {sxe_log      (SXE_LOG_ID,7,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE70I(fmt)                                     {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE71I(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE72I(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE73I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE74I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE75I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE76I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE77I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE78I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE79I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=7; frame.function=__func__; SXE_IF_LEVEL_GE(7) {sxe_log_entry(&frame,SXE_LOG_ID,7,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE70I(fmt)                                     {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE71I(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE72I(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE73I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE74I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE75I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE76I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE77I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE78I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE79I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(7); SXE_IF_LEVEL_GE(7) {sxe_log_entry(SXE_LOG_FRAME_ID,7,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER70I(fmt)                                     SXE_IF_LEVEL_GE(7) {sxe_log(SXE_LOG_ID,7,fmt                           ); sxe_log_return(SXE_LOG_ID,7);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER71I(fmt,a1)                                  SXE_IF_LEVEL_GE(7) {sxe_log(SXE_LOG_ID,7,fmt,a1                        ); sxe_log_return(SXE_LOG_ID,7);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER72I(fmt,a1,a2)                               SXE_IF_LEVEL_GE(7) {sxe_log(SXE_LOG_ID,7,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_ID,7);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -1111,16 +1116,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL87I(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(8) {sxe_log      (SXE_LOG_ID,8,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL88I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(8) {sxe_log      (SXE_LOG_ID,8,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL89I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(8) {sxe_log      (SXE_LOG_ID,8,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE80I(fmt)                                     {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE81I(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE82I(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE83I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE84I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE85I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE86I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE87I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE88I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE89I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=8; frame.function=__func__; SXE_IF_LEVEL_GE(8) {sxe_log_entry(&frame,SXE_LOG_ID,8,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE80I(fmt)                                     {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE81I(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE82I(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE83I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE84I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE85I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE86I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE87I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE88I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE89I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(8); SXE_IF_LEVEL_GE(8) {sxe_log_entry(SXE_LOG_FRAME_ID,8,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER80I(fmt)                                     SXE_IF_LEVEL_GE(8) {sxe_log(SXE_LOG_ID,8,fmt                           ); sxe_log_return(SXE_LOG_ID,8);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER81I(fmt,a1)                                  SXE_IF_LEVEL_GE(8) {sxe_log(SXE_LOG_ID,8,fmt,a1                        ); sxe_log_return(SXE_LOG_ID,8);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER82I(fmt,a1,a2)                               SXE_IF_LEVEL_GE(8) {sxe_log(SXE_LOG_ID,8,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_ID,8);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -1163,16 +1168,16 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXEL97I(fmt,a1,a2,a3,a4,a5,a6,a7)                SXE_IF_LEVEL_GE(9) {sxe_log      (SXE_LOG_ID,9,                  fmt,a1,a2,a3,a4,a5,a6,a7      );}
 #define SXEL98I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXE_IF_LEVEL_GE(9) {sxe_log      (SXE_LOG_ID,9,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8   );}
 #define SXEL99I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          SXE_IF_LEVEL_GE(9) {sxe_log      (SXE_LOG_ID,9,                  fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);}
-#define SXEE90I(fmt)                                     {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt                           );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE91I(fmt,a1)                                  {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1                        );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE92I(fmt,a1,a2)                               {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE93I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE94I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE95I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE96I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE97I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE98I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
-#define SXEE99I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME frame; frame.level=9; frame.function=__func__; SXE_IF_LEVEL_GE(9) {sxe_log_entry(&frame,SXE_LOG_ID,9,__func__,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,SXE_FILE,~0U,__LINE__);}
+#define SXEE90I(fmt)                                     {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt                           );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE91I(fmt,a1)                                  {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1                        );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE92I(fmt,a1,a2)                               {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2                     );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE93I(fmt,a1,a2,a3)                            {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2,a3                  );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE94I(fmt,a1,a2,a3,a4)                         {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2,a3,a4               );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE95I(fmt,a1,a2,a3,a4,a5)                      {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2,a3,a4,a5            );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE96I(fmt,a1,a2,a3,a4,a5,a6)                   {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2,a3,a4,a5,a6         );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE97I(fmt,a1,a2,a3,a4,a5,a6,a7)                {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2,a3,a4,a5,a6,a7      );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE98I(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2,a3,a4,a5,a6,a7,a8   );} else {sxe_log_frame_push(&frame,~0U);}
+#define SXEE99I(fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9)          {SXE_LOG_FRAME_CREATE(9); SXE_IF_LEVEL_GE(9) {sxe_log_entry(SXE_LOG_FRAME_ID,9,fmt,a1,a2,a3,a4,a5,a6,a7,a8,a9);} else {sxe_log_frame_push(&frame,~0U);}
 #define SXER90I(fmt)                                     SXE_IF_LEVEL_GE(9) {sxe_log(SXE_LOG_ID,9,fmt                           ); sxe_log_return(SXE_LOG_ID,9);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER91I(fmt,a1)                                  SXE_IF_LEVEL_GE(9) {sxe_log(SXE_LOG_ID,9,fmt,a1                        ); sxe_log_return(SXE_LOG_ID,9);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
 #define SXER92I(fmt,a1,a2)                               SXE_IF_LEVEL_GE(9) {sxe_log(SXE_LOG_ID,9,fmt,a1,a2                     ); sxe_log_return(SXE_LOG_ID,9);} else {sxe_log_frame_pop(SXE_FILE,~0U,__LINE__);}}
@@ -1414,81 +1419,8 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXED90I(ptr,len)
 #endif
 
-#define SXEE60T(fmt)                                     SXEE61("%s(" fmt ")", __func__)
-#define SXEE61T(fmt,a1)                                  SXEE62("%s(" fmt ")", __func__,a1)
-#define SXEE62T(fmt,a1,a2)                               SXEE63("%s(" fmt ")", __func__,a1,a2)
-#define SXEE63T(fmt,a1,a2,a3)                            SXEE64("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE64T(fmt,a1,a2,a3,a4)                         SXEE65("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE65T(fmt,a1,a2,a3,a4,a5)                      SXEE66("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE66T(fmt,a1,a2,a3,a4,a5,a6)                   SXEE67("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE67T(fmt,a1,a2,a3,a4,a5,a6,a7)                SXEE68("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE68T(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXEE69("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-#define SXEE70T(fmt)                                     SXEE71("%s(" fmt ")", __func__)
-#define SXEE71T(fmt,a1)                                  SXEE72("%s(" fmt ")", __func__,a1)
-#define SXEE72T(fmt,a1,a2)                               SXEE73("%s(" fmt ")", __func__,a1,a2)
-#define SXEE73T(fmt,a1,a2,a3)                            SXEE74("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE74T(fmt,a1,a2,a3,a4)                         SXEE75("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE75T(fmt,a1,a2,a3,a4,a5)                      SXEE76("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE76T(fmt,a1,a2,a3,a4,a5,a6)                   SXEE77("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE77T(fmt,a1,a2,a3,a4,a5,a6,a7)                SXEE78("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE78T(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXEE79("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-#define SXEE80T(fmt)                                     SXEE81("%s(" fmt ")", __func__)
-#define SXEE81T(fmt,a1)                                  SXEE82("%s(" fmt ")", __func__,a1)
-#define SXEE82T(fmt,a1,a2)                               SXEE83("%s(" fmt ")", __func__,a1,a2)
-#define SXEE83T(fmt,a1,a2,a3)                            SXEE84("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE84T(fmt,a1,a2,a3,a4)                         SXEE85("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE85T(fmt,a1,a2,a3,a4,a5)                      SXEE86("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE86T(fmt,a1,a2,a3,a4,a5,a6)                   SXEE87("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE87T(fmt,a1,a2,a3,a4,a5,a6,a7)                SXEE88("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE88T(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXEE89("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-#define SXEE90T(fmt)                                     SXEE91("%s(" fmt ")", __func__)
-#define SXEE91T(fmt,a1)                                  SXEE92("%s(" fmt ")", __func__,a1)
-#define SXEE92T(fmt,a1,a2)                               SXEE93("%s(" fmt ")", __func__,a1,a2)
-#define SXEE93T(fmt,a1,a2,a3)                            SXEE94("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE94T(fmt,a1,a2,a3,a4)                         SXEE95("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE95T(fmt,a1,a2,a3,a4,a5)                      SXEE96("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE96T(fmt,a1,a2,a3,a4,a5,a6)                   SXEE97("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE97T(fmt,a1,a2,a3,a4,a5,a6,a7)                SXEE98("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE98T(fmt,a1,a2,a3,a4,a5,a6,a7,a8)             SXEE99("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-
-#define SXEE60TI(fmt)                                    SXEE61I("%s(" fmt ")", __func__)
-#define SXEE61TI(fmt,a1)                                 SXEE62I("%s(" fmt ")", __func__,a1)
-#define SXEE62TI(fmt,a1,a2)                              SXEE63I("%s(" fmt ")", __func__,a1,a2)
-#define SXEE63TI(fmt,a1,a2,a3)                           SXEE64I("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE64TI(fmt,a1,a2,a3,a4)                        SXEE65I("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE65TI(fmt,a1,a2,a3,a4,a5)                     SXEE66I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE66TI(fmt,a1,a2,a3,a4,a5,a6)                  SXEE67I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE67TI(fmt,a1,a2,a3,a4,a5,a6,a7)               SXEE68I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE68TI(fmt,a1,a2,a3,a4,a5,a6,a7,a8)            SXEE69I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-#define SXEE70TI(fmt)                                    SXEE71I("%s(" fmt ")", __func__)
-#define SXEE71TI(fmt,a1)                                 SXEE72I("%s(" fmt ")", __func__,a1)
-#define SXEE72TI(fmt,a1,a2)                              SXEE73I("%s(" fmt ")", __func__,a1,a2)
-#define SXEE73TI(fmt,a1,a2,a3)                           SXEE74I("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE74TI(fmt,a1,a2,a3,a4)                        SXEE75I("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE75TI(fmt,a1,a2,a3,a4,a5)                     SXEE76I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE76TI(fmt,a1,a2,a3,a4,a5,a6)                  SXEE77I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE77TI(fmt,a1,a2,a3,a4,a5,a6,a7)               SXEE78I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE78TI(fmt,a1,a2,a3,a4,a5,a6,a7,a8)            SXEE79I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-#define SXEE80TI(fmt)                                    SXEE81I("%s(" fmt ")", __func__)
-#define SXEE81TI(fmt,a1)                                 SXEE82I("%s(" fmt ")", __func__,a1)
-#define SXEE82TI(fmt,a1,a2)                              SXEE83I("%s(" fmt ")", __func__,a1,a2)
-#define SXEE83TI(fmt,a1,a2,a3)                           SXEE84I("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE84TI(fmt,a1,a2,a3,a4)                        SXEE85I("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE85TI(fmt,a1,a2,a3,a4,a5)                     SXEE86I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE86TI(fmt,a1,a2,a3,a4,a5,a6)                  SXEE87I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE87TI(fmt,a1,a2,a3,a4,a5,a6,a7)               SXEE88I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE88TI(fmt,a1,a2,a3,a4,a5,a6,a7,a8)            SXEE89I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-#define SXEE90TI(fmt)                                    SXEE91I("%s(" fmt ")", __func__)
-#define SXEE91TI(fmt,a1)                                 SXEE92I("%s(" fmt ")", __func__,a1)
-#define SXEE92TI(fmt,a1,a2)                              SXEE93I("%s(" fmt ")", __func__,a1,a2)
-#define SXEE93TI(fmt,a1,a2,a3)                           SXEE94I("%s(" fmt ")", __func__,a1,a2,a3)
-#define SXEE94TI(fmt,a1,a2,a3,a4)                        SXEE95I("%s(" fmt ")", __func__,a1,a2,a3,a4)
-#define SXEE95TI(fmt,a1,a2,a3,a4,a5)                     SXEE96I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5)
-#define SXEE96TI(fmt,a1,a2,a3,a4,a5,a6)                  SXEE97I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6)
-#define SXEE97TI(fmt,a1,a2,a3,a4,a5,a6,a7)               SXEE98I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7)
-#define SXEE98TI(fmt,a1,a2,a3,a4,a5,a6,a7,a8)            SXEE99I("%s(" fmt ")", __func__,a1,a2,a3,a4,a5,a6,a7,a8)
-
 #include "sxe-log-proto.h"
+#include "sxe-strlcpy-proto.h"
 #include "sxe-str-encode-proto.h"
 
 /* Pushing and popping function call information is done inline for performance */
@@ -1548,7 +1480,7 @@ sxe_log_set_indent_maximum(unsigned maximum)
 #endif
 
 static inline void
-sxe_log_frame_push(SXE_LOG_FRAME * frame, const char * file, unsigned id, int line)
+sxe_log_frame_push(SXE_LOG_FRAME * frame, unsigned id)
 {
     SXE_LOG_FRAME *log_stack_top = sxe_log_get_stack_top();
 #if SXE_DEBUG
@@ -1557,7 +1489,7 @@ sxe_log_frame_push(SXE_LOG_FRAME * frame, const char * file, unsigned id, int li
 
     if (log_stack_top != NULL) {
         if (frame >= log_stack_top) {
-            sxe_log_assert(NULL, file, id, line, "frame < sxe_log_stack_top",
+            sxe_log_assert(NULL, frame->file, id, frame->line, "frame < sxe_log_stack_top",
                            "New stack frame %p is not lower than previous %p; maybe SXEE## was called and SXER## was not?",
                            frame, log_stack_top);
         }

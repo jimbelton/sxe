@@ -19,6 +19,7 @@
  * THE SOFTWARE.
  */
 
+#include <inttypes.h>
 #include <string.h>
 #include <sys/time.h>
 #include <time.h>
@@ -26,7 +27,6 @@
 #include "mock.h"
 #include "sxe-time.h"
 #include "tap.h"
-#include <inttypes.h>
 
 #define TEST_1MS 1000000    /* Number of nanoseconds in a millisecond */
 
@@ -77,25 +77,24 @@ main(void)
 
     time(&expected);
     actual = (time_t)sxe_get_time_in_seconds();
-    ok((actual == expected) || (actual == expected + 1),
-       "Actual time (%lu) is as expected (%lu)", actual, expected);
+    ok((actual == expected) || (actual == expected + 1), "Actual time (%lu) is as expected (%lu)", actual, expected);
 
     time(&expected);
     sxe_time = sxe_time_get();
     actual   = sxe_time_to_unix_time(sxe_time);
-    ok((actual == expected) || (actual == expected + 1),
-       "Whole part %lu of SXE time (%" PRIu64 ") is as expected (%lu)", actual, sxe_time, expected);
+    ok((actual == expected) || (actual == expected + 1), "Whole part %lu of SXE time (%" PRIu64 ") is as expected (%lu)",
+        actual, sxe_time, expected);
 
     is_eq(sxe_time_to_string((SXE_TIME)987654321, buffer, sizeof(buffer)), "19700101000000.987",
           "Formatted SXE time as expected (%s)", buffer);
     sxe_time_to_string((SXE_TIME)expected << 32, extra_buffer, sizeof(extra_buffer));
-    is_eq(&extra_buffer[14], ".000000000", "Zeroed fractional part formatted as expected (stamp=%s, time=%" PRIx64 ")", extra_buffer,
-          (SXE_TIME)expected << 32);
+    is_eq(&extra_buffer[14], ".000000000", "Zeroed fractional part formatted as expected (stamp=%s, time=%" PRIx64 ")",
+          extra_buffer, (SXE_TIME)expected << 32);
 
     /* Due to roundoff errors, check accuracy to a millisecond (1000000 ns)
      */
     sxe_time_got      = sxe_time_from_double_seconds(1286482481.666);
-    sxe_time_expected = ((SXE_TIME)1286482481 << 32) + (1ULL << 32) * 666000000 / 1000000000;
+    sxe_time_expected = ((SXE_TIME)1286482481 << 32) + SXE_TIME_1_SEC * 666000000 / 1000000000;
 
     ok((sxe_time_expected - sxe_time_got < TEST_1MS) || (sxe_time_got - sxe_time_expected < TEST_1MS),
        "Time is correctly encoded from a double (1286482481.666 - (%u,%u) < 0.001)", (uint32_t)(sxe_time_got >> 32),
@@ -110,19 +109,21 @@ main(void)
 
     test_tv.tv_usec = 999999;
     sxe_time        = sxe_time_get();
-    ok((1ULL << 32) - 1 - sxe_time < (1ULL << 32) / 1000, "tv(0,999999) -> SXE time ~%llu (got %" PRIu64 ", epsilon %llu)", (1ULL << 32) - 1,
-       sxe_time, (1ULL << 32) / 1000);
+    ok(SXE_TIME_1_SEC - 1 - sxe_time < SXE_TIME_1_SEC / 1000,
+       "tv(0,999999) -> SXE time ~%" PRIu64 " (got %" PRIu64 ", epsilon %" PRIu64 ")",
+       SXE_TIME_1_SEC - 1,  sxe_time,  SXE_TIME_1_SEC / 1000);
 
     test_tv.tv_sec  = 1;
     test_tv.tv_usec = 0;
     sxe_time        = sxe_time_get();
-    ok(sxe_time == (1ULL << 32), "tv(1, 0) -> SXE time 2^32 == %llu (got %" PRIu64 ")", 1ULL << 32, sxe_time);
+    ok(sxe_time == SXE_TIME_1_SEC, "tv(1, 0) -> SXE time 2^32 == %" PRIu64 " (got %" PRIu64 ")", SXE_TIME_1_SEC, sxe_time);
 
     test_tv.tv_sec  = 1;
     test_tv.tv_usec = 666000;
     sxe_time        = sxe_time_get();
     double_time_got = sxe_time_to_double_seconds(sxe_time);
-    ok(double_time_got - 1.666 < 0.000001, "Double time %f for SXE time 0x%" PRIu64 " is ~1.666 as expected", double_time_got, sxe_time);
+    ok(double_time_got - 1.666 < 0.000001, "Double time %f for SXE time 0x%" PRIx64 " is ~1.666 as expected",
+       double_time_got, sxe_time);
 
     ok(sxe_time_from_double_seconds(double_time_got) == sxe_time, "Double time converted back to the same SXE time");
 
@@ -142,11 +143,11 @@ main(void)
     test_timeval_conversions(6,   4294, 6,   4293, 6.00, 6.01); /* rounds down; challenge for you, figure out why! */
     test_timeval_conversions(7,   4295, 7,   4294, 7.00, 7.01); /* rounds down; challenge for you, figure out why! */
 
-    ok(SXE_TIME_FROM_MSEC(1)    ==    1 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(1)   =0x%" PRIx64 ",expected 0x%" PRIx64,
-       SXE_TIME_FROM_MSEC(1),         1 * 0x100000000ULL / 1000);
-    ok(SXE_TIME_FROM_MSEC(3000) == 3000 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(3000)=0x%" PRIx64 ",expected 0x%" PRIx64,
-       SXE_TIME_FROM_MSEC(3000),   3000 * 0x100000000ULL / 1000);
-    ok(SXE_TIME_FROM_MSEC(3010) == 3010 * 0x100000000ULL / 1000, "SXE_TIME_FROM_MSEC(3010)=0x%" PRIx64 ",expected 0x%" PRIx64,
-       SXE_TIME_FROM_MSEC(3010),   3010 * 0x100000000ULL / 1000);
+    ok(SXE_TIME_FROM_MSEC(1)    ==    1 * SXE_TIME_1_SEC / 1000, "SXE_TIME_FROM_MSEC(1)   =0x%" PRIx64 ",expected 0x%" PRIx64,
+       SXE_TIME_FROM_MSEC(1),         1 * SXE_TIME_1_SEC / 1000);
+    ok(SXE_TIME_FROM_MSEC(3000) == 3000 * SXE_TIME_1_SEC / 1000, "SXE_TIME_FROM_MSEC(3000)=0x%" PRIx64 ",expected 0x%" PRIx64,
+       SXE_TIME_FROM_MSEC(3000),   3000 * SXE_TIME_1_SEC / 1000);
+    ok(SXE_TIME_FROM_MSEC(3010) == 3010 * SXE_TIME_1_SEC / 1000, "SXE_TIME_FROM_MSEC(3010)=0x%" PRIx64 ",expected 0x%" PRIx64,
+       SXE_TIME_FROM_MSEC(3010),   3010 * SXE_TIME_1_SEC / 1000);
     return exit_status();
 }

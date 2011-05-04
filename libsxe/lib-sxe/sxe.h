@@ -50,15 +50,14 @@ typedef void (*SXE_IN_EVENT_CLOSE)(    struct SXE *            );
 typedef void (*SXE_IN_EVENT_CONNECTED)(struct SXE *            );
 typedef void (*SXE_OUT_EVENT_WRITTEN )(struct SXE *, SXE_RETURN);
 
-/* SXE_BUFFER object. Can be used to send multiple buffers in sequence using
- * sxe_send_buffers(). Equivalent to calling sxe_write() on each buffer in
- * turn, but allows the caller to prepare several buffers. */
+/* SXE_BUFFER object. Used by sxe_send() to track asynchronous completions.
+ */
 typedef struct SXE_BUFFER {
-    SXE_LIST_NODE       node;
-    const char        * ptr;
-    size_t              len;
-    size_t              sent;
-    char                space[1];   /* allows inline storage */
+    SXE_LIST_NODE node;
+    char        * ptr;
+    unsigned      len;
+    unsigned      sent;
+    char          space[1];   /* allows inline storage */
 } SXE_BUFFER;
 
 /* SXE object. Used for "Accept Sockets", "Connection Sockets", and UDP ports.
@@ -117,5 +116,21 @@ typedef struct SXE {
 
 static inline SXE_RETURN sxe_listen(SXE * this)         {return sxe_listen_plus(this, 0);                   }
 static inline SXE_RETURN sxe_listen_oneshot(SXE * this) {return sxe_listen_plus(this, SXE_FLAG_IS_ONESHOT); }
+
+static inline void
+sxe_buffer_construct(SXE_BUFFER * buffer, char * memory, unsigned length, unsigned size)
+{
+    SXE_UNUSED_PARAMETER(size);    /* TODO: Allow buffer bigger than length */
+    buffer->ptr  = memory;
+    buffer->len  = length;
+    buffer->sent = 0;
+}
+
+static inline void
+sxe_buffer_construct_const(SXE_BUFFER * buffer, const char * memory, unsigned length)
+{
+    sxe_buffer_construct(buffer, SXE_CAST_NOCONST(char *, memory), length, length);
+    /* TODO: buffer->flags |= SXE_BUFFER_FLAG_IS_CONST; */
+}
 
 #endif /* __SXE_H__ */

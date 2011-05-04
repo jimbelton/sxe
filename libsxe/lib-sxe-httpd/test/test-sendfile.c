@@ -111,18 +111,18 @@ main(void)
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
 
     {
-        char readbuf[65536];
-        SXE_BUFFER buffer, buffer2, buffer3;
+        char        readbuf[65536];
+        SXE_BUFFER  buffer;
+        SXE_BUFFER  buffer2;
+        SXE_BUFFER  buffer3;
         struct stat sb;
-        unsigned expected_length;
-        int fd;
+        unsigned    expected_length;
+        int         fd;
 
         SXEA11((fd = open("sxe-httpd-proto.h", O_RDONLY)) >= 0, "Failed to open sxe-httpd-proto.h: %s", strerror(errno));
         SXEA11(fstat(fd, &sb) >= 0, "Failed to fstat sxe-httpd-proto.h: %s", strerror(errno));
 
-        buffer.ptr  = "Hello, world";
-        buffer.len  = strlen(buffer.ptr);
-        buffer.sent = 0;
+        sxe_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"));
         buffer2     = buffer;
         buffer3     = buffer;
 

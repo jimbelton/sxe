@@ -93,6 +93,7 @@ sxe_log_get_indent(volatile SXE_LOG_CONTROL * control_self, const char * file, u
     for (frame = sxe_log_get_stack_top(); frame != NULL; frame = frame->caller) {
 #if SXE_DEBUG
         unsigned log_indent_maximum = sxe_log_get_indent_maximum();
+
         if (frame->indent > log_indent_maximum) {
             sxe_log_assert(NULL, file, id, line, "frame->indent <= sxe_log_indent_maximum",
                            "Log indent %u exceeds maximum log indent %u", frame->indent, log_indent_maximum);
@@ -144,34 +145,31 @@ sxe_return_to_string(SXE_RETURN ret)
     return NULL;
 }
 
-static int
+static bool
 sxe_log_safe_append(char * log_buffer, unsigned * index_ptr, int appended)
 {
-    unsigned i;
-
     /* If output was truncated, Win32 returns negative result while Linux returns positive result!
      */
     if ((appended < 0) || ((unsigned)appended >= SXE_LOG_BUFFER_SIZE - *index_ptr))
     {
-        i = SXE_LOG_BUFFER_SIZE - 1;
-        log_buffer[i - 0] = '\0';   /* snprintf() will give up & not append a \0    */
-        log_buffer[i - 1] = '\n';   /* in which case a \n also comes in handy       */
-        log_buffer[i - 2] = '.';
-        log_buffer[i - 3] = '.';
-        return 0;
+        log_buffer[SXE_LOG_BUFFER_SIZE - 4] = '.';
+        log_buffer[SXE_LOG_BUFFER_SIZE - 3] = '.';
+        log_buffer[SXE_LOG_BUFFER_SIZE - 2] = '\n';
+        log_buffer[SXE_LOG_BUFFER_SIZE - 1] = '\0';
+        return false;
     }
 
     *index_ptr += appended;
-    return 1;
+    return true;
 }
 
 static void
 sxe_log_line_out_default(SXE_LOG_LEVEL level, const char * line) /* Coverage Exclusion - default version for testing */
-{                                                                /* Coverage Exclusion - default version for testing */
+{                                                             /* Coverage Exclusion - default version for testing */
     SXE_UNUSED_ARGUMENT(level);
 
-    fputs(line, stderr);                                         /* Coverage Exclusion - default version for testing */
-    fflush(stderr);                                              /* Coverage Exclusion - default version for testing */
+    fputs(line, stderr);                                      /* Coverage Exclusion - default version for testing */
+    fflush(stderr);                                           /* Coverage Exclusion - default version for testing */
 }
 
 static unsigned
@@ -187,7 +185,7 @@ sxe_log_prefix_default(char * log_buffer, unsigned id, SXE_LOG_LEVEL level)
     pid_t            ThreadId;
 #   if defined(__APPLE__)
     pid_t            ProcessId;
-#   endif
+#endif
 #endif
 
 #if defined(WIN32)
@@ -550,18 +548,17 @@ SXE_EARLY_OR_ERROR_OUT:
 }
 
 void
-sxe_log_entry(SXE_LOG_FRAME * frame, volatile SXE_LOG_CONTROL * control_self, const char * file, unsigned id, int line,
-              SXE_LOG_LEVEL level, const char * function, const char * format, ...)
+sxe_log_entry(SXE_LOG_FRAME * frame, volatile SXE_LOG_CONTROL * control_self, unsigned id,  SXE_LOG_LEVEL level,
+              const char * format, ...)
 {
     char     log_buffer[SXE_LOG_BUFFER_SIZE];
     va_list  ap;
     unsigned i;
     unsigned prefix_length;
 
-    SXE_UNUSED_ARGUMENT(function);
-    sxe_log_frame_push(frame, file, id, line);
+    sxe_log_frame_push(frame, id);
 
-    if (level > sxe_log_control_learn_level(control_self, file)) {
+    if (level > sxe_log_control_learn_level(control_self, frame->file)) {
         return;
     }
 
@@ -569,17 +566,19 @@ sxe_log_entry(SXE_LOG_FRAME * frame, volatile SXE_LOG_CONTROL * control_self, co
     i               = prefix_length;
     va_start(ap, format);
 
-    if (sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s+ ",
-                            2 * sxe_log_get_indent(control_self, file, id, line) - 2, ""))
-    &&  sxe_log_safe_append(log_buffer, &i, vsnprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap))) {
-        sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
+    if (sxe_log_safe_append(log_buffer, &i, snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s+ ",
+                                                      2 * sxe_log_get_indent(control_self, frame->file, id, frame->line) - 2, ""))
+     && (format[0] != '(' || sxe_log_safe_append(log_buffer, &i, sxe_strlcpy(&log_buffer[i], frame->function, SXE_LOG_BUFFER_SIZE - i)))
+     && sxe_log_safe_append(log_buffer, &i, vsnprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap)))
+    {
+        sxe_log_safe_append(log_buffer, &i, snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
     }
 
     va_end(ap);
     sxe_log_line_out_escaped(level, log_buffer);
     i = prefix_length;
     sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s  { // %s:%d \n",
-                        2 * sxe_log_get_indent(control_self, file, id, line) - 2, "", file, line));
+                        2 * sxe_log_get_indent(control_self, frame->file, id, frame->line) - 2, "", frame->file, frame->line));
     sxe_log_line_out_escaped(level, log_buffer);
 }
 
@@ -604,26 +603,37 @@ sxe_log_return(volatile SXE_LOG_CONTROL * control_self, const char * file, unsig
 void
 sxe_log_assert(volatile SXE_LOG_CONTROL * control_self, const char * file, unsigned id, int line, const char * con, const char * format, ...)
 {
-    char     log_buffer[SXE_LOG_BUFFER_SIZE_ASSERT];
-    va_list  ap;
-    unsigned i = 0;
+    char            log_buffer[SXE_LOG_BUFFER_SIZE_ASSERT];
+    va_list         ap;
+    unsigned        length = 0;
+    const char    * where  = "in";
+    SXE_LOG_FRAME * frame;
 
     SXE_UNUSED_ARGUMENT(control_self);
-    i = (*sxe_log_buffer_prefix)(log_buffer, id, 1);
+    length = (*sxe_log_buffer_prefix)(log_buffer, id, 1);
     va_start(ap, format);
 
-    if (sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i,
+    if (sxe_log_safe_append(log_buffer, &length,  snprintf(&log_buffer[length], SXE_LOG_BUFFER_SIZE - length,
         "ERROR: assertion '%s' failed at %s:%d; ", con, file, line))
-    &&  sxe_log_safe_append(log_buffer, &i, vsnprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap))) {
-        sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
+    &&  sxe_log_safe_append(log_buffer, &length, vsnprintf(&log_buffer[length], SXE_LOG_BUFFER_SIZE - length, format, ap))) {
+        sxe_log_safe_append(log_buffer, &length,  snprintf(&log_buffer[length], SXE_LOG_BUFFER_SIZE - length, "\n"));
     }
 
     va_end(ap);
 
-    /* TODO: Add stack traceback */
-
 SXE_EARLY_OR_ERROR_OUT:
     sxe_log_line_out_escaped(SXE_LOG_LEVEL_FATAL, log_buffer);
+
+    /* Stack traceback
+     */
+    for (frame = sxe_log_get_stack_top(); frame != NULL; frame = frame->caller) {
+        length = 0;
+        sxe_log_safe_append(log_buffer, &length, snprintf(&log_buffer[length], SXE_LOG_BUFFER_SIZE - length,
+                            "       %s function %s() at %s:%d\n", where, frame->function, frame->file, frame->line));
+        sxe_log_line_out_escaped(SXE_LOG_LEVEL_FATAL, log_buffer);
+        where = "called from";
+    }
+
     abort();
 }
 

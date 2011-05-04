@@ -1452,7 +1452,7 @@ sxe_send_buffers_again(SXE * this)
 }
 
 SXE_RETURN
-sxe_send_buffers(SXE * this, SXE_LIST *buffers, SXE_OUT_EVENT_WRITTEN on_complete)
+sxe_send_buffers(SXE * this, SXE_LIST * buffers, SXE_OUT_EVENT_WRITTEN on_complete)
 {
     SXE_RETURN result = SXE_RETURN_OK;
 
@@ -1481,14 +1481,9 @@ sxe_send(SXE * this, const void * buf, unsigned size, SXE_OUT_EVENT_WRITTEN on_c
     SXEA10I(on_complete != NULL, "sxe_send: on_complete callback function pointer can't be NULL");
 
     SXE_LIST_CONSTRUCT(&this->send_list, 0, SXE_BUFFER, node);
+    sxe_buffer_construct_const(&this->send_buffer, buf, size);
     sxe_list_push(&this->send_list, &this->send_buffer);
-
-    this->send_buffer.ptr  = (const char *)buf;
-    this->send_buffer.len  = size;
-    this->send_buffer.sent = 0;
-
     result = sxe_send_buffers(this, &this->send_list, on_complete);
-
     SXER81I("return %s", sxe_return_to_string(result));
     return result;
 }
