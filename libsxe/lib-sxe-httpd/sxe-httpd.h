@@ -44,21 +44,6 @@ typedef enum {
     SXE_HTTPD_CONN_NUMBER_OF_STATES
 } SXE_HTTPD_CONN_STATE;
 
-typedef enum {
-    SXE_HTTP_METHOD_INVALID=0,
-    SXE_HTTP_METHOD_GET,
-    SXE_HTTP_METHOD_HEAD,
-    SXE_HTTP_METHOD_PUT,
-    SXE_HTTP_METHOD_POST,
-    SXE_HTTP_METHOD_DELETE
-} SXE_HTTP_METHOD;
-
-typedef enum {
-    SXE_HTTP_VERSION_UNKNOWN=0,
-    SXE_HTTP_VERSION_1_0,
-    SXE_HTTP_VERSION_1_1
-} SXE_HTTP_VERSION;
-
 #define WANT_BODY(request) (request->method == SXE_HTTP_METHOD_PUT || request->method == SXE_HTTP_METHOD_POST)
 
 struct SXE_HTTPD;
@@ -93,10 +78,12 @@ typedef struct SXE_HTTPD_REQUEST {
     SXE_HTTP_MESSAGE           message;
     unsigned                   in_content_length;    /* value from Content-Length header */
     unsigned                   in_content_seen;      /* number of body bytes read */
+    bool                       paused;               /* are input events paused? */
 
-    /* Output: have we finished headers? */
-    bool                       out_eoh;
-    SXE_LIST                   out_buffer_list;
+    /* Output handling */
+    bool                       out_started;          /* have we called sxe_httpd_response_start() yet? */
+    bool                       out_eoh;              /* have we send the EOH marker yet? */
+    SXE_LIST                   out_buffer_list;      /* the output queue */
 
     /* Handle sxe_send() and sxe_sendfile() */
     sxe_httpd_on_sent_handler  on_sent_handler;
@@ -110,6 +97,7 @@ static inline SXE * sxe_httpd_request_get_sxe(SXE_HTTPD_REQUEST * request) { ret
 
 typedef struct SXE_HTTPD {
     SXE_HTTPD_REQUEST       * requests;
+    unsigned                  max_connections;
     SXE_BUFFER              * buffers;
     unsigned                  buffer_size;
     unsigned                  buffer_count;

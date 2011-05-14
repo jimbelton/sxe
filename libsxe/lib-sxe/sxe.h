@@ -114,8 +114,9 @@ typedef struct SXE {
 
 #include "lib-sxe-proto.h"
 
-static inline SXE_RETURN sxe_listen(SXE * this)         {return sxe_listen_plus(this, 0);                   }
+static inline SXE_RETURN sxe_listen(        SXE * this) {return sxe_listen_plus(this, 0);                   }
 static inline SXE_RETURN sxe_listen_oneshot(SXE * this) {return sxe_listen_plus(this, SXE_FLAG_IS_ONESHOT); }
+static inline void       sxe_pause(         SXE * this) {this->flags |= SXE_FLAG_IS_PAUSED;                 }
 
 static inline void
 sxe_buffer_construct(SXE_BUFFER * buffer, char * memory, unsigned length, unsigned size)
@@ -132,5 +133,6 @@ sxe_buffer_construct_const(SXE_BUFFER * buffer, const char * memory, unsigned le
     sxe_buffer_construct(buffer, SXE_CAST_NOCONST(char *, memory), length, length);
     /* TODO: buffer->flags |= SXE_BUFFER_FLAG_IS_CONST; */
 }
+
 
 #endif /* __SXE_H__ */

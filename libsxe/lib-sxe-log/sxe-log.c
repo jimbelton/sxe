@@ -382,6 +382,18 @@ sxe_log_set_level(SXE_LOG_LEVEL level)
 }
 
 /**
+ * Get the global log level
+ *
+ * @return Global log level or SXE_LOG_LEVEL_OVER_MAXIMUM if log level has not been set/read from environment
+ */
+
+SXE_LOG_LEVEL
+sxe_log_get_level(void)
+{
+    return sxe_log_level;
+}
+
+/**
  * Decrease the global log level
  *
  * @param level = Level to decrease to (e.g. SXE_LOG_LEVEL_WARN); If log level is already less than this value, no action is taken

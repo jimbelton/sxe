@@ -39,8 +39,9 @@ main(void)
 {
     TEST_SHA1 sha1_expected;
     TEST_SHA1 sha1_got;
+    char      hex_buffer[sizeof(SHA1_HEX)];
 
-    plan_tests(7);
+    plan_tests(10);
     is(sxe_hex_to_unsigned("0",     2), 0,                            "'0':2    -> 0");
     is(sxe_hex_to_unsigned("face",  4), 0xface,                       "'face':4 -> 0xface");
     is(sxe_hex_to_unsigned("B00B",  2), 0xb0,                         "'B00B':2 -> 0xb0");
@@ -63,5 +64,10 @@ main(void)
         fail(                                                         "bytes are not as expected");
     }
 
+    tap_test_case_name("sxe_hex_from_bytes");
+    hex_buffer[sizeof(hex_buffer) - 1] = 0xBE;
+    is(sxe_hex_from_bytes(hex_buffer, sxe_sha1_expected_bytes, sizeof(sxe_sha1_expected_bytes)), hex_buffer, "Returns hex buffer");
+    is_strncmp(hex_buffer, SHA1_HEX, SXE_LITERAL_LENGTH(SHA1_HEX),    "SHA1 converted to hex as expected");
+    is((unsigned char)hex_buffer[sizeof(hex_buffer) - 1], 0xBE,       "Guard byte is intact");
     return exit_status();
 }

@@ -24,7 +24,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <process.h>
-#include <unistd.h>
+#include <unistd.h>     /* for PATH_MAX     on WIN32 */
+#include <limits.h>     /* for PATH_MAX not on WIN32 */
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -51,7 +52,10 @@ int
 main(int argc, char ** argv)
 {
     int                     fd;
-    unsigned                instance;
+    unsigned                instance = 0;                /* e.g. master=0, slaves=1, 2, 3, etc */
+    char                  * unique_memmap_path_and_file; /* e.g. /tmp/test-sxe-mmap-pid-1234.bin */
+    char                    unique_memmap_path_and_file_master_buffer[PATH_MAX];
+    unsigned                unique_memmap_path_and_file_master_buffer_used;
     SXE_MMAP                memmap;
     volatile unsigned     * shared;
     SXE_SPINLOCK          * shared_spinlock;
@@ -68,13 +72,16 @@ main(int argc, char ** argv)
     sxe_log_decrease_level(SXE_LOG_LEVEL_WARNING); /* A lot of stuff going on here, don't want logging to slow us down */
 
     if (argc > 1) {
-        instance = atoi(argv[1]);
-        sxe_mmap_open(&memmap, "memmap");
+        instance                    = atoi(argv[1]);
+        unique_memmap_path_and_file =      argv[2] ;
+
+        SXEL12("Instance %2u unique memmap path and file: %s", instance, unique_memmap_path_and_file);
+        sxe_mmap_open(&memmap, unique_memmap_path_and_file);
         shared = SXE_MMAP_ADDR(&memmap);
-        SXEL11("Instance %u about to set shared memory", instance);
+        SXEL11("Instance %2u about to set shared memory", instance);
         shared[instance] = instance;
         SXED10(SXE_CAST(char *, SXE_MMAP_ADDR(&memmap)), sizeof(long) * (TEST_MMAP_INSTANCES + 2));
-        SXEL11("Instance %u just     set shared memory", instance);
+        SXEL11("Instance %2u just     set shared memory", instance);
         SXEA11(shared[instance] == instance, "WTF! Thought I wrote %u", instance);
 
         shared_spinlock = SXE_CAST(SXE_SPINLOCK *, shared + 1024);
@@ -87,13 +94,13 @@ main(int argc, char ** argv)
             usleep(10000);
         }
 
-        SXEL11("Instance %u ready to rumble", instance);
+        SXEL11("Instance %2u ready to rumble", instance);
         start_time = sxe_get_time_in_seconds();
 
         for (i = 0; i < TEST_ITERATIONS; i++) {
             SXEA11(sxe_get_time_in_seconds() < start_time + TEST_WAIT, "Unexpected timeout i=%u... is the hardware too slow?", i);
             SXEA11(sxe_spinlock_take(&shared_spinlock[0]) == SXE_SPINLOCK_STATUS_TAKEN,
-                                     "Instance %u failed to take lock", instance);
+                                     "Instance %2u failed to take lock", instance);
             shared_spinlock[1           ].lock++;
             shared_spinlock[1 + instance].lock++;
             sxe_spinlock_give(&shared_spinlock[0]);
@@ -134,13 +141,19 @@ main(int argc, char ** argv)
 
     plan_tests(3);
 
-    /* TODO: Make multiple simultaneous runs safe */
+    sxe_test_get_temp_file_name("test-sxe-mmap-pool", unique_memmap_path_and_file_master_buffer, sizeof(unique_memmap_path_and_file_master_buffer), &unique_memmap_path_and_file_master_buffer_used);
+    unique_memmap_path_and_file = &unique_memmap_path_and_file_master_buffer[0];
+    SXEL12("Instance %2d unique memmap path and file: %s", instance, unique_memmap_path_and_file);
 
-    SXEA11((fd = open("memmap", O_CREAT | O_TRUNC | O_WRONLY, 0666)) >= 0, "Failed to create file 'memmap': %s",         strerror(errno));
-    SXEA12(ftruncate(fd, TEST_FILE_SIZE)                             >= 0, "Failed to extend the file to %lu bytes: %s", TEST_FILE_SIZE, strerror(errno));
+    /* TODO: make creating the file faster on Windows! */
+
+    SXEL11("Instance %2d creating memory mapped file contents", instance);
+    SXEA12((fd = open(unique_memmap_path_and_file, O_CREAT | O_TRUNC | O_WRONLY, 0666)) >= 0, "Failed to create file '%s': %s"            , unique_memmap_path_and_file, strerror(errno));
+    SXEA12(ftruncate(fd, TEST_FILE_SIZE)                                                >= 0, "Failed to extend the file to %lu bytes: %s", TEST_FILE_SIZE, strerror(errno));
     close(fd);
 
-    sxe_mmap_open(&memmap, "memmap");
+    SXEL11("Instance %2d memory mapping file", instance);
+    sxe_mmap_open(&memmap, unique_memmap_path_and_file);
     shared = SXE_MMAP_ADDR(&memmap);
 
     shared_spinlock = SXE_CAST(SXE_SPINLOCK *, shared + 1024);
@@ -148,12 +161,13 @@ main(int argc, char ** argv)
     sxe_spinlock_construct(&shared_spinlock[1]);
     shared[0] = 0;
 
+    SXEL11("Instance %2d spawning slaves", instance);
     for (instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
         char buffer[12];
 
         SXEL12("Launching %d of %d", instance, TEST_MMAP_INSTANCES);
         snprintf(buffer, sizeof(buffer), "%u", instance);
-        hell_spawn[instance - 1] = spawnl(P_NOWAIT, argv[0], argv[0], buffer, NULL);
+        hell_spawn[instance - 1] = spawnl(P_NOWAIT, argv[0], argv[0], buffer, unique_memmap_path_and_file, NULL);
         SXEA15(hell_spawn[instance - 1] != -1, "Failed to spawn (%d of %d) '%s %s': %s", instance, TEST_MMAP_INSTANCES, argv[0], buffer, strerror(errno));
     }
 
@@ -181,7 +195,7 @@ main(int argc, char ** argv)
 
     for (instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
         total += shared_spinlock[1 + instance].lock;
-        SXEL12("Instance %u incremented %d times", instance, shared_spinlock[1 + instance].lock);
+        SXEL12("Instance %2u incremented %d times", instance, shared_spinlock[1 + instance].lock);
     }
 
     is(total                  , (TEST_MMAP_INSTANCES * TEST_ITERATIONS), "Total of counts is as expected");
@@ -221,5 +235,8 @@ main(int argc, char ** argv)
     }
 
     sxe_mmap_close(&memmap);
+    SXEL12("Instance %02d unlinking: %s", instance, unique_memmap_path_and_file);
+    unlink(unique_memmap_path_and_file);
+    SXEL11("Instance %02d exiting // master", instance);
     return exit_status();
 }

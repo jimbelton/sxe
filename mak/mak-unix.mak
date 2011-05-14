@@ -33,7 +33,7 @@ CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wcha
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
 CFLAGS += -O0 -Wunused
 else ifneq ($(filter debug,$(MAKECMDGOALS)),)
-CFLAGS += -O -Wuninitialized -Wno-unused
+CFLAGS += -O0 -Wno-unused
 else
 CFLAGS += -O -Wuninitialized -Wunused
 endif
@@ -74,7 +74,7 @@ LIB_FLAGS          =
 OSQUOTE            = '
 OSPC               = %
 OS_class		   = any-unix
-OS_name            = $(if $(findstring el5,$(shell uname -r)),rhes5,$(shell uname -s | tr '[:upper:]' '[:lower:]'))
+OS_name            = $(if $(findstring CentOS,$(shell cat /etc/redhat-release 2>/dev/null)),centos56,$(if $(findstring el5,$(shell uname -r)),rhes53,$(shell uname -s | tr '[:upper:]' '[:lower:]')))
 OS_bits			   = $(shell uname -a | $(PERL) -lane '$$o.=$$_;sub END{printf qq[%d], $$o =~ m~_64~s ? 64 : 32;}')
 # syntax engine workaround ' (a.k.a. VIM)
 TEST_ENV_VARS      = LIBC_FATAL_STDERR_=1

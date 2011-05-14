@@ -137,8 +137,8 @@ test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, 
 
     for (i = 0; i < expected_length; i++) {
         if (strcmp(test_tap_ev_queue_identifier_wait(queue, seconds, ev_ptr), read_event_name) != 0) {
-            fail("Expected read event '%s', got event '%s' (already read %u fragments, %u bytes)", read_event_name,
-                 (const char *)tap_ev_identifier(*ev_ptr), i, used);
+            fail("%s expected read event '%s', got event '%s' (already read %u fragments, %u bytes of %u expected)", who,
+                 read_event_name, (const char *)tap_ev_identifier(*ev_ptr), i, used, expected_length);
             goto SXE_ERROR_OUT;
         }
 

@@ -29,9 +29,11 @@
 #include "sxe-util.h"
 
 #define TEST_WAIT 5.0
+#define TEST_BUFFER_COUNT 10
 
 static tap_ev_queue q_client;
 static tap_ev_queue q_httpd;
+static SXE_HTTPD    httpd;
 
 static void
 h_connect(struct SXE_HTTPD_REQUEST *request)
@@ -85,7 +87,7 @@ h_body(struct SXE_HTTPD_REQUEST *request, const char *buf, unsigned used)
 {
     SXE * this = sxe_httpd_request_get_sxe(request);
     SXE_UNUSED_PARAMETER(this);
-    SXEE63I("%s(buf=%p,used=%u)", __func__, buf, used);
+    SXEE65I("%s(buf=%p,used=%u) // '%.*s'", __func__, buf, used, used, buf);
     tap_ev_queue_push(q_httpd, __func__, 4,
                       "request", request,
                       "buf", tap_dup(buf, used),
@@ -150,10 +152,18 @@ client_close(SXE * this)
     SXER60("return");
 }
 
+static void
+test_httpd_diag_functions(unsigned active_requests, unsigned idle_connections, unsigned free_connection_objects, unsigned free_buffers)
+{
+    is(sxe_httpd_diag_get_active_requests(&httpd),  active_requests,         "# active requests");
+    is(sxe_httpd_diag_get_idle_connections(&httpd), idle_connections,        "# idle connections");
+    is(sxe_httpd_diag_get_free_connections(&httpd), free_connection_objects, "# free connections");
+    is(sxe_httpd_diag_get_free_buffers(&httpd),     free_buffers,            "# unused buffers");
+}
+
 int
 main(void)
 {
-    SXE_HTTPD                httpd;
     SXE_HTTPD_REQUEST      * request;
     sxe_httpd_header_handler old_header_handler;
     tap_ev                   ev;
@@ -161,7 +171,7 @@ main(void)
     SXE                    * c;
     char                     buffer[1024];
 
-    tap_plan(34, TAP_FLAG_ON_FAILURE_EXIT, NULL);
+    tap_plan(38, TAP_FLAG_ON_FAILURE_EXIT, NULL);
     sxe_register(4, 0);        /* http listener and connections */
     sxe_register(8, 0);        /* http clients */
     sxe_init();
@@ -169,7 +179,7 @@ main(void)
     q_client = tap_ev_queue_new();
     q_httpd = tap_ev_queue_new();
 
-    sxe_httpd_construct(&httpd, 3, 10, 512, 0);
+    sxe_httpd_construct(&httpd, 3, TEST_BUFFER_COUNT, 512, 0);
 
     SXE_HTTPD_SET_HANDLER(&httpd, connect, h_connect);
     SXE_HTTPD_SET_HANDLER(&httpd, request, h_request);
@@ -186,6 +196,8 @@ main(void)
 
     is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_connect",      "Client connected to HTTPD");
     SXE_WRITE_LITERAL(c, "GET /this/is/a/URL HTTP/1.1\r\nConnection: whatever\r\nHost: interesting\r\nContent-Length: 10\r\n\r\n12345678\r\n");
+    /*                        active,idle,free, buffers_free */
+    test_httpd_diag_functions(     0,   1,   2, TEST_BUFFER_COUNT);
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_connect",            "HTTPD: connected");
 

@@ -65,7 +65,7 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
     SXE_HASH * hash;
     unsigned   size;
 
-    SXEE86("sxe_hash_new(name=%s,element_count=%u,element_size=%u,key_offset=%u,key_size=$u,options=%u)", name, element_count,
+    SXEE86("sxe_hash_new_plus(name=%s,element_count=%u,element_size=%u,key_offset=%u,key_size=%u,options=%u)", name, element_count,
            element_size, key_offset, key_size, options);
     size = sizeof(SXE_HASH) + sxe_pool_size(element_count, element_size, element_count + SXE_HASH_BUCKETS_RESERVED);
     SXEA12((hash = malloc(size)) != NULL, "Unable to allocate %u bytes of memory for hash %s", size, name);
@@ -78,12 +78,23 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
     hash->size       = element_size;
     hash->key_offset = key_offset;
     hash->key_size   = key_size;
+    hash->options    = options;
     hash->hash_key   = options & SXE_HASH_OPTION_LOOKUP3_HASH ? lookup3_hash : sxe_prehashed_key_hash;
 
     SXER81("return array=%p", hash->pool);
     return hash->pool;
 }
 
+void
+sxe_hash_reconstruct(void * array)
+{
+    SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    SXEE81("sxe_hash_reconstruct(hash=%s)", sxe_pool_get_name(array));
+    hash->pool  = sxe_pool_construct(hash + 1, sxe_pool_get_name(array),
+                                     hash->count, hash->size, hash->count + SXE_HASH_BUCKETS_RESERVED,
+                                     hash->options & SXE_HASH_OPTION_LOCKED ? SXE_POOL_OPTION_LOCKED : 0);
+    SXER80("return");
+}
 /**
  * Delete a hash created with sxe_hash_new()
  *

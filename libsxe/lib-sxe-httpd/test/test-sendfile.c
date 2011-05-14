@@ -115,6 +115,7 @@ main(void)
         SXE_BUFFER  buffer;
         SXE_BUFFER  buffer2;
         SXE_BUFFER  buffer3;
+        SXE_BUFFER  buffer4;
         struct stat sb;
         unsigned    expected_length;
         int         fd;
@@ -140,6 +141,11 @@ main(void)
 #define X_NAM "X-Header"
 #define X_V77 "abcdefghijklmnopqrstuvwxyz-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #define X_V49 "123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#define X_V770 X_V77 X_V77 X_V77 X_V77 X_V77 X_V77 X_V77 X_V77 X_V77 X_V77
+#define X_V7700 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770
+#define X_V30800 X_V770 X_V770 X_V770 X_V770
+
+        sxe_buffer_construct_const(&buffer4, X_V30800, SXE_LITERAL_LENGTH(X_V30800));
 
         expected_length = SXE_LITERAL_LENGTH("HTTP/1.1 200 OK\r\n")                                 //   17 =   17      =   17
                         + SXE_LITERAL_LENGTH("Content-Type: text/plain; charset=.UTF-8.\r\n")       // + 43 =   60      =   60
@@ -160,9 +166,10 @@ main(void)
                         /* end of second buffer */
                         + SXE_LITERAL_LENGTH("\r\n")                                                // +  2 =    2      =  980
                         /* end of headers - rest is body */
-                        + buffer.len                                                                // + 12 =   14      =  992
-                        + buffer.len                                                                // + 12 =   26      = 1004
-                        + buffer.len                                                                // + 12 =   38      = 1016
+                        + buffer.len                                                                // + 12 =   12      =  992
+                        + buffer.len                                                                // + 12 =   12      = 1004
+                        + buffer.len                                                                // + 12 =   12      = 1016
+                        + buffer4.len
                         /* remainder is file */
                         + sb.st_size
                         + buffer.len
@@ -189,6 +196,7 @@ main(void)
         sxe_httpd_response_copy_body_data(request, "Hello, world", 0);
         sxe_httpd_response_add_body_buffer(request, &buffer);
         sxe_httpd_response_add_raw_buffer(request, &buffer2);
+        sxe_httpd_response_add_raw_buffer(request, &buffer4);
         sxe_httpd_response_sendfile(request, fd, sb.st_size, handle_sent, NULL);
         is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished sending");
         close(fd);

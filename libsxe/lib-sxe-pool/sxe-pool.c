@@ -169,7 +169,7 @@ sxe_pool_construct(void * base, const char * name, unsigned number, unsigned siz
             SXE_POOL_NODES(pool)[i].last.time  = current_time;
         }
         else {
-            SXE_POOL_NODES(pool)[i].last.count = pool->next_count++;
+            SXE_POOL_NODES(pool)[i].last.count = ++pool->next_count;
         }
 
         sxe_list_push(&SXE_POOL_QUEUE(pool)[0], &SXE_POOL_NODES(pool)[i].list_node);
@@ -383,7 +383,7 @@ sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned 
     SXE_POOL_NODE * node;
 
     SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
-    SXEE85("sxe_pool_set_indexed_element_state_unlocked(pool=%s,id=%u,old_state=%s,new_state=%s,on_incorrect_state=%s)",
+    SXEE85("(pool=%s,id=%u,old_state=%s,new_state=%s,on_incorrect_state=%s)",
            pool->name, id, (*pool->state_to_string)(old_state), (*pool->state_to_string)(new_state),
            on_incorrect_state == SXE_POOL_ON_INCORRECT_STATE_ABORT ? "ABORT" : "RETURN_FALSE");
 
@@ -403,7 +403,7 @@ sxe_pool_set_indexed_element_state_unlocked(void * array, unsigned id, unsigned 
         node->last.time  = sxe_time_get();
     }
     else {
-        node->last.count = pool->next_count++;
+        node->last.count = ++pool->next_count;
     }
 
     sxe_list_push(&SXE_POOL_QUEUE(pool)[new_state], &node->list_node);
@@ -425,7 +425,7 @@ sxe_pool_set_indexed_element_state(void * array, unsigned id, unsigned old_state
 
     SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
     SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
-    SXEE84("sxe_pool_set_indexed_element_state(pool=%s,id=%u,old_state=%s,new_state=%s)",
+    SXEE84("(pool=%s,id=%u,old_state=%s,new_state=%s)",
            pool->name, id, (*pool->state_to_string)(old_state), (*pool->state_to_string)(new_state));
     SXEA83(id < pool->number, "sxe_pool_set_indexed_element_state(pool=%s,id=%u): Index is too big (number=%u)",
            pool->name, id, pool->number);
@@ -599,32 +599,27 @@ SXE_ERROR_OUT:
     return id;
 }
 
-/**
- * Get the use time of the oldest object in a given state (or 0 if none)
+/*
+ * Get the time or count of the oldest object in a given state (or 0 if none)
  *
  * @param array = Pointer to the pool array
  * @param state = State to check
- *
- * @exception Release mode assertion: the pool must be a timed pool
  */
-SXE_TIME
-sxe_pool_get_oldest_element_time(void * array, unsigned state)
+static SXE_TIME
+sxe_pool_impl_get_oldest_element_time_or_count(SXE_POOL_IMPL * pool, unsigned state)
 {
-    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
     SXE_POOL_NODE * node;
     SXE_TIME        last_time = 0;
 
-    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
-    SXEE82("sxe_pool_get_oldest_element_time(pool=%s, state=%s)", pool->name, (*pool->state_to_string)(state));
-    SXEA11(pool->options & SXE_POOL_OPTION_TIMED, "sxe_pool_get_oldest_element_time: pool %s is not a timed pool", pool->name);
-    SXEA83(state <= pool->states, "state %u is greater than maximum state %u for pool %s", state, pool->states, pool->name);
+    SXEE83("sxe_pool_get_oldest_element_%s(pool=%s, state=%s)", pool->options & SXE_POOL_OPTION_TIMED ? "time" : "count",
+           pool->name, (*pool->state_to_string)(state));
 
     if (sxe_pool_lock(pool) == SXE_POOL_LOCK_NOT_TAKEN) {
         goto SXE_ERROR_OUT;  /* Coverage exclusion: Add tests before using in multiprocess code */
     }
 
     if ((node = sxe_list_peek_head(&SXE_POOL_QUEUE(pool)[state])) == NULL) {
-        SXEL82("sxe_pool_get_oldest_element_time(pool=%s): No objects in state %s", pool->name, (*pool->state_to_string)(state));
+        SXEL81("No objects in state %s", (*pool->state_to_string)(state));
         goto SXE_EARLY_OUT;
     }
 
@@ -634,8 +629,44 @@ SXE_EARLY_OUT:
     sxe_pool_unlock(pool);
 
 SXE_ERROR_OUT:
-    SXER81("return %f", sxe_time_to_double_seconds(last_time));
+    SXER81("return %llu", (unsigned long long)last_time);
     return last_time;
+}
+
+/**
+ * Get the last use time of the oldest object in a given state (or 0 if none)
+ *
+ * @param array = Pointer to the pool array
+ * @param state = State to check
+ *
+ * @exception Aborts if the pool is not a timed pool
+ */
+SXE_TIME
+sxe_pool_get_oldest_element_time(void * array, unsigned state)
+{
+    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
+
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEA12(pool->options & SXE_POOL_OPTION_TIMED, "%s: pool %s is a timed pool", __func__, pool->name);
+    return sxe_pool_impl_get_oldest_element_time_or_count(pool, state);
+}
+
+/**
+ * Get the insertion counter of the oldest object in a given state (or 0 if none)
+ *
+ * @param array = Pointer to the pool array
+ * @param state = State to check
+ *
+ * @exception Aborts if the pool is a timed pool
+ */
+uint64_t
+sxe_pool_get_oldest_element_count(void * array, unsigned state)
+{
+    SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
+
+    SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);
+    SXEA12(!(pool->options & SXE_POOL_OPTION_TIMED), "%s: pool %s is a timed pool", __func__, pool->name);
+    return (uint64_t)sxe_pool_impl_get_oldest_element_time_or_count(pool, state);
 }
 
 /**
@@ -663,7 +694,6 @@ SXE_EARLY_OR_ERROR_OUT:
     SXER81("return %llu", node->last.time);
     return node->last.time;
 }
-
 
 void
 sxe_pool_delete(void * array)

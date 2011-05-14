@@ -34,7 +34,11 @@ else
 DST.obj    += $(COM.dir)/lib-ev/$(DST.dir)/libev/ev$(EXT.obj) $(COM.dir)/lib-ev/$(DST.dir)/libev/event$(EXT.obj)
 endif
 
-DST.obj    += $(wildcard $(COM.dir)/lib-lua/$(DST.dir)/lua/*$(EXT.obj))
+# TODO: make this line work. Unfortunately $(wildcard) is evaluated at make startup time.
+# DST.obj  += $(wildcard $(COM.dir)/lib-lua/$(DST.dir)/lua/*$(EXT.obj))
+LUA.src     = lapi.c lauxlib.c lbaselib.c lcode.c ldblib.c ldebug.c ldo.c ldump.c lfunc.c lgc.c linit.c liolib.c llex.c lmathlib.c lmem.c \
+              loadlib.c lobject.c lopcodes.c loslib.c lparser.c lstate.c lstring.c lstrlib.c ltable.c ltablib.c ltm.c lundump.c lvm.c lzio.c
+DST.obj    += $(LUA.src:%.c=$(COM.dir)/lib-lua/$(DST.dir)/lua/%$(EXT.obj))
 
 libheaders  = $(wildcard $(1)/*.h) $(wildcard $(1)/$(DST.dir)/*.h) $(wildcard $(1)/$(OS_class)/*.h)
 sysheaders  = $(wildcard $(1)/$(OS_class)/sys/*.h)

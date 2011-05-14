@@ -12,7 +12,7 @@
 
 #define TEST_WAIT 5
 
-#if !defined(__WIN32) && !defined(__APPLE__) && !defined(__FreeBSD__)
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__FreeBSD__)
 #define TEST_DIRWATCH 1
 #else
 #define TEST_DIRWATCH 0
@@ -45,6 +45,9 @@ main(void)
     char tempdir1[] = "tmp-XXXXXX";
     char tempdir2[] = "tmp-XXXXXX";
     char tempdir3[] = "tmp-XXXXXX";
+    SXE_DIRWATCH dirwatch1;
+    SXE_DIRWATCH dirwatch2;
+    SXE_DIRWATCH dirwatch3;
     char fname[PATH_MAX];
     tap_ev ev;
 
@@ -61,10 +64,11 @@ main(void)
     SXEA11(mkdtemp(tempdir2), "Failed to create tempdir: %s", strerror(errno));
     SXEA11(mkdtemp(tempdir3), "Failed to create tempdir: %s", strerror(errno));
 
-    sxe_dirwatch_init(10);
-    sxe_dirwatch_add(tempdir1, SXE_DIRWATCH_CREATED|SXE_DIRWATCH_MODIFIED|SXE_DIRWATCH_DELETED, test_dirwatch_event, (void *)1);
-    sxe_dirwatch_add(tempdir2, SXE_DIRWATCH_MODIFIED, test_dirwatch_event, (void *)2);
-    sxe_dirwatch_add(tempdir3, SXE_DIRWATCH_DELETED, test_dirwatch_event, (void *)3);
+    sxe_dirwatch_init();
+    sxe_dirwatch_init(); /* for coverage */
+    sxe_dirwatch_add(&dirwatch1, tempdir1, SXE_DIRWATCH_CREATED|SXE_DIRWATCH_MODIFIED|SXE_DIRWATCH_DELETED, test_dirwatch_event, (void *)1);
+    sxe_dirwatch_add(&dirwatch2, tempdir2, SXE_DIRWATCH_MODIFIED, test_dirwatch_event, (void *)2);
+    sxe_dirwatch_add(&dirwatch3, tempdir3, SXE_DIRWATCH_DELETED, test_dirwatch_event, (void *)3);
     sxe_dirwatch_start();
 
     /* tempdir1: create, modify, delete */

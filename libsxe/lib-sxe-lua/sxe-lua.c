@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdarg.h>
 
 #include "sxe.h"
 #include "sxe-spawn.h"
@@ -440,7 +441,7 @@ lsxe_write(lua_State *L)
             THROW("sxe_write: arg 2: invalid type %s", luaL_typename(L, 2));
     }
 
-    SXEL63("Writing %d:%.*s to socket", length, length, data);
+    SXEL63("Writing %d:%.*s to socket", (int)length, (int)length, data);
     sxe_write(udata->sxe, data, length);
     return 0;
 }
@@ -587,9 +588,334 @@ lsxe_meta_newindex(lua_State *L)
     return 0;
 }
 
+#if SXE_DEBUG
+static void
+fdump(FILE *f, lua_State *L, int n)
+{
+    int t;
+
+    if (n < 0)
+        n = lua_gettop(L) + n + 1;
+
+    t = lua_type(L, n);
+    switch (t) {
+    case LUA_TBOOLEAN:
+        fprintf(f, "%s", (lua_toboolean(L, n) ? "true" : "false"));
+        break;
+    case LUA_TNUMBER:
+        fprintf(f, "%.0f", lua_tonumber(L, n));
+        break;
+    case LUA_TSTRING:
+        fprintf(f, "\"%s\"", lua_tostring(L, n));
+        break;
+    case LUA_TTABLE:
+        {
+            int first;
+
+            fprintf(f, "{");
+
+            lua_checkstack(L, 3);
+            lua_pushnil(L);  /* first key */
+            first = 1;
+            while (lua_next(L, n) != 0) {
+                /* uses 'key' (at index -2) and 'value' (at index -1) */
+
+                if (!first)
+                    fprintf(f, ",");
+
+                fdump(f, L, -2);
+                fprintf(f, ":");
+                fdump(f, L, -1);
+
+                /* removes 'value'; keeps 'key' for next iteration */
+                lua_pop(L, 1);
+                first = 0;
+            }
+            fprintf(f, "}");
+        }
+        break;
+    case LUA_TNIL:
+        fprintf(f, "null");
+        break;
+    case LUA_TFUNCTION:
+        fprintf(f, "function@");
+        /* fallthrough */
+    default:
+        fprintf(f, "%p", lua_topointer(L, n));
+    }
+}
+#endif
+
 /*****************************************************************************
  * Function registration
  ****************************************************************************/
+
+static int
+lsxe_table_hook_get(lua_State *L)   /* params: (table, field) */
+{
+    const char *field = luaL_checkstring(L, 2);
+
+    SXEE91("(field=%s)", field);
+    SXEA11(lua_type(L, 1) == LUA_TTABLE, "arg(1) is not a table: it's a %s", luaL_typename(L, 1));
+
+    lua_getmetatable(L, 1);
+    lua_pushfstring(L, "get_%s", field);
+    lua_rawget(L, -2);
+    lua_remove(L, -2);
+
+    if (lua_type(L, -1) == LUA_TFUNCTION) {
+        SXEL91("found getter get_%s, calling it", field);
+        lua_call(L, 0, 1); /* call function with zero args and expect one return */
+    }
+    else {
+        SXEL92("found no getter named get_%s: type is %s", field, luaL_typename(L, -1));
+    }
+
+    SXER90("return 1");
+    return 1;
+}
+
+static int
+lsxe_table_hook_set(lua_State *L)   /* params: (table, field, value) */
+{
+    const char *field = luaL_checkstring(L, 2);
+
+    SXEE91("(field=%s)", field);
+
+    lua_getmetatable(L, 1);
+    lua_pushfstring(L, "set_%s", field);
+    lua_rawget(L, -2);
+    lua_remove(L, -2);
+
+    if (lua_type(L, -1) == LUA_TFUNCTION) {
+        SXEL91("found setter set_%s, calling it", field);
+        lua_pushvalue(L, 3); /* push copy of the value */
+        lua_call(L, 1, 0); /* call function with one arg and expect zero return */
+    }
+    else {
+        SXEL92("found no setter name set_%s: type is %s", field, luaL_typename(L, -1));
+    }
+
+    SXER90("return 0");
+    return 0;
+}
+
+static void
+sxe_lua_table_get_metatable(lua_State *L, const char *table)
+{
+    lua_getglobal(L, table);
+    if (lua_type(L, -1) == LUA_TNIL) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_setglobal(L, table);
+        lua_getglobal(L, table);
+    }
+
+    SXEA12(lua_type(L, -1) == LUA_TTABLE, "sxe_lua_table_get_metatable: global '%s' has type %s -- not a table", table, luaL_typename(L, -1));
+
+    /* If the table doesn't have a metatable, create one and set the __index
+     * and __newindex fields */
+    if (!lua_getmetatable(L, -1)) {
+        lua_newtable(L);                    /* S: T M */
+        lua_pushvalue(L, -1);               /* S: T M M */
+        lua_setmetatable(L, -3);            /* S: T M */
+        lua_pushcfunction(L, lsxe_table_hook_get);
+        lua_setfield(L, -2, "__index");
+        lua_pushcfunction(L, lsxe_table_hook_set);
+        lua_setfield(L, -2, "__newindex");
+    }
+
+    lua_remove(L, -2);
+
+    /* returns, leaving the metatable on the stack */
+}
+
+void
+sxe_lua_hook_field(lua_State *L, const char *table, const char *field, lua_CFunction get, lua_CFunction set)
+{
+    sxe_lua_table_get_metatable(L, table);
+
+    lua_pushfstring(L, "get_%s", field);
+    lua_pushcfunction(L, get);
+    lua_rawset(L, -3);
+
+    lua_pushfstring(L, "set_%s", field);
+    lua_pushcfunction(L, set);
+    lua_rawset(L, -3);
+
+    lua_pop(L, 1);
+}
+
+static int
+lsxe_tie_lstring_get(lua_State *L)
+{
+    char       * s   = lua_touserdata(L, lua_upvalueindex(1));
+    lua_Number   len = lua_tonumber(L, lua_upvalueindex(2));
+
+    s[(size_t)len - 1] = '\0'; /* ensure NUL-terminated */
+    lua_pushstring(L, s);
+
+    return 1;
+}
+
+static int
+lsxe_tie_lstring_set(lua_State *L)
+{
+    char       * buf = lua_touserdata(L, lua_upvalueindex(1));
+    lua_Number   buflen = lua_tonumber(L, lua_upvalueindex(2));
+    size_t       len;
+    const char * str = lua_tolstring(L, 1, &len);
+    snprintf(buf, buflen, "%.*s", (int)len, str);
+    return 0;
+}
+
+static int
+lsxe_tie_int_get(lua_State *L)
+{
+    int *iptr = lua_touserdata(L, lua_upvalueindex(1));
+    lua_pushinteger(L, *iptr);
+    return 1;
+}
+
+static int
+lsxe_tie_int_set(lua_State *L)
+{
+    int *iptr = lua_touserdata(L, lua_upvalueindex(1));
+    int  ival = lua_tonumber(L, 1);
+    *iptr = ival;
+    return 0;
+}
+
+static int
+lsxe_tie_long_get(lua_State *L)
+{
+    long *lptr = lua_touserdata(L, lua_upvalueindex(1));
+    lua_pushinteger(L, *lptr);
+    return 1;
+}
+
+static int
+lsxe_tie_long_set(lua_State *L)
+{
+    long *lptr = lua_touserdata(L, lua_upvalueindex(1));
+    long  lval = lua_tonumber(L, 1);
+    *lptr = lval;
+    return 0;
+}
+
+static int
+lsxe_tie_bool_get(lua_State *L)
+{
+    int *bptr = lua_touserdata(L, lua_upvalueindex(1));
+    lua_pushboolean(L, *bptr);
+    return 1;
+}
+
+static int
+lsxe_tie_bool_set(lua_State *L)
+{
+    int *bptr = lua_touserdata(L, lua_upvalueindex(1));
+    int  bval = lua_toboolean(L, 1);
+    *bptr = bval;
+    return 0;
+}
+
+void
+sxe_lua_tie_field(lua_State *L, const char *table, const char *field, char type, ...)
+{
+    va_list ap;
+
+    sxe_lua_table_get_metatable(L, table);
+    lua_pushfstring(L, "set_%s", field);
+    lua_pushfstring(L, "get_%s", field);
+
+    va_start(ap, type);
+    switch (type) {
+        case 'b':
+        {
+            int *bptr = va_arg(ap, int *);
+
+            lua_pushlightuserdata(L, bptr);
+            lua_pushcclosure(L, lsxe_tie_bool_get, 1);
+            lua_rawset(L, -4);
+
+            lua_pushlightuserdata(L, bptr);
+            lua_pushcclosure(L, lsxe_tie_bool_set, 1);
+            lua_rawset(L, -3);
+            break;
+        }
+
+        case 's':
+        {
+            char *buf     = va_arg(ap, char *);
+            size_t buflen = va_arg(ap, size_t);
+
+            lua_pushlightuserdata(L, buf);
+            lua_pushinteger(L, buflen);
+            lua_pushcclosure(L, lsxe_tie_lstring_get, 2);
+            lua_rawset(L, -4);
+
+            lua_pushlightuserdata(L, buf);
+            lua_pushinteger(L, buflen);
+            lua_pushcclosure(L, lsxe_tie_lstring_set, 2);
+            lua_rawset(L, -3);
+            break;
+        }
+
+        case 'i':
+        {
+            int *iptr = va_arg(ap, int *);
+
+            lua_pushlightuserdata(L, iptr);
+            lua_pushcclosure(L, lsxe_tie_int_get, 1);
+            lua_rawset(L, -4);
+
+            lua_pushlightuserdata(L, iptr);
+            lua_pushcclosure(L, lsxe_tie_int_set, 1);
+            lua_rawset(L, -3);
+            break;
+        }
+
+        case 'l':
+        {
+            long *lptr = va_arg(ap, long *);
+
+            lua_pushlightuserdata(L, lptr);
+            lua_pushcclosure(L, lsxe_tie_long_get, 1);
+            lua_rawset(L, -4);
+
+            lua_pushlightuserdata(L, lptr);
+            lua_pushcclosure(L, lsxe_tie_long_set, 1);
+            lua_rawset(L, -3);
+            break;
+        }
+
+        default:
+            SXEA11(0, "sxe_lua_tie_field(): unsupported data type %c", type); /* coverage exclusion: assertion */
+            break;
+    }
+    va_end(ap);
+
+    lua_pop(L, 1);
+}
+
+static int
+lsxe_get_log_level(lua_State *L)
+{
+    int level = sxe_log_get_level();
+    lua_pushinteger(L, level);
+    SXEL91("lsxe_get_log_level() // returning %d", level);
+    return 1;
+}
+
+static int
+lsxe_set_log_level(lua_State *L)
+{
+    int level = luaL_checkint(L, 1);
+    SXEL91("lsxe_set_log_level(%d)", level);
+    sxe_log_set_level(level);
+    return 0;
+}
 
 static void
 register_sxe(lua_State *L)
@@ -608,6 +934,8 @@ register_sxe(lua_State *L)
     lua_register(L, "SXEL7", lsxe_SXEL7);
     lua_register(L, "SXEL8", lsxe_SXEL8);
     lua_register(L, "SXEL9", lsxe_SXEL9);
+
+    sxe_lua_hook_field(L, "sxe", "log_level", lsxe_get_log_level, lsxe_set_log_level);
 }
 
 /*****************************************************************************
@@ -639,7 +967,9 @@ sxe_lua_new()
 void
 sxe_lua_load(SXE_LUA *L, const char *file)
 {
-    SXEV12(luaL_dofile(L, file), == 0, "failed to load script %s: %s", file, lua_tostring(L, -1));
+    if (luaL_dofile(L, file) != 0) {
+        SXEL32("failed to load script %s: %s", file, lua_tostring(L, -1)); /* coverage exclusion: todo */
+    }
 }
 
 void

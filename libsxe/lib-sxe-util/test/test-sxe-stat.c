@@ -20,16 +20,16 @@
  */
 
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "sxe-log.h"
+//#include "sxe-test.h"
 #include "sxe-util.h"
 #include "tap.h"
-
-#define TEST_FILE "test-sxe-stat-file"
 
 int
 main(void)
@@ -37,26 +37,32 @@ main(void)
     SXE_STAT status;
     FILE   * file_ptr;
     time_t   current_time;
+    char     file_path[PATH_MAX] = "test-sxe-stat-file";
+//    unsigned file_path_length;
 
     plan_tests(7);
     time(&current_time);
-    unlink(TEST_FILE);
+    current_time -= 5;      /* Hack for now to allow file system clock to lag by up to 5 seconds: ugh! */
 
-    is(sxe_stat(&status, TEST_FILE),              NULL,         "After removal, correctly can't stat '" TEST_FILE "'");
+//    sxe_test_get_temp_file_name("test-sxe-stat", file_path, sizeof(file_path), &file_path_length);
+//    SXEA11( sizeof(file_path) >= sizeof(file_path), "Temp file name is too big (%u characters)",  sizeof(file_path));
+//    file_path[file_path_length] = '\0';
+
+    is(sxe_stat(&status, file_path),              NULL,         "After removal, correctly can't stat '%s'", file_path);
     is(sxe_stat_get_time_modification(NULL),      0,            "Modification time of NULL SXE_STAT is 0");
-    SXEA11((file_ptr = fopen(TEST_FILE, "w"))  != NULL,         "Can't create '" TEST_FILE "': %s", strerror(errno));
+    SXEA12((file_ptr = fopen(file_path, "w"))  != NULL,         "Can't create '%s': %s", file_path, strerror(errno));
     fclose(file_ptr);
-    is(sxe_stat(&status, TEST_FILE),              &status,      "After creation, able to stat '" TEST_FILE "'");
+    is(sxe_stat(&status, file_path),              &status,      "After creation, able to stat '%s'", file_path);
     ok(sxe_stat_get_time_modification(&status) >= current_time, "Modification time of file is %lu (program time %lu)",
                                                                 (unsigned long)sxe_stat_get_time_modification(&status), (unsigned long)current_time);
     is(sxe_stat_get_file_size(&status), 0,                      "It's an empty file, 0 bytes");
-    SXEA11((file_ptr = fopen(TEST_FILE, "w"))  != NULL,         "Can't create '" TEST_FILE "': %s", strerror(errno));
+    SXEA12((file_ptr = fopen(file_path, "w"))  != NULL,         "Can't create '%s': %s", file_path, strerror(errno));
     fwrite("foobar", 1, 6, file_ptr);
     fclose(file_ptr);
-    is(sxe_stat(&status, TEST_FILE),              &status,      "After write, able to stat '" TEST_FILE "' again");
+    is(sxe_stat(&status, file_path),              &status,      "After write, able to stat '%s' again", file_path);
     is(sxe_stat_get_file_size(&status), 6,                      "It's not empty any more, file is 6 bytes now");
 
-    unlink(TEST_FILE);
+    unlink(file_path);
     return exit_status();
 }
 

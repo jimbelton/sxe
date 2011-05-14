@@ -133,6 +133,30 @@ SXE_EARLY_OUT:
 }
 
 /**
+ * Get the number of available SXEs
+ *
+ * @return the number of free SXEs
+ */
+
+unsigned
+sxe_diag_get_free_count(void)
+{
+    return sxe_pool_get_number_in_state(sxe_array, SXE_STATE_FREE);
+}
+
+/**
+ * Get the number of SXEs in use
+ *
+ * @return the number of used SXEs
+ */
+
+unsigned
+sxe_diag_get_used_count(void)
+{
+    return sxe_pool_get_number_in_state(sxe_array, SXE_STATE_USED);
+}
+
+/**
  * Called by each protocol plugin before initialization.
  */
 void
@@ -697,7 +721,7 @@ sxe_buf_consume(SXE * this, unsigned bytes)
     SXEA82I(bytes <= SXE_BUF_SIZE,       "attempt to consume %u bytes, which is more than SXE_BUF_SIZE (%u)", bytes, SXE_BUF_SIZE);
     SXEA82I(bytes <= SXE_BUF_USED(this), "attempt to consume %u bytes, which is more than SXE_BUF_USED (%u)", bytes, SXE_BUF_USED(this));
     this->in_consumed += bytes;
-    this->flags       |= SXE_FLAG_IS_PAUSED;
+    sxe_pause(this);
 
     if (this->in_consumed == this->in_total) {
         SXEL80I("Consumed the whole buffer; clearing");

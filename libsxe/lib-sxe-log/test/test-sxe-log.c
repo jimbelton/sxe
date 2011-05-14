@@ -186,7 +186,7 @@ main(void) {
     struct object   self;
     struct object * this = &self;
 
-    plan_tests(49);
+    plan_tests(50);
 
     /* Test sxe_return_to_string()
      */
@@ -236,6 +236,7 @@ main(void) {
 
     is(sxe_log_decrease_level(SXE_LOG_LEVEL_ERROR),       SXE_LOG_LEVEL_TRACE,       "Level decreased to ERROR (2) from TRACE (6)");
     is(sxe_log_set_level(     SXE_LOG_LEVEL_INFORMATION), SXE_LOG_LEVEL_ERROR,       "Level set to INFO, was ERROR");
+    is(sxe_log_get_level(),                               SXE_LOG_LEVEL_INFORMATION, "level is INFO");
     is(sxe_log_decrease_level(SXE_LOG_LEVEL_TRACE),       SXE_LOG_LEVEL_INFORMATION, "Level was INFO, TRACE is not a decrease");
 
 #if defined(_WIN32) && defined(LOCAL_SXE_DEBUG)

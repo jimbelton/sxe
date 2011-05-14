@@ -158,9 +158,11 @@ $(PERL) -e $(OSQUOTE) \
 	$$gcov_cmd = qq[cd $$dst_dir && gcov *.c 2>&1]; \
 	printf qq[MAKE_PERL_COVERAGE_CHECK: running gcov; $$gcov_cmd\n] if ( $(MAKE_DEBUG) ); \
 	$$gcov_output .=  `$$gcov_cmd`; \
+	$$gcov_output2 =  $$gcov_output; \
 	$$gcov_output  =~ s~`~\x27~g; \
 	$$gcov_output  =~ s~^/.*~~gm; \
 	$$gcov_output  =~ s~[^\s]+\.h:cannot open source file[\r\n]+~~gs; \
+	$$gcov_output  =~ s~^\s*'.+\.h\.gcov'\s*~~gm; \
 	$$gcov_output  =~ s~File [^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~Lines executed:[^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+:creating [^\r\n]+[\r\n]+~~gs; \
@@ -173,7 +175,8 @@ $(PERL) -e $(OSQUOTE) \
 	} \
 	$$gcov_output =~ s~[^\s]+\:cannot open data file[\r\n]+~~gs; \
 	if ( $$gcov_output !~ m~^\s*$$~s ) { \
-		die(qq[MAKE_PERL_COVERAGE_CHECK: FATAL: unexpected gcov output:\n$$gcov_output\n]); \
+		printf qq[MAKE_PERL_COVERAGE_CHECK: WARNING: unexpected output found in lines:\n$$gcov_output2\n]; \
+		die(   qq[MAKE_PERL_COVERAGE_CHECK: FATAL: unexpected gcov line(s) (in above):\n$$gcov_output\n]); \
 	} \
 	printf qq[MAKE_PERL_COVERAGE_CHECK: showing exclusions\n] if ( $(MAKE_DEBUG) ); \
 	@g = glob ( qq[$$dst_dir/*.c.gcov] ); \
