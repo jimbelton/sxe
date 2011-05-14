@@ -161,8 +161,8 @@ $(PERL) -e $(OSQUOTE) \
 	$$gcov_output2 =  $$gcov_output; \
 	$$gcov_output  =~ s~`~\x27~g; \
 	$$gcov_output  =~ s~^/.*~~gm; \
+	$$gcov_output  =~ s~\s*'.+\.h\.gcov'\s*~~gm; \
 	$$gcov_output  =~ s~[^\s]+\.h:cannot open source file[\r\n]+~~gs; \
-	$$gcov_output  =~ s~^\s*'.+\.h\.gcov'\s*~~gm; \
 	$$gcov_output  =~ s~File [^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~Lines executed:[^\r\n]+[\r\n]+~~gs; \
 	$$gcov_output  =~ s~[^\s]+:creating [^\r\n]+[\r\n]+~~gs; \
