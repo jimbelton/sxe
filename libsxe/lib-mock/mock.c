@@ -19,6 +19,10 @@
  * THE SOFTWARE.
  */
 
+#ifndef WINDOWS_NT
+#define _GNU_SOURCE         /* ask for accept4() on linux */
+#endif
+
 #include "mock.h"
 
 #ifdef WINDOWS_NT
@@ -32,6 +36,9 @@
  *       Return Type   CRT/OS   Function     Parameter Types
  */
 MOCK_DEF(MOCK_SOCKET,  STDCALL, accept,      (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *));
+#ifdef SOCK_CLOEXEC
+MOCK_DEF(MOCK_SOCKET,  STDCALL, accept4,     (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *, int flags));
+#endif
 MOCK_DEF(int,          STDCALL, bind,        (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T));
 MOCK_DEF(void *,       CDECL,   calloc,      (size_t, size_t));
 MOCK_DEF(int,          CDECL,   close,       (int));

@@ -56,8 +56,8 @@ sxe_dirwatch_event(EV_P_ ev_io * io, int revents)
     struct inotify_event * event;
 
     SXE_UNUSED_PARAMETER(revents);
-    SXEE62("(fd=%d, revents=%08x)", io->fd, revents);
-    SXEA11((length = read(io->fd, buffer, sizeof(buffer))) >= 0, "sxe_dirwatch_event: Failed to read events from inotify: %s",
+    SXEE6("(fd=%d, revents=%08x)", io->fd, revents);
+    SXEA1((length = read(io->fd, buffer, sizeof(buffer))) >= 0, "sxe_dirwatch_event: Failed to read events from inotify: %s",
             strerror(errno));
 
     for (offset = 0; offset < (unsigned)length;)
@@ -66,14 +66,14 @@ sxe_dirwatch_event(EV_P_ ev_io * io, int revents)
         SXE_DIRWATCH  * dirwatch;
         int             flags = 0;
 
-        SXEA12(length - offset >= sizeof(struct inotify_event),
+        SXEA1(length - offset >= sizeof(struct inotify_event),
                "Odd sized chunk left in buffer %u (expected inotify event of %u bytes)",
-               length - offset, sizeof(struct inotify_event));
+               length - offset, (unsigned)sizeof(struct inotify_event));
         event = (struct inotify_event *)&buffer[offset];
         offset += sizeof(struct inotify_event);
-        SXEA12(length - offset >= event->len, "Chunk left in buffer %u (expected length %u)", length - offset, event->len);
+        SXEA1(length - offset >= event->len, "Chunk left in buffer %u (expected length %u)", length - offset, event->len);
         offset += event->len;
-        SXEL63("dirwatch_event: fd=%d flags=%08x file=%s", event->wd, event->mask, event->name);
+        SXEL6("dirwatch_event: fd=%d flags=%08x file=%s", event->wd, event->mask, event->name);
         sxe_list_walker_construct(&walker, &sxe_dirwatch_list);
 
         while ((dirwatch = (SXE_DIRWATCH *)sxe_list_walker_step(&walker)) != NULL) {
@@ -82,7 +82,7 @@ sxe_dirwatch_event(EV_P_ ev_io * io, int revents)
             }
         }
 
-        SXEA11(dirwatch, "No watched directory found with fd %d", event->wd);
+        SXEA1(dirwatch, "No watched directory found with fd %d", event->wd);
 
         flags |= (event->mask & IN_CREATE)     ? SXE_DIRWATCH_CREATED  : 0;
         flags |= (event->mask & IN_MOVED_TO)   ? SXE_DIRWATCH_CREATED  : 0;
@@ -93,7 +93,7 @@ sxe_dirwatch_event(EV_P_ ev_io * io, int revents)
         dirwatch->notify(EV_A_ event->name, flags, dirwatch->user_data);
     }
 
-    SXER60("return");
+    SXER6("return");
 }
 
 /**
@@ -104,19 +104,19 @@ sxe_dirwatch_event(EV_P_ ev_io * io, int revents)
 void
 sxe_dirwatch_init(void)
 {
-    SXEE60("()");
+    SXEE6("()");
     if (sxe_dirwatch_inotify_fd != -1) {
-        SXEL60("sxe_dirwatch_init: Already initialized");
+        SXEL6("sxe_dirwatch_init: Already initialized");
         goto SXE_EARLY_OUT;
     }
 
-    SXEA11((sxe_dirwatch_inotify_fd = inotify_init()) != -1, "sxe_dirwatch_init: inotify_init() failed with %s", strerror(errno));
-    SXEL61("inotify_init() returned fd: %d", sxe_dirwatch_inotify_fd);
+    SXEA1((sxe_dirwatch_inotify_fd = inotify_init()) != -1, "sxe_dirwatch_init: inotify_init() failed with %s", strerror(errno));
+    SXEL6("inotify_init() returned fd: %d", sxe_dirwatch_inotify_fd);
     SXE_LIST_CONSTRUCT(&sxe_dirwatch_list, 0, SXE_DIRWATCH, node);
     ev_io_init(&sxe_dirwatch_watcher, sxe_dirwatch_event, sxe_dirwatch_inotify_fd, EV_READ);
 
 SXE_EARLY_OUT:
-    SXER60("return");
+    SXER6("return");
 }
 
 /**
@@ -138,7 +138,7 @@ sxe_dirwatch_add(SXE_DIRWATCH * dirwatch, const char * directory, unsigned flags
     char * cwd;
     int    inotify_flags = IN_MASK_ADD | IN_ONLYDIR;
 
-    SXEE65("(dirwatch=%p, directory=%s, flags=0x%x, notify=%p, user_data=%p)", dirwatch, directory, flags, notify, user_data);
+    SXEE6("(dirwatch=%p, directory=%s, flags=0x%x, notify=%p, user_data=%p)", dirwatch, directory, flags, notify, user_data);
 
     if (flags & SXE_DIRWATCH_CREATED) {
         inotify_flags |= IN_CREATE | IN_MOVED_TO;
@@ -155,11 +155,11 @@ sxe_dirwatch_add(SXE_DIRWATCH * dirwatch, const char * directory, unsigned flags
     dirwatch->notify    = notify;
     dirwatch->user_data = user_data;
     dirwatch->fd        = inotify_add_watch(sxe_dirwatch_watcher.fd, directory, inotify_flags);
-    SXEA13(dirwatch->fd != -1, "Error watching directory '%s' (pwd = '%s'): %s", directory,
+    SXEA1(dirwatch->fd != -1, "Error watching directory '%s' (pwd = '%s'): %s", directory,
            (cwd = getcwd(buffer, sizeof(buffer))), strerror(errno));
     sxe_list_push(&sxe_dirwatch_list, dirwatch);
-    SXEL62("added directory %s as watch id %d", directory, dirwatch->fd);
-    SXER60("return");
+    SXEL6("added directory %s as watch id %d", directory, dirwatch->fd);
+    SXER6("return");
 }
 
 /**
@@ -168,9 +168,9 @@ sxe_dirwatch_add(SXE_DIRWATCH * dirwatch, const char * directory, unsigned flags
 void
 sxe_dirwatch_start(void)
 {
-    SXEE61("sxe_dirwatch_start() // fd=%d", sxe_dirwatch_watcher.fd);
+    SXEE6("sxe_dirwatch_start() // fd=%d", sxe_dirwatch_watcher.fd);
     ev_io_start(sxe_private_main_loop, &sxe_dirwatch_watcher);
-    SXER60("return");
+    SXER6("return");
 }
 
 /**
@@ -179,9 +179,9 @@ sxe_dirwatch_start(void)
 void
 sxe_dirwatch_stop(void)
 {
-    SXEE60("sxe_stat_stop()");
+    SXEE6("sxe_stat_stop()");
     ev_io_stop(sxe_private_main_loop, &sxe_dirwatch_watcher);
-    SXER60("return");
+    SXER6("return");
 }
 
 #endif

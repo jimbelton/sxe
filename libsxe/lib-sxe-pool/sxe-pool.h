@@ -22,6 +22,7 @@
 #ifndef __SXE_POOL_H__
 #define __SXE_POOL_H__
 
+#include "ev.h"
 #include "sxe-list.h"
 #include "sxe-time.h"
 #include "sxe-util.h"
@@ -36,17 +37,24 @@
 #define SXE_POOL_OPTION_LOCKED         SXE_BIT_OPTION(0)
 #define SXE_POOL_OPTION_TIMED          SXE_BIT_OPTION(1)
 
-typedef void (*SXE_POOL_EVENT_TIMEOUT)(    void * array, unsigned array_index, void * caller_info);
+typedef void (*SXE_POOL_EVENT_TIMEOUT)(void * array, unsigned array_index, void * caller_info);
 
 typedef struct SXE_POOL_WALKER {
     SXE_LIST_WALKER list_walker;
-    void       * pool;
-    unsigned     state;
+    void           * pool;
+    unsigned         state;
     union {
-        SXE_TIME time;
-        uint64_t count;
+        SXE_TIME     time;
+        uint64_t     count;
     } last;
 } SXE_POOL_WALKER;
+
+typedef struct SXE_POOL_DEFER {
+    struct ev_loop * loop;
+    void           * array;
+    unsigned         state;
+    SXE_LIST_NODE    node;
+} SXE_POOL_DEFER;
 
 #include "lib-sxe-pool-proto.h"
 #endif

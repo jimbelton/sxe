@@ -28,90 +28,39 @@
 #include "sxe-test.h"
 #include "sxe-util.h"
 
+#include "common.h"
+
 #define TEST_WAIT 5.0
-
-tap_ev_queue q_client;
-tap_ev_queue q_server;
-
-static void
-handle_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN final, void *user_data)
-{
-    SXE * this = request->sxe;
-    SXE_UNUSED_PARAMETER(this);
-    SXE_UNUSED_PARAMETER(request);
-    SXE_UNUSED_PARAMETER(final);
-    SXE_UNUSED_PARAMETER(user_data);
-    SXEE62I("%s(final=%s)", __func__, sxe_return_to_string(final));
-    tap_ev_queue_push(q_server, __func__, 2, "request", request, "final", final);
-    SXER60I("return");
-}
-
-static void
-http_respond(SXE_HTTPD_REQUEST *request)
-{
-    SXE * this = request->sxe;
-    SXE_UNUSED_PARAMETER(this);
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_server, __func__, 1, "request", request);
-    SXER60I("return");
-}
-
-static void
-client_connect(SXE * this)
-{
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_client, __func__, 1, "this", this);
-    SXER60I("return");
-}
-
-static void
-client_read(SXE * this, int length)
-{
-    SXE_UNUSED_PARAMETER(length);
-    SXEE62I("%s(length=%u)", __func__, length);
-    tap_ev_queue_push(q_client, __func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
-    sxe_buf_clear(this);
-    SXER60I("return");
-}
 
 int
 main(void)
 {
-    SXE_HTTPD httpd;
+    SXE_HTTPD           httpd;
     SXE_HTTPD_REQUEST * request;
-    tap_ev ev;
-    SXE *listener;
-    SXE *c;
+    tap_ev              ev;
+    SXE               * listener;
+    SXE               * client;
 
-    q_server = tap_ev_queue_new();
-    q_client = tap_ev_queue_new();
-
-    plan_tests(12);
-
-    sxe_register(4, 0);        /* http listener and connections */
-    sxe_register(8, 0);        /* http clients */
-    sxe_init();
-
+    plan_tests(13);
+    test_sxe_register_and_init(12);
     sxe_httpd_construct(&httpd, 3, 10, 512, 0);
-    SXE_HTTPD_SET_HANDLER(&httpd, respond, http_respond);
+    SXE_HTTPD_SET_HANDLER(&httpd, respond, h_respond);
+    listener = test_httpd_listen(&httpd, "0.0.0.0", 0);
+    client   = test_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, NULL);
+    sxe_connect(client, "127.0.0.1", SXE_LOCAL_PORT(listener));
 
-    listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
-
-    c = sxe_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, NULL);
-    sxe_connect(c, "127.0.0.1", SXE_LOCAL_PORT(listener));
-
-    is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_connect",                   "Client connected to HTTPD");
-    SXE_WRITE_LITERAL(c, "GET /file HTTP/1.1\r\n\r\n");
-    is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "http_respond",                     "HTTPD ready to respond");
+    is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_connect", "Client connected to HTTPD");
+    TEST_SXE_SEND_LITERAL(client, "GET /file HTTP/1.1\r\n\r\n", client_sent, q_client, TEST_WAIT, &ev);
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",       "HTTPD ready to respond");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
 
     {
         char       readbuf[65536];
-        SXE_BUFFER buffer;
-        SXE_BUFFER buffer2;
+        SXE_HTTPD_BUFFER buffer;
+        SXE_HTTPD_BUFFER buffer2;
         unsigned   expected_length;
 
-        sxe_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"));
+        sxe_httpd_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"), NULL, NULL);
         buffer2 = buffer;
 
         /* NOTE: these numbers are carefully designed so that we'll hit the
@@ -148,14 +97,14 @@ main(void)
                         /* end of second buffer */
                         + SXE_LITERAL_LENGTH("\r\n")                                                // +  2 =    2      =  978
                         /* end of headers - rest is body */
-                        + buffer.len                                                                // + 12 =   14      =  990
-                        + buffer.len                                                                // + 12 =   26      = 1002
-                        + buffer.len                                                                // + 12 =   38      = 1014
+                        + sxe_httpd_buffer_length(&buffer)                                          // + 12 =   14      =  990
+                        + sxe_httpd_buffer_length(&buffer)                                          // + 12 =   26      = 1002
+                        + sxe_httpd_buffer_length(&buffer)                                          // + 12 =   38      = 1014
                         ;
 
         sxe_httpd_response_start(request, 200, "OK");
         sxe_httpd_response_header(request, "Content-Type", "text/plain; charset=\"UTF-8\"", 0);
-        sxe_httpd_response_content_length(request, (int)(3 * buffer.len));
+        sxe_httpd_response_content_length(request, (int)(3 * sxe_httpd_buffer_length(&buffer)));
         sxe_httpd_response_header(request, X_NAM "1", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "2", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "3", X_V77, 0);
@@ -172,24 +121,24 @@ main(void)
         sxe_httpd_response_copy_body_data(request, "Hello, world", 0);
         sxe_httpd_response_add_body_buffer(request, &buffer);
         sxe_httpd_response_add_raw_buffer(request, &buffer2);
-        sxe_httpd_response_end(request, handle_sent, NULL);
-        is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
+        sxe_httpd_response_end(request, h_sent, NULL);
+        is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_sent", "HTTPD finished request");
 
-        SXEL41("Expecting to read %u bytes", expected_length);
-        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, c, "client_read", readbuf, expected_length, "client");
+        SXEL4("Expecting to read %u bytes", expected_length);
+        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, client, "client_read", readbuf, expected_length, "client");
         /* TODO: actually test that we got the correct contents of buf */
     }
 
-    SXE_WRITE_LITERAL(c, "GET /file HTTP/1.1\r\n\r\n");
-    is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "http_respond",                     "HTTPD ready to respond");
+    TEST_SXE_SEND_LITERAL(client, "GET /file HTTP/1.1\r\n\r\n", client_sent, q_client, TEST_WAIT, &ev);
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",  "HTTPD ready to respond");
 
     {
         char       readbuf[65536];
-        SXE_BUFFER buffer;
-        SXE_BUFFER buffer2;
+        SXE_HTTPD_BUFFER buffer;
+        SXE_HTTPD_BUFFER buffer2;
         unsigned   expected_length;
 
-        sxe_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"));
+        sxe_httpd_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"), NULL, NULL);
         buffer2 = buffer;
 
         /* NOTE: these numbers are carefully designed so that we'll hit the
@@ -226,51 +175,42 @@ main(void)
                         /* end of second buffer */
                         + SXE_LITERAL_LENGTH("\r\n")                                                // +  2 =    2      =  978
                         /* end of headers - rest is body */
-                        + buffer.len                                                                // + 12 =   14      =  990
-                        + buffer.len                                                                // + 12 =   26      = 1002
-                        + buffer.len                                                                // + 12 =   38      = 1014
+                        + sxe_httpd_buffer_length(&buffer)                                          // + 12 =   14      =  990
+                        + sxe_httpd_buffer_length(&buffer)                                          // + 12 =   26      = 1002
+                        + sxe_httpd_buffer_length(&buffer)                                          // + 12 =   38      = 1014
                         ;
 
         sxe_httpd_response_start(request, 200, "OK");
         sxe_httpd_response_header(request, "Content-Type", "text/plain; charset=\"UTF-8\"", 0);
-        sxe_httpd_response_content_length(request, (int)(3 * buffer.len));
+        sxe_httpd_response_content_length(request, (int)(3 * sxe_httpd_buffer_length(&buffer)));
         sxe_httpd_response_header(request, X_NAM "1", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "2", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "3", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "4", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "5", X_V77, 0);
-        sxe_httpd_response_send(request, handle_sent, NULL);
-        is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
+        sxe_httpd_response_header(request, X_NAM "6", X_V77, 0);         /* Doesn't fit in 1st buffer, so the buffer is sent  */
 
-        /* end of first buffer */
-        sxe_httpd_response_header(request, X_NAM "6", X_V77, 0);
+        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, client, "client_read", readbuf, 465, "client-read1");
         sxe_httpd_response_header(request, X_NAM "7", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "8", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "9", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "A", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "B", X_V77, 0);
         sxe_httpd_response_header(request, X_NAM "C", X_V49, 0);
-        sxe_httpd_response_send(request, handle_sent, NULL);
-        is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
+        sxe_httpd_response_copy_body_data(request, "Hello, world", 0);   /* Doesn't fit in 2nd buffer, so the buffer is sent  */
 
-        sxe_httpd_response_copy_body_data(request, "Hello, world", 0);
-        sxe_httpd_response_send(request, handle_sent, NULL);
-        is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
-
-        sxe_httpd_response_add_body_buffer(request, &buffer);
-        sxe_httpd_response_send(request, handle_sent, NULL);
-        is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
-
-        sxe_httpd_response_add_raw_buffer(request, &buffer2);
-        sxe_httpd_response_send(request, handle_sent, NULL);
-        is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
-
-        sxe_httpd_response_end(request, handle_sent, NULL);
-        is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
-
-        SXEL41("Expecting to read %u bytes", expected_length);
-        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, c, "client_read", readbuf, expected_length, "client");
-        /* TODO: actually test that we got the correct contents of buf */
+        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, client, "client_read", readbuf, 511, "client-read2");
+        sxe_httpd_response_add_body_buffer(request, &buffer);            /* Our buffer should cause the 3rd buffer to be sent */
+        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, client, "client_read", readbuf, SXE_LITERAL_LENGTH("\r\nHello, world"),
+                                "client-read3");
+        sxe_httpd_response_add_raw_buffer(request, &buffer2);            /* Our buffer should cause the 4th buffer to be sent */
+        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, client, "client_read", readbuf, SXE_LITERAL_LENGTH("Hello, world"),
+                                "client-read4");
+        sxe_httpd_response_end(request, h_sent, NULL);                   /* Should cause the last buffer to be sent */
+        is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_sent", "HTTPD finished responding");
+        test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, client, "client_read", readbuf, SXE_LITERAL_LENGTH("Hello, world"),
+                                "client-read5");
+        /* TODO: actually test that we got the correct contents in our reads */
     }
 
     return exit_status();

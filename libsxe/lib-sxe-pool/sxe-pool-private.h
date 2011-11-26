@@ -27,16 +27,18 @@
 #include "sxe-spinlock.h"
 #include "sxe-util.h"
 
-#define SXE_POOL_ARRAY_TO_IMPL(array) ((SXE_POOL_IMPL *)(array) - 1)
-#define SXE_POOL_IMPL_TO_ARRAY(impl)  ((void *)((SXE_POOL_IMPL *)(impl) + 1))
-#define SXE_POOL_NODES(impl)          SXE_PTR_FIX(impl, SXE_POOL_NODE *, (impl)->nodes)
-#define SXE_POOL_QUEUE(impl)          SXE_PTR_FIX(impl, SXE_LIST *,      (impl)->queue)
+#define SXE_POOL_ARRAY_TO_IMPL(array)            ((SXE_POOL_IMPL *)(array) - 1)
+#define SXE_POOL_IMPL_TO_ARRAY(impl)             ((void *)((SXE_POOL_IMPL *)(impl) + 1))
+#define SXE_POOL_NODES(impl)                     SXE_PTR_FIX(impl, SXE_POOL_NODE *, (impl)->nodes)
+#define SXE_POOL_QUEUE(impl)                     SXE_PTR_FIX(impl, SXE_LIST *,      (impl)->queue)
+#define SXE_POOL_ASSERT_ARRAY_INITIALIZED(array) SXEA6((array) != NULL, "%s(array=NULL): Uninitialized pool?", __func__)
 
 typedef struct SXE_POOL_NODE {
     SXE_LIST_NODE list_node;
+    void (*       event)(void * array, unsigned id);
     union {
-        SXE_TIME time;
-        uint64_t count;
+        SXE_TIME  time;
+        uint64_t  count;
     } last;
 } SXE_POOL_NODE;
 
@@ -55,6 +57,7 @@ typedef struct SXE_POOL_IMPL {
     SXE_LIST_NODE          timeout_node;
     uint64_t               next_count;
     const char *        (* state_to_string)(unsigned state);
+    SXE_POOL_DEFER *       defer;
 } SXE_POOL_IMPL;
 
 static inline SXE_POOL_NODE *
@@ -74,14 +77,14 @@ sxe_pool_lock(SXE_POOL_IMPL * pool)
         return SXE_POOL_LOCK_TAKEN;
     }
 
-    SXEE81("sxe_pool_lock(pool->name=%s)", pool->name);
+    SXEE6("sxe_pool_lock(pool->name=%s)", pool->name);
 
     if (sxe_spinlock_take(&pool->spinlock) != SXE_SPINLOCK_STATUS_TAKEN) {
         result = SXE_POOL_LOCK_NOT_TAKEN;
     }
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER81("return %s", result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" : "SXE_POOL_LOCK_TAKEN");
+    SXER6("return %s", result == SXE_POOL_LOCK_NOT_TAKEN ? "SXE_POOL_LOCK_NOT_TAKEN" : "SXE_POOL_LOCK_TAKEN");
     return result;
 }
 
@@ -92,9 +95,9 @@ sxe_pool_unlock(SXE_POOL_IMPL * pool)
         return;
     }
 
-    SXEE81("sxe_pool_unlock(pool->name=%s)", pool->name);
+    SXEE6("sxe_pool_unlock(pool->name=%s)", pool->name);
     sxe_spinlock_give(&pool->spinlock);
-    SXER80("return");
+    SXER6("return");
 }
 
 static inline const char *

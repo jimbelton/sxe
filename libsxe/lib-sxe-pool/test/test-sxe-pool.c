@@ -28,6 +28,7 @@
 #include "sxe-log.h"
 #include "sxe-pool.h"
 #include "sxe-socket.h"
+#include "sxe-test.h"
 #include "sxe-util.h"
 #include "tap.h"
 
@@ -48,7 +49,7 @@ unsigned test_pool_2_timeout_call_count = 0;
 static void
 test_pool_1_timeout(void * array, unsigned array_index, void * caller_info)
 {
-    SXEE83("test_pool_1_timeout(array=%p,array_index=%u,caller_info=%p)", array, array_index, caller_info);
+    SXEE6("test_pool_1_timeout(array=%p,array_index=%u,caller_info=%p)", array, array_index, caller_info);
     SXE_UNUSED_PARAMETER(caller_info);
     test_pool_1_timeout_call_count ++;
 
@@ -60,13 +61,13 @@ test_pool_1_timeout(void * array, unsigned array_index, void * caller_info)
         sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED,   TEST_STATE_FREE);
     }
 
-    SXER80("return");
+    SXER6("return");
 }
 
 static void
 test_pool_2_timeout(void * array, unsigned array_index, void * caller_info)
 {
-    SXEE82("test_pool_2_timeout(array=%p,array_index=%u)", array, array_index);
+    SXEE6("test_pool_2_timeout(array=%p,array_index=%u)", array, array_index);
     SXE_UNUSED_PARAMETER(caller_info);
     test_pool_2_timeout_call_count ++;
 
@@ -82,17 +83,17 @@ test_pool_2_timeout(void * array, unsigned array_index, void * caller_info)
         sxe_pool_set_indexed_element_state(array, array_index, TEST_STATE_USED,   TEST_STATE_FREE);
     }
 
-    SXER80("return");
+    SXER6("return");
 }
 
 static void
 test_pool_3_timeout(void * array, unsigned array_index, void * caller_info)
 {
-    SXEE82("test_pool_3_timeout(array=%p,array_index=%u)", array, array_index);
+    SXEE6("test_pool_3_timeout(array=%p,array_index=%u)", array, array_index);
     SXE_UNUSED_PARAMETER(caller_info);
     sxe_pool_set_indexed_element_state(array, array_index, 0, 1);
     sxe_pool_set_indexed_element_state(array, array_index, 1, 0);
-    SXER80("return");
+    SXER6("return");
 }
 
 static struct timeval test_mock_gettimeofday_timeval;
@@ -107,12 +108,20 @@ test_mock_gettimeofday(struct timeval  * SXE_SOCKET_RESTRICT tv,
                       )
 {
     /* Note: It's safe to use log functions here because they don't use mocked versions of gettimeofday() :-) */
-    SXEE63("%s(tv=%p, tz=%p)", __func__, tv, tz);
-    SXEA60(tv != NULL, "tv must never contain NULL");
+    SXEE6("%s(tv=%p, tz=%p)", __func__, tv, tz);
+    SXEA6(tv != NULL, "tv must never contain NULL");
     SXE_UNUSED_PARAMETER(tz);
     memcpy(tv, &test_mock_gettimeofday_timeval, sizeof(*tv));
-    SXER61("return // gettimeofday: %f", (double)tv->tv_sec + 1.e-6 * (double)tv->tv_usec);
+    SXER6("return // gettimeofday: %f", (double)tv->tv_sec + 1.e-6 * (double)tv->tv_usec);
     return 0;
+}
+
+static void
+test_event_deferred(void * array, unsigned id)
+{
+    SXEE6("(array=%p (%s), id=%u)", array, sxe_pool_get_name(array), id);
+    tap_ev_push(__func__, 2, "array", array, "id", id);
+    SXER6("return");
 }
 
 int
@@ -142,16 +151,26 @@ main(void)
     unsigned        oldest_index;
 
     time(&time_0);
-    plan_tests(120);
+    plan_tests(126);
+
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_LIST=6");
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=6");
 
     /* Initialization causes expected state
      */
     ok((size = sxe_pool_size(4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= 4 * sizeof(*pool),
        "Expect pool size %u to be at least the size of the array %u", (unsigned)size, 4 * (unsigned)sizeof(*pool));
-    SXEA10((base[0] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 1st copy of pool");
+    SXEA1((base[0] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 1st copy of pool");
     pool = sxe_pool_construct(base[0], "cesspool", 4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_OPTION_TIMED);
-    SXEA10((base[1] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 2nd copy of pool");
+
+    SXEA1((base[1] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 2nd copy of pool");
     memcpy(base[1], base[0], size);
+
+#if defined(_WIN64) || defined(_LP64)
+    ok((uint64_t)sxe_pool_size(1010000, 7672, 2) >= 7748720000ULL,           "Size of a huge pool must be at least the array size");
+#else
+    ok(sxe_pool_size(101, 7672, 2) >= 774872,                                "Size of a small pool must be at least the array size");
+#endif
 
     is_eq(sxe_pool_get_name(pool),            "cesspool",                     "sxe_pool_get_name() works");
 
@@ -170,7 +189,7 @@ main(void)
         sxe_pool_walker_construct(&walker, pool, TEST_STATE_FREE);
 
         for (j = 0; (id = sxe_pool_walker_step(&walker)) != SXE_POOL_NO_INDEX; j++) {
-            SXEA11(id <= 3, "test_visit_count: id %u is > 3", id);
+            SXEA1(id <= 3, "test_visit_count: id %u is > 3", id);
         }
 
         is(j,                                 4,                              "Visited 4 free objects in newly created pool");
@@ -188,6 +207,7 @@ main(void)
          * - Mark 2 as free
          * (Note, assertions in the code catch double free and double use)
          */
+
         sxe_pool_set_indexed_element_state(pool, 0, TEST_STATE_FREE, TEST_STATE_USED);
         sxe_pool_set_indexed_element_state(pool, 2, TEST_STATE_FREE, TEST_STATE_USED);
         is(sxe_pool_index_to_state(pool, 0), TEST_STATE_USED,                 "Index 0 is in use");
@@ -289,7 +309,7 @@ main(void)
 
     #define TEST_TIMEOUT "Test timeout: "
 
-    SXEA11(gettimeofday(&test_mock_gettimeofday_timeval, NULL) == 0, "Failed to get time of day: %s", strerror(errno));
+    SXEA1(gettimeofday(&test_mock_gettimeofday_timeval, NULL) == 0, "Failed to get time of day: %s", strerror(errno));
     MOCK_SET_HOOK(gettimeofday, test_mock_gettimeofday);    /* Hook gettimeofday to mock it */
 
     pool_1_timeout = sxe_pool_new_with_timeouts("pool_1_timeout", 4, sizeof(*pool_1_timeout), TEST_STATE_NUMBER_OF_STATES,
@@ -324,6 +344,30 @@ main(void)
                                                 test_pool_3_timeout, NULL);
     test_mock_gettimeofday_timeval.tv_sec += 2;
     sxe_pool_check_timeouts();
+
+    tap_set_test_case_name("Deferred function call");
+    {
+        unsigned     * pool1 = sxe_pool_new("pool1_deferred", 4, sizeof(*pool1), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_OPTION_UNLOCKED);
+        unsigned     * pool2 = sxe_pool_new("pool2_deferred", 4, sizeof(*pool2), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_OPTION_UNLOCKED);
+        SXE_POOL_DEFER defer1;
+        SXE_POOL_DEFER defer2;
+        tap_ev         ev;
+
+        sxe_socket_init(); /* so that Windows select() works; can't called sxe_init() but can call sxe_socket_init() */
+
+        sxe_pool_defer_allow(pool1, &defer1, ev_default_loop(0), TEST_STATE_ABUSED);
+        sxe_pool_defer_allow(pool2, &defer2, ev_default_loop(0), TEST_STATE_ABUSED);    /* Check adding a second defered pool */
+        sxe_pool_defer_event(pool1, 2, test_event_deferred);
+        sxe_pool_defer_event(pool1, 2, test_event_deferred);    /* Deferring is idempotent */
+        is(sxe_pool_deferred(pool1, 2), true,               "Pool1, element 2 is deferred");
+        is(tap_ev_length(), 0,                              "No events lurking");
+        test_process_all_libev_events();
+        ev = tap_ev_shift();
+        is_eq(tap_ev_identifier(ev), "test_event_deferred", "Got the expected deferred event");
+        is(tap_ev_arg(ev, "array"), pool1,                  "On the expected pool");
+        is(tap_ev_arg(ev, "id"),    (void *)2,              "...and expected id");
+        sxe_pool_defer_private_fini();                    /* For coverage only */
+    }
 
     return exit_status();
 }

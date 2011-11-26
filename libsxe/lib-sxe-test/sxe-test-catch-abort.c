@@ -48,12 +48,12 @@ test_expect_abort_in_function(void (*func)(void *), void * user_data)
     int     savesigs = 0;
     void*   old_signal_handler = NULL;
 
-    SXEE62("%s(user_data=%p)", __func__, user_data);
+    SXEE6("%s(user_data=%p)", __func__, user_data);
 
     SXE_UNUSED_ARGUMENT(savesigs); /* sigsetjmp may not 'use' this, but its required by the API */
 
     if (setjmp(abort_jmpbuf_env) == 0) {
-        SXEL60("Trap abort() so we can run a test which is expected to call it");
+        SXEL6("Trap abort() so we can run a test which is expected to call it");
         old_signal_handler = signal(SIGABRT, test_signal_handler_sigabrt);
 
         func(user_data); /* not expected to return */
@@ -69,6 +69,6 @@ test_expect_abort_in_function(void (*func)(void *), void * user_data)
 
     signal(SIGABRT, old_signal_handler);
 
-    SXER61("return result=%d", result);
+    SXER6("return result=%d", result);
     return result; /* 0 means failure */
 }

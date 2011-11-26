@@ -47,39 +47,39 @@ static SXE * pipe_accepted = NULL;    /* Emulates the WDX service   */
 static void
 test_event_pipe_connected(SXE * this)
 {
-    SXEE60I("test_event_pipe_connected()");
+    SXEE6I("test_event_pipe_connected()");
 
     if (this != pipe_connector) {
-        SXEA10I(pipe_accepted == NULL, "A pipe connection has already been accepted");
+        SXEA1I(pipe_accepted == NULL, "A pipe connection has already been accepted");
         pipe_accepted = this;
     }
 
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_connected(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE61I("test_event_read(length=%d)", length);
+    SXEE6I("test_event_read(length=%d)", length);
     tap_ev_push(__func__, 2, "this", this, "length", length);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE60I("test_event_close()");
+    SXEE6I("test_event_close()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 int
@@ -100,10 +100,33 @@ main(void)
     int            paired_socket;
     unsigned       i;
 
-    plan_tests(25);
+    plan_tests(32);
     sxe_register(6, 0);
     is(sxe_init(), SXE_RETURN_OK,                                                        "sxe_init succeeded");
 
+    {
+        int   temp_sock;
+        SXE * temp_client  = sxe_new_socketpair(NULL, &temp_sock, test_event_connected, test_event_read, test_event_close);
+
+        tap_set_test_case_name("Close deferred event");
+
+        ok(temp_client != NULL,                                                         "Allocated connected socket");
+        is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_connected",  "Got a connected event");
+        ok(tap_ev_arg(event, "this") == temp_client,                                    "Got a connected event from the socketpair");
+
+        SXEA1(write(temp_sock, "Hello", 5) == 5,                                        "Failed to write even 5 lousy bytes to socket");
+        is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_read",       "Got a read event from the socketpair");
+        ok(tap_ev_arg(event, "this") == temp_client,                                    "Data was received on connected socketpair");
+        is(SXE_BUF_USED(temp_client), SXE_LITERAL_LENGTH("Hello"),                      "Data is %u bytes", (unsigned)SXE_LITERAL_LENGTH("Hello"));
+        ok(memcmp(SXE_BUF(temp_client), "Hello", SXE_LITERAL_LENGTH("Hello")) == 0,     "It's got the right stuff");
+
+        sxe_buf_consume(temp_client, 2);
+        sxe_buf_resume(temp_client, SXE_BUF_RESUME_IMMEDIATE);
+        sxe_close(temp_client); /* Ensure that a SXE in state DEFERRED (from the resume) can be closed and moved to FREE */
+        close(temp_sock);
+    }
+
+    tap_set_test_case_name("socketpair");
     client_connected  = sxe_new_socketpair(NULL, &paired_socket, test_event_connected, test_event_read, test_event_close);
     ok(client_connected != NULL,                                                         "Allocated connected socket");
     is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_connected",  "Got a connected event");
@@ -111,7 +134,7 @@ main(void)
 
     /* Try writing a few bytes to the other descriptor, and see whether we get
      * a read event on the connected SXE! */
-    SXEA10(write(paired_socket, "Hello", 5) == 5,                                        "Failed to write even 5 lousy bytes to socket");
+    SXEA1(write(paired_socket, "Hello", 5) == 5,                                        "Failed to write even 5 lousy bytes to socket");
     is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_read",       "Got a read event from the socketpair");
     ok(tap_ev_arg(event, "this") == client_connected,                                    "Data was received on connected socketpair");
     is(SXE_BUF_USED(client_connected), SXE_LITERAL_LENGTH("Hello"),                      "Data is %u bytes", (unsigned)SXE_LITERAL_LENGTH("Hello"));

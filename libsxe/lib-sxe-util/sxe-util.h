@@ -42,7 +42,7 @@
 
 /* TODO: Figure out a way to do a safe cast, something like this:
 #define SXE_SAFE_CAST_UNSIGNED_CHAR(value) \
-    ((unsigned char)(SXEV81((unsigned long)value, <= 0xFF, "%lu cannot be safely cast to unsigned char", (unsigned long)value)))
+    ((unsigned char)(SXEV6((unsigned long)value, <= 0xFF, "%lu cannot be safely cast to unsigned char", (unsigned long)value)))
 */
 
 /* Fun macros for relocatable data structures

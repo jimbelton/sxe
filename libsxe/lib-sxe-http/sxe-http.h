@@ -87,7 +87,7 @@ typedef struct SXE_HTTP_NONCE {
 static inline const char *
 sxe_http_message_get_line_element(SXE_HTTP_MESSAGE * message)
 {
-    SXEA11(message->element_length > 0, "%s: called when no line element parsed", __func__);
+    SXEA1(message->element_length > 0, "%s: called when no line element parsed", __func__);
     return &message->buffer[message->consumed];
 }
 
@@ -106,7 +106,7 @@ sxe_http_message_get_request_line_length(SXE_HTTP_MESSAGE * message)
 static inline const char *
 sxe_http_message_get_header_name(SXE_HTTP_MESSAGE * message)
 {
-    SXEA11(message->name_length > 0, "%s: called when no header parsed", __func__);
+    SXEA1(message->name_length > 0, "%s: called when no header parsed", __func__);
     return &message->buffer[message->consumed];
 }
 

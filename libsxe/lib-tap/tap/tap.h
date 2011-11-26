@@ -290,7 +290,8 @@ extern const char TAP_EV_NO_EVENT[];
 
 void         tap_init(                FILE * out);
 void         tap_plan(                unsigned tests, unsigned flags, FILE * output);
-void         tap_test_case_name(      const char * name);
+const char * tap_get_test_case_name(  void);
+void         tap_set_test_case_name(  const char * name);
 void *       tap_dup(                 const void * mem, size_t size);
 
 unsigned     tap_ev_arg_count(        tap_ev ev);
@@ -301,6 +302,7 @@ const void * tap_ev_identifier(       tap_ev ev);
 void         tap_ev_push(             const char * identifier, unsigned argc, ...);
 unsigned     tap_ev_length(           void);
 tap_ev       tap_ev_shift(            void);
+tap_ev       tap_ev_shift_next(       const char * identifier);
 void         tap_ev_flush(            void);
 
 unsigned     tap_ev_queue_count(      tap_ev_queue queue, const char * identifier);
@@ -310,6 +312,9 @@ unsigned     tap_ev_queue_length(     tap_ev_queue queue);
 tap_ev_queue tap_ev_queue_new(        void);
 void         tap_ev_queue_push(       tap_ev_queue queue, const char * identifier, unsigned argc, ...);
 tap_ev       tap_ev_queue_shift(      tap_ev_queue queue);
+tap_ev       tap_ev_queue_shift_next( tap_ev_queue queue, const char * identifier);
+
+#define tap_test_case_name(name) tap_set_test_case_name(name)
 
 #endif /* C99 or gcc */
 #endif /* __TAP_H__  */

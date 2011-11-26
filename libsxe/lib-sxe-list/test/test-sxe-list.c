@@ -67,7 +67,7 @@ main(void)
     sxe_list_push(&blob.list,    &blob.list_obj[2]);
     sxe_list_unshift(&blob.list, &blob.list_obj[3]);                     /* List now contains: 3, 1, 0, 2 */
 
-    SXEA10((blob_copy = malloc(sizeof(blob))) != NULL, "Couldn't allocate memory for the list and all the objects");
+    SXEA1((blob_copy = malloc(sizeof(blob))) != NULL, "Couldn't allocate memory for the list and all the objects");
     memcpy(blob_copy, &blob, sizeof(blob));
 
     for (blob_ptr = &blob; blob_ptr != NULL; blob_ptr = (blob_ptr == &blob ? blob_copy : NULL)) {

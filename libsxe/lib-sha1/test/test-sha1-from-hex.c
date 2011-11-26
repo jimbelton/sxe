@@ -49,10 +49,10 @@ main(void)
         pass("SHA1 is as expected");
     }
     else {
-        SXEL10("Expected:");
-        SXED10(&sha1_expected, sizeof(sha1_expected));
-        SXEL10("Got:");
-        SXED10(&sha1_got,      sizeof(sha1_got));
+        SXEL1("Expected:");
+        SXED1(&sha1_expected, sizeof(sha1_expected));
+        SXEL1("Got:");
+        SXED1(&sha1_got,      sizeof(sha1_got));
         fail("SHA1 is not as expected");
     }
 

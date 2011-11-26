@@ -103,11 +103,13 @@ ifdef DST.dir
 
     # vvv - This code was disabled when building peers - that broke things, so I reverted; TBD: why was this done?
 
-    ifdef MAKE_DEBUG
-        $(info make[$(MAKELEVEL)]: ensure folder exists: $(DST.dir))
-    endif
+    ifeq ($(filter remote,$(MAKECMDGOALS)),)
+        ifdef MAKE_DEBUG
+            $(info make[$(MAKELEVEL)]: ensure folder exists: $(DST.dir))
+        endif
 
-    DUMMY := $(shell $(MKDIR) $(DST.dir) $(REDIRECT))
+        DUMMY := $(shell $(MKDIR) $(DST.dir) $(REDIRECT))
+    endif
 
     ifdef THIRD_PARTY.dir
         DUMMY := $(shell $(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: 3rdparty: replicating: $(COPYDIR) $(call OSPATH,$(THIRD_PARTY.dir)) $(DST.dir)$(DIR_SEP)$(notdir $(THIRD_PARTY.dir))")
@@ -132,19 +134,63 @@ ifneq ($(filter test,$(MAKECMDGOALS)),)
 	DST.d            += $(patsubst %,$(DST.dir)/%,$(subst .c,.d,$(wildcard test/*.c)))
 endif
 
+# Remote build support. Use '?=' so that commands can be exported in the environment or overridden on the commandline.
+REMOTE_PROXY     ?= cuba
+REMOTE_USER      ?= dev
+REMOTE_PATH      ?= /tmp/$(USER)/build
+REMOTE_MKDIR     ?= /bin/mkdir -p
+REMOTE_MAKE      ?= $(MAKE)
+REMOTE_SETENV    ?= true
+REMOTE_SHELL     ?= bash
+
+SSH              ?= ssh
+SSH_OPTS         := -l $(REMOTE_USER)
+ifneq ($(REMOTE_PROXY),)
+SSH_OPTS         += -oProxyCommand='nc -x localhost:2222 -X 5 %h %p'
+endif
+ifneq ($(filter shell,$(MAKECMDGOALS)),)
+SSH_INTERACTIVE  := -t
+endif
+
+RSYNC            ?= rsync
+RSYNC_EXCLUDE    := *.swp build-*
+RSYNC_OPTS       := --compress-level=9 --recursive --links --checksum --delete $(RSYNC_EXCLUDE:%=--exclude='%')
+RSYNC_RSH        := $(SSH) $(SSH_OPTS)
+export RSYNC_RSH
+
+ifeq ($(filter remote,$(MAKECMDGOALS)),)
+UREMOTE_H_ := $(ECHOESCAPE)<remote-host$(ECHOESCAPE)>
+UU_        := $(ECHOESCAPE)<user$(ECHOESCAPE)>
+UM_        := $(ECHOESCAPE)<make$(ECHOESCAPE)>
 all : convention_usage
-	@echo $(ECHOQUOTE)usage: make realclean$(ECHOESCAPE)|clean$(ECHOESCAPE)|(release$(ECHOESCAPE)|debug$(ECHOESCAPE)|coverage [test])$(ECHOESCAPE)|check$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: make [remote] realclean$(ECHOESCAPE)|clean$(ECHOESCAPE)|(release$(ECHOESCAPE)|debug$(ECHOESCAPE)|coverage [test [fulllog]])$(ECHOESCAPE)|check$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: make  remote  shell$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: check:          winnt   winnt mingw $(ECHOESCAPE)<- winnt: gcc $(ECHOESCAPE)& cl$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: check:          mingw   mingw mingw $(ECHOESCAPE)<- winnt: gcc$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: check:          linux   linux linux $(ECHOESCAPE)<- linux: gcc$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: check:          rhes5   rhes5 rhes5 $(ECHOESCAPE)<- rhes5: gcc$(ECHOQUOTE)
-	@echo $(ECHOQUOTE)usage: note: set CFLAGS_EXTRA="<flags>" to add custom flags to the make$(ECHOQUOTE)
-	@echo $(ECHOQUOTE)usage: note: set MAKE_DEBUG=1 for make file instrumentation$(ECHOQUOTE)
-	@echo $(ECHOQUOTE)usage: note: set MAKE_PEER_DEPENDENTS=0 for no recursive make$(ECHOQUOTE)
-	@echo $(ECHOQUOTE)usage: note: set SXE_LOG_LEVEL=7 to filter lib-sxe-* logging$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set CFLAGS_EXTRA="<flags>"    to add custom flags to the make$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set MAKE_DEBUG=1              to enable make file instrumentation$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set MAKE_PEER_DEPENDENTS=0    to disable recursive make$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set SXE_DISABLE_OPENSSL=1     to disable openssl support *1$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set SXE_EXTERNAL_OPENSSL=1    to use an external openssl library instead of the bundled openssl *1$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set SXE_LOG_LEVEL=7           to filter lib-sxe-* logging$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set SXE_WINNT_ASSERT_MSGBOX=1 to enable the messagebox on assert (to use the Microsoft visual debugger)$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set REMOTE_HOST=localhost     to build in a different path on the local box:  eg: make remote check REMOTE_HOST=localhost$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set REMOTE_HOST=$(UREMOTE_H_) to build on a remote box:                       eg: make remote check REMOTE_HOST=mybox$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set REMOTE_PROXY=             to build on a remote box without a SOCKS proxy: eg: make remote check REMOTE_HOST=mybox REMOTE_PROXY=$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set REMOTE_PATH=/path         to override the remote build path:              eg: make remote check REMOTE_PATH=$(REMOTE_PATH)$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set REMOTE_USER=$(UU_)        to build as a different user on a remote box:   eg: make remote check REMOTE_USER=$(USER)$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set REMOTE_MAKE=$(UM_)        to specify the remote GNU make command:         eg: make remote check REMOTE_MAKE=$(MAKE)$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: set REMOTE_CMDEXTRA=          to specify extra remote GNU make parameters:    eg: make remote check REMOTE_CMDEXTRA=MAKE_DEBUG=1$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: add path to mingw32-gcc.exe to enable mingw build$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: add __debugbreak(); to breakpoint into MSVC debugger$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: *1 openssl is experimental (memory handling) and not available on winnt yet$(ECHOQUOTE)
 	@echo $(ECHOQUOTE)usage: note: hudson url: http://ci-controller-ubuntu-32.gw.catest.sophos:8080/$(ECHOQUOTE)
+	@echo $(ECHOQUOTE)usage: note: remote windows sshd: http://en.wikipedia.org/wiki/CopSSH$(ECHOQUOTE)
+	@$(PERL) -e $(OSQUOTE)$$_=q[usage: note: linux   remote example: make remote debug test REMOTE_HOST=rhes53-32]; s~DQ~\x22~g; s~SQ~\x27~g; print $$_ . qq[\n];$(OSQUOTE)
+	@$(PERL) -e $(OSQUOTE)$$_=q[usage: note: windows remote example: make remote debug test REMOTE_HOST=win32-xp REMOTE_PATH=/cygdrive/c/temp/$$USER/build REMOTE_CMDPREFIX=SQcmd /C DQvsvars32.bat && SQ REMOTE_CMDSUFFIX=SQDQSQ REMOTE_SETENV=SQPATH=DQ/cygdrive/c/Program Files/Microsoft Visual Studio 9.0/Common7/Tools:$$$${PATH/:\/bin/}DQSQ REMOTE_CMDEXTRA=SQ && echo doneSQ]; s~DQ~\x22~g; s~SQ~\x27~g; print $$_ . qq[\n];$(OSQUOTE)
+endif
 
 #http://tdm-gcc.tdragon.net/download
 
@@ -185,7 +231,7 @@ DST.obj    ?= $(SRC.c:%.c=$(DST.dir)/%$(EXT.obj)) $(if $(DST_OBJ),$(foreach OBJ,
 # look for other libraries in: libname/[release/debug]/libname$(EXT.lib)
 DEP.libs    = $(foreach PACKAGE,$(DEP.lib_pkgs),$(COM.dir)/$(PACKAGE)/$(DST.dir)/$(patsubst lib-%,%,$(PACKAGE))$(EXT.lib))
 DEP.dlls    = $(foreach PACKAGE,$(DEP.dll_pkgs),$(COM.dir)/$(PACKAGE)/$(DST.dir)/$(patsubst dll-%,%,$(PACKAGE))$(EXT.dll))
-DEP.dirs    = $(call reverse, $(foreach PACKAGE, $(DEP.exe_pkgs) $(DEP.dll_pkgs) $(DEP.lib_pkgs),$(COM.dir)/$(PACKAGE)))
+DEP.dirs   ?= $(call reverse, $(foreach PACKAGE, $(DEP.exe_pkgs) $(DEP.dll_pkgs) $(DEP.lib_pkgs),$(COM.dir)/$(PACKAGE)))
 
 #TEST_LIBS   = $(COM.dir)/lib-tap/$(DST.dir)/tap$(EXT.lib)
 
@@ -266,6 +312,44 @@ ifdef MAKE_PEER_DEPENDENTS
 INCLUDES=$(DST.inc)
 endif
 
+ifneq ($(filter remote,$(MAKECMDGOALS)),)
+    ifeq ($(REMOTE_HOST),)
+        $(error make: specify $$REMOTE_HOST=localhost|<remote-host> to build remotely)
+    endif
+
+RELATIVE_PATH    := $(subst $(shell cd $(TOP.dir) && $(PWD)),,$(CURDIR))
+
+remote:
+ifneq ($(REMOTE_HOST),localhost)
+	@$(MAKE_PERL_ECHO_BOLD) "make[$(MAKELEVEL)]: remote:   host: $(REMOTE_HOST), path: $(REMOTE_PATH)$(RELATIVE_PATH)"
+ifeq ($(filter shell,$(MAKECMDGOALS)),)
+	@$(MAKE_PERL_ECHO)      "make[$(MAKELEVEL)]: rsync:    host: $(REMOTE_HOST), path: $(REMOTE_PATH)$(RELATIVE_PATH)"
+	@$(SSH) $(SSH_OPTS) $(REMOTE_HOST) '$(REMOTE_MKDIR) $(REMOTE_PATH)' \
+	    || { echo "make: SSH failed; consider running 'ssh -fN -Dlocalhost:2222 $(REMOTE_PROXY)'" >&2; false; }
+	@$(RSYNC) $(RSYNC_OPTS) $(TOP.dir)/ $(REMOTE_HOST):$(REMOTE_PATH)/
+endif
+	@$(SSH) $(SSH_OPTS) $(SSH_INTERACTIVE) $(REMOTE_HOST) 'cd $(REMOTE_PATH)$(RELATIVE_PATH) && $(REMOTE_SETENV) && $(REMOTE_CMDPREFIX)$(REMOTE_MAKE) $(filter-out remote,$(MAKECMDGOALS)) REMOTE_SHELL=$(REMOTE_SHELL) $(REMOTE_CMDEXTRA)$(REMOTE_CMDSUFFIX)'
+else
+	@mkdir -p $(REMOTE_PATH)
+	@$(RSYNC) $(RSYNC_OPTS) $(TOP.dir)/ $(REMOTE_PATH)/
+	@$(MAKE) -C $(REMOTE_PATH)$(RELATIVE_PATH) $(filter-out remote,$(MAKECMDGOALS))
+endif
+
+all release debug coverage test check convention shell :
+	@$(PERL) -e0
+
+clean realclean ::
+	@$(PERL) -e0
+
+else # *NOT* building remotely
+
+shell:
+ifeq ($(OS_class),any-winnt)
+	@cmd.exe
+else
+	@$(REMOTE_SHELL)
+endif
+
 # Dependency on DST.exe was made conditional on MAKE_PEER_DEPENDENCIES; this broke thing; reverted; TBD: why was this done?
 release debug coverage:  $(addprefix $(DST.dir)/,$(ADDITIONAL_EXECUTABLES)) $(DEP.dirs) $(INCLUDES) $(DST.lib) $(DST.exe)
 ifneq ($(DST.inc),)
@@ -280,7 +364,7 @@ else
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: built:    $(DST.lib)$(DST.exe)"
 endif
 
-.PHONY: coverage_clean run_tests release debug coverage
+.PHONY: coverage_clean run_tests release debug coverage remote
 
 coverage_clean:
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: coverage: clean"
@@ -289,6 +373,7 @@ coverage_clean:
 run_tests: $(DST.oks)
 
 # This code ws disabled when making peer dependents; this broke stuff; reverted it; TBD: why was this disabled?
+ifneq ($(DEP.dirs),test)
 .PHONY: test
 test:				$(DO_COVERAGE) run_tests
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: ran:      $(DST.dir): tests complete"
@@ -299,6 +384,11 @@ ifneq ($(strip $(DST.oks)),)
 	$(MAKE_RUN) $(DEL) $(DST.dir)$(DIR_SEP)*.c
 endif
 endif
+endif
+
+.PHONY: fulllog
+fulllog:
+	$(MAKE_RUN) $(TRUE)
 
 check :
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: pre-submit check"
@@ -394,7 +484,11 @@ $(DST.lib) : $(DST.obj) $(SRC.lib)
 # Flags must be last on Windows
 $(DST.exe) : $(DST.obj) $(DEP.libs)
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
-	@echo                     $(LINK) $(LINK_OUT)$@ $(call OSPATH,$^) $(COVERAGE_LIBS) $(LINK_FLAGS) >  $(call OSPATH,$@.out) 2>&1
-	$(MAKE_RUN) $(LINK_CHECK) $(LINK) $(LINK_OUT)$@ $(call OSPATH,$^) $(COVERAGE_LIBS) $(LINK_FLAGS) >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
+	@echo                     $(LINK) $(LINK_OUT)$(call OSPATH,$@) $(call OSPATH,$^) $(COVERAGE_LIBS) $(LINK_FLAGS) >  $(call OSPATH,$@.out) 2>&1
+	$(MAKE_RUN) $(LINK_CHECK) $(LINK) $(LINK_OUT)$(call OSPATH,$@) $(call OSPATH,$^) $(COVERAGE_LIBS) $(LINK_FLAGS) >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
+	@echo                     $(COPY)            $(call OSPATH,$@) $(call OSPATH,$(COM.dir)/$(DST.dir))             >> $(call OSPATH,$@.out) 2>&1
+	$(MAKE_RUN)               $(COPY)            $(call OSPATH,$@) $(call OSPATH,$(COM.dir)/$(DST.dir))             >> $(call OSPATH,$@.out) 2>&1 $(CC_OUT_ON_ERROR)
 
 endif
+
+endif # *NOT* building remotely

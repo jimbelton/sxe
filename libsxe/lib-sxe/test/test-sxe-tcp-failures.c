@@ -19,6 +19,9 @@
  * THE SOFTWARE.
  */
 
+#ifndef WINDOWS_NT
+#define _GNU_SOURCE
+#endif
 #include <string.h>
 
 #include "mock.h"
@@ -40,72 +43,86 @@ static SXE        * third_connector;
 static void
 test_event_connected(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE62I("test_event_read(this->socket=%d, length=%d)", this->socket, length);
+    SXEE6I("test_event_read(this->socket=%d, length=%d)", this->socket, length);
     tap_ev_push(__func__, 3, "this", this, "length", length, "buf_used", (size_t)SXE_BUF_USED(this));
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE61I("test_event_close(this->socket=%d)", this->socket);
+    SXEE6I("test_event_close(this->socket=%d)", this->socket);
     tap_ev_push(__func__, 2, "this", this, "buf_used", (size_t)SXE_BUF_USED(this));
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_client_connected(SXE * this)
 {
-    SXEE60I("test_event_client_connected()");
+    SXEE6I("test_event_client_connected()");
     tap_ev_queue_push(client_queue, __func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_client_read(SXE * this, int length)
 {
-    SXEE62I("test_event_client_read(this->socket=%d, length=%d)", this->socket, length);
+    SXEE6I("test_event_client_read(this->socket=%d, length=%d)", this->socket, length);
     tap_ev_queue_push(client_queue, __func__, 3, "this", this, "length", length, "buf_used", (size_t)SXE_BUF_USED(this));
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_client_close(SXE * this)
 {
-    SXEE61I("test_event_client_close(this->socket=%d)", this->socket);
+    SXEE6I("test_event_client_close(this->socket=%d)", this->socket);
     tap_ev_queue_push(client_queue, __func__, 2, "this", this, "buf_used", SXE_BUF_USED(this));
-    SXER60I("return");
+    SXER6I("return");
 }
 
+#ifdef SOCK_CLOEXEC
 static MOCK_SOCKET SXE_STDCALL
-test_mock_accept(SXE_SOCKET sock, struct sockaddr * peer_addr, MOCK_SOCKLEN_T * peer_addr_size)
+test_mock_accept4(SXE_SOCKET sock, struct sockaddr * peer_addr, MOCK_SOCKLEN_T * peer_addr_size, int flags)
 {
-    SXEE63("test_mock_accept(sock=%d,peer_addr=%p,peer_addr_size=%p)", sock, peer_addr, peer_addr_size);
-    SXEL65("tap_ev_push(%s=%d, sock=%p, peer_addr=%p, peer_addr_size=%d);", __func__, 3, sock, tap_dup(peer_addr, *peer_addr_size), *peer_addr_size);
-    tap_ev_push(__func__, 3, "sock", sock, "peer_addr", tap_dup(peer_addr, *peer_addr_size), "peer_addr_size", *peer_addr_size);
+    SXEE64("test_mock_accept4(sock=%d,peer_addr=%p,peer_addr_size=%p,flags=%d)", sock, peer_addr, peer_addr_size, flags);
+    SXEL65("tap_ev_push(%s=%d, sock=%d, peer_addr=%p, peer_addr_size=%d);", __func__, 3, sock, tap_dup(peer_addr, *peer_addr_size), *peer_addr_size);
+    tap_ev_push(__func__, 4, "sock", sock, "peer_addr", tap_dup(peer_addr, *peer_addr_size), "peer_addr_size", *peer_addr_size, "flags", flags);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EINVAL));
-    MOCK_SET_HOOK(accept, accept);
+    MOCK_SET_HOOK(accept4, accept4);
     SXER60("return -1 // error=EINVAL");
     return -1;
 }
+#else
+static MOCK_SOCKET SXE_STDCALL
+test_mock_accept(SXE_SOCKET sock, struct sockaddr * peer_addr, MOCK_SOCKLEN_T * peer_addr_size)
+{
+    SXEE6("test_mock_accept(sock=%d,peer_addr=%p,peer_addr_size=%p)", sock, peer_addr, peer_addr_size);
+    SXEL6("tap_ev_push(%s=%d, sock=%d, peer_addr=%p, peer_addr_size=%d);", __func__, 3, sock, tap_dup(peer_addr, *peer_addr_size), *peer_addr_size);
+    tap_ev_push(__func__, 3, "sock", sock, "peer_addr", tap_dup(peer_addr, *peer_addr_size), "peer_addr_size", *peer_addr_size);
+    sxe_socket_set_last_error(SXE_SOCKET_ERROR(EINVAL));
+    MOCK_SET_HOOK(accept, accept);
+    SXER6("return -1 // error=EINVAL");
+    return -1;
+}
+#endif
 
 static SXE_SOCKET SXE_STDCALL
 test_mock_socket(int domain, int type, int protocol)
 {
-    SXEE63("test_mock_socket(domain=%d,type=%d,protocol=%d)", domain, type, protocol);
+    SXEE6("test_mock_socket(domain=%d,type=%d,protocol=%d)", domain, type, protocol);
     SXE_UNUSED_PARAMETER(domain);
     SXE_UNUSED_PARAMETER(type);
     SXE_UNUSED_PARAMETER(protocol);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EMFILE));
-    SXER60("return -1 // error=EMFILE");
+    SXER6("return -1 // error=EMFILE");
     return -1;
 }
 
@@ -121,12 +138,12 @@ test_mock_listen(SXE_SOCKET sock, int backlog)
 static int SXE_STDCALL
 test_mock_bind_efault(SXE_SOCKET sock, const struct sockaddr* addr, SXE_SOCKLEN_T len)
 {
-    SXEE90("test_mock_bind_efault()");
+    SXEE7("test_mock_bind_efault()");
     SXE_UNUSED_PARAMETER(sock);
     SXE_UNUSED_PARAMETER(addr);
     SXE_UNUSED_PARAMETER(len);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EFAULT));
-    SXER90("return -1 (last_error=EFAULT)");
+    SXER7("return -1 (last_error=EFAULT)");
     return -1;
 }
 
@@ -162,15 +179,23 @@ test_mock_connect(SXE_SOCKET sock, const struct sockaddr* addr, SXE_SOCKLEN_T le
 static int SXE_STDCALL
 test_mock_getsockopt(SXE_SOCKET sock, int level, int optname, SXE_SOCKET_VOID * optval, SXE_SOCKLEN_T * SXE_SOCKET_RESTRICT optlen)
 {
-    SXEE65("test_mock_getsockopt(sock=%d, level=%d, optname=%d, optval=%p, optlen=%p)", sock, level, optname, optval, optlen);
-    SXE_UNUSED_PARAMETER(sock);
-    SXE_UNUSED_PARAMETER(level);
-    SXE_UNUSED_PARAMETER(optname);
-    SXE_UNUSED_PARAMETER(optval);
-    SXE_UNUSED_PARAMETER(optlen);
-    sxe_socket_set_last_error(SXE_SOCKET_ERROR(EBADF));
-    SXER60("return -1");
-    return -1;
+    int        result     = -1;
+
+    SXEE6("test_mock_getsockopt(sock=%d, level=%d, optname=%d, optval=%p, optlen=%p)", sock, level, optname, optval, optlen);
+
+    /* If testing the debug build, the first two times only, call the real function. */
+    if (optname == SO_ERROR) {
+        sxe_socket_set_last_error(SXE_SOCKET_ERROR(EBADF));
+        goto SXE_EARLY_OUT;
+    }
+
+    MOCK_SET_HOOK(getsockopt, getsockopt);
+    result = getsockopt(sock, level, optname, optval, optlen);
+    MOCK_SET_HOOK(getsockopt, test_mock_getsockopt);
+
+SXE_EARLY_OUT:
+    SXER6("return %d", result);
+    return result;
 }
 
 static int test_mock_send_error = 0;
@@ -178,11 +203,11 @@ static int test_mock_send_error = 0;
 static MOCK_SSIZE_T SXE_STDCALL
 test_mock_send(SXE_SOCKET sock, const MOCK_SOCKET_VOID *buf, MOCK_SOCKET_SSIZE_T count, int flags)
 {
-    SXEE64("test_mock_send(sock=%d, buf=%p, count=%d, flags=%d)", sock, buf, count, flags);
-    SXEL66("tap_ev_push(%s=%d, sock=%p, buf=%p, count=%d, flags=%d);", __func__, 4, sock, tap_dup(buf, count), count, flags);
+    SXEE6("test_mock_send(sock=%d, buf=%p, count=%zu, flags=%d)", sock, buf, count, flags);
+    SXEL6("tap_ev_push(%s=%d, sock=%d, buf=%p, count=%zu, flags=%d);", __func__, 4, sock, tap_dup(buf, count), count, flags);
     tap_ev_push(__func__, 4, "sock", sock, "buf", tap_dup(buf, count), "count", count, "flags", flags);
     sxe_socket_set_last_error(test_mock_send_error);
-    SXER60("return -1");
+    SXER6("return -1");
     return -1;
 }
 
@@ -232,14 +257,21 @@ main(void)
     first_connector = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_client_connected, test_event_client_read, test_event_client_close);
     ok(first_connector != NULL,                                              "1st connector: Allocated first connector");
 
+#ifdef SOCK_CLOEXEC
+    MOCK_SET_HOOK(accept4, test_mock_accept4);
+#else
     MOCK_SET_HOOK(accept, test_mock_accept);
+#endif
     is(sxe_connect(first_connector, "127.0.0.1", SXE_LOCAL_PORT(listener)), SXE_RETURN_OK,  "1st connector: Initiated connection on first connector");
     ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "1st connector: Got first client event");
     is_eq(tap_ev_identifier(ev),           "test_event_client_connected",    "1st connector: First event is SXE client connected");
 
     ok((ev = test_tap_ev_shift_wait(2)),                                     "1st connector: Got first server event");
+#ifdef SOCK_CLOEXEC
+    is_eq(tap_ev_identifier(ev),           "test_mock_accept4",              "1st connector: First server event is accept4() system call");
+#else
     is_eq(tap_ev_identifier(ev),           "test_mock_accept",               "1st connector: First server event is accept() system call");
-    /* MOCK_SET_HOOK(accept, accept); <-- note: moved into test_mock_accept() otherwise race condition! */
+#endif
     ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "1st connector: Got another server event");
     is_eq(tap_ev_identifier(ev),           "test_event_connected",           "1st connector: Second server event is SXE server connected");
 

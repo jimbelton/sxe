@@ -39,62 +39,62 @@ static void
 test_event_httpd_request(SXE_HTTPD_REQUEST *request, const char * method, unsigned method_length, const char * url,
                          unsigned url_length, const char * version, unsigned version_length)
 {
-    SXEE68("%s(request=%p, method='%.*s', url='%.*s', version='%*.s'", __func__, request, method_length, method,
+    SXEE6("%s(request=%p, method='%.*s', url='%.*s', version='%*.s'", __func__, request, method_length, method,
            url_length, url, version_length, version);
     tap_ev_queue_push(q_httpd, __func__, 7, "request", request, "method_length", method_length, "method", method,
                      "url_length", url_length, "url", url, "version_length", version_length, "version", version);
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_event_httpd_respond(SXE_HTTPD_REQUEST *request)
 {
-    SXEE62("%s(request=%p)", __func__, request);
+    SXEE6("%s(request=%p)", __func__, request);
     tap_ev_queue_push(q_httpd, __func__, 1, "request", request);
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_event_httpd_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN result, void *user_data)
 {
     SXE_UNUSED_PARAMETER(user_data);
-    SXEE62("%s(request=%p)", __func__, request);
+    SXEE6("%s(request=%p)", __func__, request);
     tap_ev_queue_push(q_httpd, __func__, 2, "request", request, "result", result);
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_event_client_file_sent(SXE * this, SXE_RETURN final)
 {
-    SXEE63I("%s(this=%p, final=%s)", __func__, this, sxe_return_to_string(final));
+    SXEE6I("%s(this=%p, final=%s)", __func__, this, sxe_return_to_string(final));
     tap_ev_push(__func__, 2, "this", this, "final", final);
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_event_client_connected(SXE * this)
 {
-    SXEE62I("%s(this=%p)", __func__, this);
+    SXEE6I("%s(this=%p)", __func__, this);
     tap_ev_push(__func__, 1, "this", this);
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_event_client_read(SXE * this, int length)
 {
     SXE_UNUSED_PARAMETER(length);
-    SXEE64I("%s(this=%p, buf='%.*s')", __func__, this, SXE_BUF_USED(this), SXE_BUF(this));
+    SXEE6I("%s(this=%p, buf='%.*s')", __func__, this, SXE_BUF_USED(this), SXE_BUF(this));
     tap_ev_push(__func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
     sxe_buf_clear(this);
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_event_client_close(SXE * this)
 {
-    SXEE62I("%s(this=%p)", __func__, this);
+    SXEE6I("%s(this=%p)", __func__, this);
     tap_ev_push(__func__, 1, "this", this);
-    SXER60("return");
+    SXER6("return");
 }
 
 #endif
@@ -135,11 +135,11 @@ main(void)
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_connected", "Got a connected event");
     is(tap_ev_arg(ev, "this"), client,                                                "On the client");
-    SXEA11((fd = open("../sxe-httpd.c", O_RDONLY)) >= 0,                              "Failed to open '../sxe-httpd.c': %s", strerror(errno));
-    SXEA11(fstat(fd, &file_status)                          >= 0,                              "fstat failed: %s", strerror(errno));
+    SXEA1((fd = open("../sxe-httpd.c", O_RDONLY)) >= 0,                              "Failed to open '../sxe-httpd.c': %s", strerror(errno));
+    SXEA1(fstat(fd, &file_status)                          >= 0,                              "fstat failed: %s", strerror(errno));
     length = snprintf(buffer, sizeof(buffer), "POST /sxe-httpd.c HTTP/1.1\r\nContent-Type: text/plain\r\n"
                                               "Content-Length: %lu\r\n\r\n", (unsigned long)file_status.st_size);
-    SXEA11((result = sxe_write(client, buffer, length)) == SXE_RETURN_OK,             "sxe_write failed: %s", sxe_return_to_string(result));
+    SXEA1((result = sxe_write(client, buffer, length)) == SXE_RETURN_OK,             "sxe_write failed: %s", sxe_return_to_string(result));
     offset = 0;
     sxe_sendfile(client, fd, &offset, (unsigned)file_status.st_size, test_event_client_file_sent);
 

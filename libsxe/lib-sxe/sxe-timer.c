@@ -28,35 +28,35 @@ extern struct ev_loop * sxe_private_main_loop;
 void
 sxe_timer_init(ev_timer* timer, void(*cb)(EV_P_ ev_timer *w, int revents), double after, double repeat)
 {
-    SXEE84("sxe_timer_init(ev_timer=%p, cb=%p, after=%f, repeat=%p)", timer, cb, after, repeat);
+    SXEE6("sxe_timer_init(ev_timer=%p, cb=%p, after=%f, repeat=%f)", timer, cb, after, repeat);
     ev_timer_init(timer, cb, after, repeat);
-    SXER80("return");
+    SXER6("return");
 }
 
 void sxe_timer_start(ev_timer* timer)
 {
-    SXEE81("sxe_timer_start(ev_timer=%p)", timer);
+    SXEE6("sxe_timer_start(ev_timer=%p)", timer);
     ev_timer_start(sxe_private_main_loop, timer);
-    SXER80("return");
+    SXER6("return");
 }
 
 void sxe_timer_stop(ev_timer* timer)
 {
-    SXEE81("sxe_timer_stop(ev_timer=%p)", timer);
+    SXEE6("sxe_timer_stop(ev_timer=%p)", timer);
     ev_timer_stop(sxe_private_main_loop, timer);
-    SXER80("return");
+    SXER6("return");
 }
 
 void sxe_timer_set(ev_timer* timer, double after, double repeat)
 {
-    SXEE83("sxe_timer_set(ev_timer=%p, after=%f, repeat=%p)", timer, after, repeat);
+    SXEE6("sxe_timer_set(ev_timer=%p, after=%f, repeat=%f)", timer, after, repeat);
     ev_timer_set(timer, after, repeat);
-    SXER80("return");
+    SXER6("return");
 }
 
 void sxe_timer_again(ev_timer* timer)
 {
-    SXEE81("sxe_timer_again(ev_timer=%p)", timer);
+    SXEE6("sxe_timer_again(ev_timer=%p)", timer);
     ev_timer_again(sxe_private_main_loop, timer);
-    SXER80("return");
+    SXER6("return");
 }

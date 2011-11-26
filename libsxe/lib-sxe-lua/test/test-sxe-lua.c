@@ -29,7 +29,7 @@ main(void)
     sxe_lua_tie_field(sxel, "test", "ulong", 'l', &s_ulong);
     sxe_lua_tie_field(sxel, "test", "str",   's', s_string, sizeof s_string);
 
-    SXEL10("sxelua: loading sxelua handlers");
+    SXEL1("sxelua: loading sxelua handlers");
     sxe_lua_load(sxel, "../test/test-sxe-lua.lua");
 
     sxe_init();

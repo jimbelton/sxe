@@ -22,6 +22,9 @@
 #ifndef __SXE_DIRWATCH_H__
 #define __SXE_DIRWATCH_H__
 
+#include "ev.h"
+#include "sxe-list.h"
+
 /* TODO: implement sxe_dirwatch on windows */
 
 #define SXE_DIRWATCH_CREATED      1        /* file was created (or moved into directory via rename) */

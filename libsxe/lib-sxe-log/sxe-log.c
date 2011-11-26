@@ -30,6 +30,7 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <windows.h>         /* for GetCurrentThreadId()             */
+#include <assert.h>          /* for _set_error_mode()                */
 #else
 #include <syslog.h>          /* for openlog(), syslog()              */
 #include <sys/syscall.h>     /* for syscall(), SYS_gettid            */
@@ -72,46 +73,24 @@
 /* Global variables used by header in-lines for performance */
 
 #ifdef __APPLE__
-pthread_key_t            sxe_log_stack_top_key;
-pthread_key_t            sxe_log_indent_maximum_key;
+pthread_key_t          sxe_log_stack_key;
+pthread_key_t          sxe_log_indent_maximum_key;
 #else
-__thread SXE_LOG_FRAME * sxe_log_stack_top      = NULL;
-__thread unsigned        sxe_log_indent_maximum = 0;                    /* To allow release mode tests to link, always define */
+__thread SXE_LOG_STACK sxe_log_stack;
+__thread unsigned      sxe_log_indent_maximum = 0;                      /* To allow release mode tests to link, always define */
 #endif
 
 /* Local variables */
 
 static volatile SXE_LOG_LEVEL     sxe_log_level        = SXE_LOG_LEVEL_OVER_MAXIMUM;
 static volatile SXE_LOG_CONTROL * sxe_log_control_list = NULL;
-
-static unsigned
-sxe_log_get_indent(volatile SXE_LOG_CONTROL * control_self, const char * file, unsigned id, int line)
-{
-    SXE_LOG_FRAME * frame;
-
-    SXE_UNUSED_ARGUMENT(file);
-    SXE_UNUSED_ARGUMENT(id);
-    SXE_UNUSED_ARGUMENT(line);
-
-    for (frame = sxe_log_get_stack_top(); frame != NULL; frame = frame->caller) {
-#if SXE_DEBUG
-        unsigned log_indent_maximum = sxe_log_get_indent_maximum();
-
-        if (frame->indent > log_indent_maximum) {
-            sxe_log_assert(NULL, file, id, line, "frame->indent <= sxe_log_indent_maximum",
-                           "Log indent %u exceeds maximum log indent %u", frame->indent, log_indent_maximum);
-        }
-#endif
-
-        if (frame->level <= control_self->level) {
-            break;
-        }
-    }
-
-    return frame != NULL ? frame->indent : 0;
-}
+static volatile unsigned          sxe_log_setting_era  = 0;
 
 #define SXE_RETURN_CASE(ret) case SXE_RETURN_ ## ret: return #ret
+
+void sxe_log_assert_cb_default(void) { /* do nothing in the name of code coverage */ }
+
+SXE_LOG_ASSERT_CB sxe_log_assert_cb = &sxe_log_assert_cb_default; /* NULL or function to call before abort() in sxe_log_assert() */
 
 const char *
 sxe_return_to_string(SXE_RETURN ret)
@@ -376,7 +355,8 @@ sxe_log_set_level(SXE_LOG_LEVEL level)
 
     SXE_LOG_LEVEL_VALIDATE(level_previous, SXE_LOG_LEVEL_OVER_MAXIMUM);
     SXE_LOG_LEVEL_VALIDATE(level,          SXE_LOG_LEVEL_OVER_MAXIMUM);
-    sxe_log_level  = level;
+    sxe_log_level = level;
+    sxe_log_setting_era++;
     sxe_log_control_forget_all_levels();
     return level_previous;
 }
@@ -445,6 +425,23 @@ SXE_ERROR_OUT:
     return result;
 }
 
+#ifdef _WIN32
+static void
+sxe_log_suppress_crash_handlers(void)
+{
+    _set_error_mode(_OUT_TO_STDERR); /* pre-msvcrt80 mechanism */
+
+#ifdef MAKE_MINGW
+    // mingw doesn't support msvcrt80?
+#else
+    // When the app crashes, don't print the abort message and don't call Dr. Watson to make a crash dump
+    _set_abort_behavior( 0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT );
+#endif
+}
+
+static bool sxe_log_crash_handlers_supression_initialized = false;
+#endif
+
 static SXE_LOG_LEVEL
 sxe_log_control_learn_level(volatile SXE_LOG_CONTROL * control_self, const char * file)
 {
@@ -467,6 +464,18 @@ sxe_log_control_learn_level(volatile SXE_LOG_CONTROL * control_self, const char 
         } while (__sync_val_compare_and_swap(&sxe_log_control_list, control_head, control_self) != control_head);
 
         control_self->next = control_head == NULL ? control_self : control_head;
+
+#ifdef _WIN32
+        /* This is a great place to do a one-time disabling of the crash message-box on Windows
+         */
+        if (!sxe_log_crash_handlers_supression_initialized) {
+            sxe_log_crash_handlers_supression_initialized = true;
+
+            if (getenv("SXE_WINNT_ASSERT_MSGBOX") == NULL) {
+                sxe_log_suppress_crash_handlers();
+            }
+        }
+#endif
     }
 
     if ((level = control_self->level) <= SXE_LOG_LEVEL_MAXIMUM) {            /* Has the control's level already been learned? */
@@ -506,7 +515,7 @@ sxe_log_control_learn_level(volatile SXE_LOG_CONTROL * control_self, const char 
     variable_name[sizeof(variable_name) - 1] = '\0';
 
     if (file[i] != '\0' && sxe_log_level_getenv(&level, variable_name) == SXE_RETURN_OK) {    /* Has a file specific level been set? */
-        goto SXE_EARLY_OUT;
+        goto SXE_EARLY_OUT; /* COVERAGE EXCLUSION: Tests should be triggering this, don't know why it shows as a coverage hole */
     }
 
     if (end_of_package != NULL) {
@@ -543,36 +552,88 @@ SXE_EARLY_OUT:
     return level;
 }
 
-void
+static unsigned
+sxe_log_get_indent(volatile SXE_LOG_CONTROL * control_self, const char * file, unsigned id, int line)
+{
+    SXE_LOG_STACK * stack = sxe_log_get_stack(file, id, line);
+    unsigned        depth = 0;
+    SXE_LOG_FRAME * frame;
+
+    SXE_UNUSED_ARGUMENT(file);
+    SXE_UNUSED_ARGUMENT(id);
+    SXE_UNUSED_ARGUMENT(line);
+
+#if SXE_DEBUG
+    if (stack->era > sxe_log_setting_era) {
+        sxe_log_assert(NULL, file, id, line, "stack->era <= sxe_log_setting_era",
+                       "Previous stack era %u exceeds current setting era %u", stack->era, sxe_log_setting_era);
+    }
+#endif
+
+    while (stack->era < sxe_log_setting_era) {
+        stack->era = sxe_log_setting_era;
+
+        for (frame = stack->top; frame != &stack->bottom; frame = frame->caller) {
+            if (frame->level <= sxe_log_control_learn_level(control_self, file)) {
+                depth++;
+            }
+        }
+
+#if SXE_DEBUG
+        if (depth > sxe_log_get_indent_maximum()) {
+            sxe_log_set_indent_maximum(depth);
+        }
+#endif
+
+        for (frame = stack->top; frame != &stack->bottom; frame = frame->caller) {
+            frame->indent = depth;
+
+            if (frame->level <= sxe_log_control_learn_level(control_self, file)) {
+                depth--;
+            }
+        }
+    }
+
+#if SXE_DEBUG
+    if (stack->top->indent > sxe_log_get_indent_maximum()) {
+        sxe_log_assert(NULL, file, id, line, "stack->top->indent <= sxe_log_indent_maximum",
+                       "Log indent %u exceeds maximum log indent %u", stack->top->indent, sxe_log_get_indent_maximum());
+    }
+#endif
+
+    return stack->top->indent;
+}
+
+__printflike(6, 7) void
 sxe_log(volatile SXE_LOG_CONTROL * control_self, const char * file, unsigned id, int line, SXE_LOG_LEVEL level, const char * format, ...)
 {
-    char     log_buffer[SXE_LOG_BUFFER_SIZE];
-    va_list  ap;
-    unsigned i;
+    SXE_LOG_STACK * stack;
+    char            log_buffer[SXE_LOG_BUFFER_SIZE];
+    va_list         ap;
+    unsigned        i;
 
     if (level > sxe_log_control_learn_level(control_self, file)) {
         return;
     }
 
-    i = (*sxe_log_buffer_prefix)(log_buffer, id, level);
+    stack = sxe_log_get_stack(file, id, line);
+    i     = (*sxe_log_buffer_prefix)(log_buffer, id, level);
     va_start(ap, format);
 
-    if (!sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s%s",
+    if (sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s%s",
                              2 * sxe_log_get_indent(control_self, file, id, line), "", (id == ~0U - 1) ? "" : "- "))
-     || !sxe_log_safe_append(log_buffer, &i, vsnprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap)))
+     && ((format[0] != ':' && format[0] != '(')
+      || sxe_log_safe_append(log_buffer, &i, sxe_strlcpy(&log_buffer[i], stack->top->function, SXE_LOG_BUFFER_SIZE - i)))
+     && sxe_log_safe_append(log_buffer, &i, vsnprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap)))
     {
-        va_end(ap);
-        goto SXE_EARLY_OUT;
+        sxe_log_safe_append( log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
     }
 
     va_end(ap);
-    sxe_log_safe_append( log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "\n"));
-
-SXE_EARLY_OR_ERROR_OUT:
     sxe_log_line_out_escaped(level, log_buffer);
 }
 
-void
+__printflike(5, 6) void
 sxe_log_entry(SXE_LOG_FRAME * frame, volatile SXE_LOG_CONTROL * control_self, unsigned id,  SXE_LOG_LEVEL level,
               const char * format, ...)
 {
@@ -581,12 +642,12 @@ sxe_log_entry(SXE_LOG_FRAME * frame, volatile SXE_LOG_CONTROL * control_self, un
     unsigned i;
     unsigned prefix_length;
 
-    sxe_log_frame_push(frame, id);
-
     if (level > sxe_log_control_learn_level(control_self, frame->file)) {
+        sxe_log_frame_push(frame, false);
         return;
     }
 
+    sxe_log_frame_push(frame, true);
     prefix_length   = (*sxe_log_buffer_prefix)(log_buffer, id, level);
     i               = prefix_length;
     va_start(ap, format);
@@ -608,33 +669,38 @@ sxe_log_entry(SXE_LOG_FRAME * frame, volatile SXE_LOG_CONTROL * control_self, un
 }
 
 void
-sxe_log_return(volatile SXE_LOG_CONTROL * control_self, const char * file, unsigned id, int line, SXE_LOG_LEVEL level)
+sxe_log_return(volatile SXE_LOG_CONTROL * control_self, SXE_LOG_FRAME * frame, SXE_LOG_LEVEL level)
 {
     char     log_buffer[SXE_LOG_BUFFER_SIZE];
     unsigned i;
 
-    sxe_log_frame_pop(file, id, line);
+    sxe_log_frame_pop(frame);
 
-    if (level > sxe_log_control_learn_level(control_self, file)) {
+    if (level > sxe_log_control_learn_level(control_self, frame->file)) {
         return;
     }
 
-    i = (*sxe_log_buffer_prefix)(log_buffer, id, level);
-    sxe_log_safe_append(log_buffer, &i,  snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s} // %s:%d\n",
-                        2 * sxe_log_get_indent(control_self, file, id, line) + 2, "", file, line));
+    i = (*sxe_log_buffer_prefix)(log_buffer, frame->id, level);
+    sxe_log_safe_append(log_buffer, &i, snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s} // %s:%d\n",
+                        2 * sxe_log_get_indent(control_self, frame->file, frame->id, frame->line) + 2, "", frame->file,
+                        frame->line));
     sxe_log_line_out_escaped(level, log_buffer);
 }
 
-void
+__printflike(6, 7) void
 sxe_log_assert(volatile SXE_LOG_CONTROL * control_self, const char * file, unsigned id, int line, const char * con, const char * format, ...)
 {
     char            log_buffer[SXE_LOG_BUFFER_SIZE_ASSERT];
     va_list         ap;
     unsigned        length = 0;
     const char    * where  = "in";
+    SXE_LOG_STACK * stack;
     SXE_LOG_FRAME * frame;
 
     SXE_UNUSED_ARGUMENT(control_self);
+
+    (*sxe_log_assert_cb)();
+
     length = (*sxe_log_buffer_prefix)(log_buffer, id, 1);
     va_start(ap, format);
 
@@ -647,17 +713,28 @@ sxe_log_assert(volatile SXE_LOG_CONTROL * control_self, const char * file, unsig
     va_end(ap);
 
 SXE_EARLY_OR_ERROR_OUT:
+
     sxe_log_line_out_escaped(SXE_LOG_LEVEL_FATAL, log_buffer);
+    stack = sxe_log_get_stack(file, id, line);
 
     /* Stack traceback
      */
-    for (frame = sxe_log_get_stack_top(); frame != NULL; frame = frame->caller) {
+    for (frame = stack->top; frame != &stack->bottom; frame = frame->caller) {
         length = 0;
         sxe_log_safe_append(log_buffer, &length, snprintf(&log_buffer[length], SXE_LOG_BUFFER_SIZE - length,
                             "       %s function %s() at %s:%d\n", where, frame->function, frame->file, frame->line));
         sxe_log_line_out_escaped(SXE_LOG_LEVEL_FATAL, log_buffer);
         where = "called from";
     }
+
+#ifdef _WIN32
+    if (getenv("SXE_WINNT_ASSERT_MSGBOX") == NULL) {
+        length = 0;
+        sxe_log_safe_append(log_buffer, &length, snprintf(&log_buffer[length], SXE_LOG_BUFFER_SIZE - length,
+            "NOTE: set SXE_WINNT_ASSERT_MSGBOX=1 to assert into the Microsoft visual debugger\n"));
+        sxe_log_line_out_escaped(SXE_LOG_LEVEL_FATAL, log_buffer);
+    }
+#endif
 
     abort();
 }
@@ -688,6 +765,10 @@ sxe_log_dump_memory(volatile SXE_LOG_CONTROL * control_self, const char * file, 
 
     for (k = 0; k <= length / 16; k++)
     {
+        if (k && (length / 16 == k) && (length % 16 == 0)) { /* COVERAGE EXCLUSION */
+            continue;                                        /* COVERAGE EXCLUSION */
+        }                                                    /* COVERAGE EXCLUSION */
+
         i = prefix_length;
 
         if (!sxe_log_safe_append( log_buffer, &i, snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s- ",

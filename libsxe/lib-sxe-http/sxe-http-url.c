@@ -34,7 +34,7 @@ sxe_http_url_parse(SXE_HTTP_URL * url_out, const char * string, unsigned string_
     unsigned     idx;
     unsigned     start;
 
-    SXEE85("sxe_http_url_parse(url_out=%p, string='%.*s', string_length=%u, options=0x%x)",
+    SXEE6("sxe_http_url_parse(url_out=%p, string='%.*s', string_length=%u, options=0x%x)",
            url_out, string_maximum_length, string, string_length, options);
     SXE_UNUSED_ARGUMENT(options);
     memset(url_out, 0, sizeof(*url_out));
@@ -124,9 +124,9 @@ sxe_http_url_parse(SXE_HTTP_URL * url_out, const char * string, unsigned string_
     goto SXE_EARLY_OUT;
 
 SXE_ERROR_OUT:
-    SXEL33("sxe_http_url_parse: warning: URL %s: '%.*s'", reason, string_maximum_length, string);
+    SXEL3("sxe_http_url_parse: warning: URL %s: '%.*s'", reason, string_maximum_length, string);
 
 SXE_EARLY_OUT:
-    SXER81("return result=%s", sxe_return_to_string(result));
+    SXER6("return result=%s", sxe_return_to_string(result));
     return result;
 }

@@ -28,138 +28,12 @@
 #include "sxe-test.h"
 #include "sxe-util.h"
 
-#define TEST_WAIT 5.0
+#include "common.h"
+
+#define TEST_WAIT          5.0
 #define TEST_BUFFER_COUNT 10
 
-static tap_ev_queue q_client;
-static tap_ev_queue q_httpd;
-static SXE_HTTPD    httpd;
-
-static void
-h_connect(struct SXE_HTTPD_REQUEST *request)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_httpd, __func__, 1, "request", request);
-    SXER60I("return");
-}
-
-static void
-h_request(struct SXE_HTTPD_REQUEST *request, const char *method, unsigned mlen, const char *url, unsigned ulen, const char *version, unsigned vlen)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXEE67I("%s(method=[%.*s],url=[%.*s],version=[%.*s])", __func__, mlen, method, ulen, url, vlen, version);
-    tap_ev_queue_push(q_httpd, __func__, 4,
-                      "request", request,
-                      "url", tap_dup(url, ulen),
-                      "method", tap_dup(method, mlen),
-                      "version", tap_dup(version, vlen));
-    SXER60I("return");
-}
-
-static void
-h_header(struct SXE_HTTPD_REQUEST *request, const char *key, unsigned klen, const char *val, unsigned vlen)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXEE65I("%s(key=[%.*s],value=[%.*s])", __func__, klen, key, vlen, val);
-    tap_ev_queue_push(q_httpd, __func__, 3,
-                      "request", request,
-                      "key", tap_dup(key, klen),
-                      "value", tap_dup(val, vlen));
-    SXER60I("return");
-}
-
-static void
-h_eoh(struct SXE_HTTPD_REQUEST *request)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_httpd, __func__, 1, "request", request);
-    SXER60I("return");
-}
-
-static void
-h_body(struct SXE_HTTPD_REQUEST *request, const char *buf, unsigned used)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXEE65I("%s(buf=%p,used=%u) // '%.*s'", __func__, buf, used, used, buf);
-    tap_ev_queue_push(q_httpd, __func__, 4,
-                      "request", request,
-                      "buf", tap_dup(buf, used),
-                      "used", used);
-    SXER60I("return");
-}
-
-static void
-h_respond(struct SXE_HTTPD_REQUEST *request)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_httpd, __func__, 1, "request", request);
-    SXER60I("return");
-}
-
-static void
-h_close(struct SXE_HTTPD_REQUEST *request)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_httpd, __func__, 1, "request", request);
-    SXER60I("return");
-}
-
-static void
-h_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN result, void *user_data)
-{
-    SXE * this = sxe_httpd_request_get_sxe(request);
-    SXE_UNUSED_PARAMETER(this);
-    SXE_UNUSED_PARAMETER(user_data);
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_httpd, __func__, 2, "request", request, "result", result);
-    SXER60I("return");
-}
-
-static void
-client_connect(SXE * this)
-{
-    SXEE61I("%s()", __func__);
-    tap_ev_queue_push(q_client, __func__, 1, "this", this);
-    SXER60I("return");
-}
-
-static void
-client_read(SXE * this, int length)
-{
-    SXE_UNUSED_PARAMETER(length);
-    SXEE62I("%s(length=%u)", __func__, length);
-    tap_ev_queue_push(q_client, __func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
-    sxe_buf_clear(this);
-    SXER60I("return");
-}
-
-static void
-client_close(SXE * this)
-{
-    SXEE62I("%s(this=%p)", __func__, this);
-    tap_ev_queue_push(q_client, __func__, 1, "this", this);
-    SXER60("return");
-}
-
-static void
-test_httpd_diag_functions(unsigned active_requests, unsigned idle_connections, unsigned free_connection_objects, unsigned free_buffers)
-{
-    is(sxe_httpd_diag_get_active_requests(&httpd),  active_requests,         "# active requests");
-    is(sxe_httpd_diag_get_idle_connections(&httpd), idle_connections,        "# idle connections");
-    is(sxe_httpd_diag_get_free_connections(&httpd), free_connection_objects, "# free connections");
-    is(sxe_httpd_diag_get_free_buffers(&httpd),     free_buffers,            "# unused buffers");
-}
+static SXE_HTTPD httpd;
 
 int
 main(void)
@@ -168,19 +42,13 @@ main(void)
     sxe_httpd_header_handler old_header_handler;
     tap_ev                   ev;
     SXE                    * listener;
-    SXE                    * c;
+    SXE                    * this;
     char                     buffer[1024];
 
-    tap_plan(38, TAP_FLAG_ON_FAILURE_EXIT, NULL);
-    sxe_register(4, 0);        /* http listener and connections */
-    sxe_register(8, 0);        /* http clients */
-    sxe_init();
-
-    q_client = tap_ev_queue_new();
-    q_httpd = tap_ev_queue_new();
+    tap_plan(49, TAP_FLAG_ON_FAILURE_EXIT, NULL);
+    test_sxe_register_and_init(12);
 
     sxe_httpd_construct(&httpd, 3, TEST_BUFFER_COUNT, 512, 0);
-
     SXE_HTTPD_SET_HANDLER(&httpd, connect, h_connect);
     SXE_HTTPD_SET_HANDLER(&httpd, request, h_request);
     old_header_handler = SXE_HTTPD_SET_HANDLER(&httpd, header,  h_header);
@@ -189,50 +57,57 @@ main(void)
     SXE_HTTPD_SET_HANDLER(&httpd, respond, h_respond);
     SXE_HTTPD_SET_HANDLER(&httpd, close,   h_close);
 
-    listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
+    SXEA1((listener = test_httpd_listen(&httpd, "0.0.0.0", 0)) != NULL,                         "sxe_httpd_listen failed");
+    SXEA1((this = test_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, NULL)) != NULL, "sxe_new_tcp failed");
+    sxe_connect(this, "127.0.0.1", SXE_LOCAL_PORT(listener));
 
-    c = sxe_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, NULL);
-    sxe_connect(c, "127.0.0.1", SXE_LOCAL_PORT(listener));
+#define TEST_POST "POST /this/is/a/URL HTTP/1.1\r\nConnection: whatever\r\nHost: interesting\r\n" \
+                  "Content-Length: 10\r\n\r\n12345678\r\n"
 
     is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_connect",      "Client connected to HTTPD");
-    SXE_WRITE_LITERAL(c, "GET /this/is/a/URL HTTP/1.1\r\nConnection: whatever\r\nHost: interesting\r\nContent-Length: 10\r\n\r\n12345678\r\n");
-    /*                        active,idle,free, buffers_free */
-    test_httpd_diag_functions(     0,   1,   2, TEST_BUFFER_COUNT);
+    TEST_SXE_SEND_LITERAL(this, TEST_POST, client_sent, q_client, TEST_WAIT, &ev);
 
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_connect",            "HTTPD: connected");
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_request",            "HTTPD: new request");
+//  is(sxe_httpd_diag_get_active_requests (&httpd), 1                , "# active requests" ); /* note: deferred events can cause these */
+//  is(sxe_httpd_diag_get_idle_connections(&httpd), 0                , "# idle connections"); /* to be zero on Windows release sometimes */
+    is(sxe_httpd_diag_get_free_connections(&httpd), 2                , "# free connections");
+    is(sxe_httpd_diag_get_free_buffers    (&httpd), TEST_BUFFER_COUNT, "# unused buffers"  );
+
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev),            "h_request", "HTTPD: new request");
     is_strncmp(tap_ev_arg(ev, "url"), "/this/is/a/URL", SXE_LITERAL_LENGTH("/this/is/a/URL"), "HTTPD: URL is correct");
-    is_strncmp(tap_ev_arg(ev, "method"), "GET", SXE_LITERAL_LENGTH("GET"),                    "HTTPD: method is 'GET'");
+    is_strncmp(tap_ev_arg(ev, "method"), "POST", SXE_LITERAL_LENGTH("POST"),                    "HTTPD: method is 'GET'");
     is_strncmp(tap_ev_arg(ev, "version"), "HTTP/1.1", SXE_LITERAL_LENGTH("HTTP/1.1"),         "HTTPD: version is 'HTTP/1.1'");
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_header",             "HTTPD: header event");
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev),            "h_header",  "HTTPD: header event");
     is_strncmp(tap_ev_arg(ev, "key"), "Connection", SXE_LITERAL_LENGTH("Connection"),         "HTTPD: header was 'Connect'");
     is_strncmp(tap_ev_arg(ev, "value"), "whatever", SXE_LITERAL_LENGTH("whatever"),           "HTTPD: header value was 'whatever'");
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_header",             "HTTPD: header event");
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev),            "h_header",  "HTTPD: header event");
     is_strncmp(tap_ev_arg(ev, "key"), "Host", SXE_LITERAL_LENGTH("Host"),                     "HTTPD: header was 'Connect'");
     is_strncmp(tap_ev_arg(ev, "value"), "interesting", SXE_LITERAL_LENGTH("interesting"),     "HTTPD: header value was 'whatever'");
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_header",             "HTTPD: header event");
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev),            "h_header",  "HTTPD: header event");
     is_strncmp(tap_ev_arg(ev, "key"), "Content-Length", SXE_LITERAL_LENGTH("Content-Length"), "HTTPD: header was 'Connect'");
     is_strncmp(tap_ev_arg(ev, "value"), "10", SXE_LITERAL_LENGTH("10"),                       "HTTPD: header value was 'whatever'");
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_eoh",                "HTTPD: eoh (end of headers) event");
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev),            "h_eoh",     "HTTPD: eoh (end of headers) event");
 
     test_ev_queue_wait_read(q_httpd, TEST_WAIT, &ev, NULL, "h_body", buffer, 10, "HTTPD body handler");
     is_strncmp(buffer, "12345678\r\n", SXE_LITERAL_LENGTH("12345678\r\n"),                    "HTTPD: read correct body");
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",            "HTTPD: respond event");
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev),            "h_respond", "HTTPD: respond event");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
-    SXE_WRITE_LITERAL(c, "GET ");    /* Send the beginning of the next message           */
+
+    TEST_SXE_SEND_LITERAL(this, "POST ", client_sent, q_client, TEST_WAIT, &ev); // test a pipelined request
     test_ev_loop_wait(TEST_WAIT);    /* Try to make sure it's received before responding */
+
     sxe_httpd_response_simple(request, h_sent, NULL, 200, "OK", "abcd", NULL);
-    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_sent",               "HTTPD: finished responding");
+    is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev),            "h_sent",    "HTTPD: finished responding");
 
 #define EXPECTED_RESPONSE "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nabcd"
 
-    test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, c, "client_read", buffer, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE), "client");
+    test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, this, "client_read", buffer, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE), "client");
     is_strncmp(buffer, EXPECTED_RESPONSE, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE),              "Client received correct response");
 
     /* Now try it again, this time with only the respond handler hooked. */
@@ -243,26 +118,26 @@ main(void)
 
     /* Finish writing the next message
      */
-    SXE_WRITE_LITERAL(c, "/this/is/a/URL HTTP/1.1\r\nConnection: whatever\r\nHost: interesting\r\nContent-Length: 10\r\n\r\n12345678\r\n");
+    TEST_SXE_SEND_LITERAL(this, "/this/is/a/URL HTTP/1.1\r\nConnection: whatever\r\nHost: interesting\r\nContent-Length: 10\r\n\r\n12345678\r\n", client_sent, q_client, TEST_WAIT, &ev);
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",            "HTTPD: respond event");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     sxe_httpd_response_copy_raw_data(request, EXPECTED_RESPONSE, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE));
     sxe_httpd_response_end(request, h_sent, NULL);
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_sent",               "HTTPD: finished responding");
-    test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, c, "client_read", buffer, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE), "client");
+    test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, this, "client_read", buffer, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE), "client");
     is_strncmp(buffer, EXPECTED_RESPONSE, SXE_LITERAL_LENGTH(EXPECTED_RESPONSE),              "Client received correct response");
 
-    sxe_close(c);
+    sxe_close(this);
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_close",              "HTTPD: close event");
 
     /* For coverage on window */
-    c = sxe_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, client_close);
-    sxe_connect(c, "127.0.0.1", SXE_LOCAL_PORT(listener));
+    this = test_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, client_close);
+    sxe_connect(this, "127.0.0.1", SXE_LOCAL_PORT(listener));
 
     is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_connect",      "Client connected to HTTPD");
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_connect",            "HTTPD: connected");
 
-    SXE_WRITE_LITERAL(c, "GET /simple HTTP/1.1\r\n\r\n");
+    TEST_SXE_SEND_LITERAL(this, "GET /simple HTTP/1.1\r\n\r\n", client_sent, q_client, TEST_WAIT, &ev);
     is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",            "HTTPD: respond event");
     request = (SXE_HTTPD_REQUEST *)(long)tap_ev_arg(ev, "request");
     sxe_httpd_response_simple(request, h_sent, NULL, 200, "OK", NULL, "Connection", "close", NULL);
@@ -270,9 +145,34 @@ main(void)
     sxe_close(request->sxe);
 
 #define TEST_200_CLOSE_RESPONSE "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
-    test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, c, "client_read", buffer, SXE_LITERAL_LENGTH(TEST_200_CLOSE_RESPONSE), "client");
+    test_ev_queue_wait_read(q_client, TEST_WAIT, &ev, this, "client_read", buffer, SXE_LITERAL_LENGTH(TEST_200_CLOSE_RESPONSE), "client");
     is_strncmp(buffer, TEST_200_CLOSE_RESPONSE, SXE_LITERAL_LENGTH(TEST_200_CLOSE_RESPONSE),  "GET response is a 200 OK with close");
-    is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_close",                        "Got a client close event");
+    is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_close",        "Got a client close event");
+
+    tap_test_case_name("Application detected error");
+    {
+        SXE_HTTPD_REQUEST * test_server_request;
+        SXEA1((this = test_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, client_close)) != NULL,
+               "Failed to allocate client SXE");
+        SXEA1(sxe_connect(this, "127.0.0.1", SXE_LOCAL_PORT(listener)) == SXE_RETURN_OK,             "Failed to connect to HTTPD");
+        is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "client_connect",         "Got a client connected event");
+        is(tap_ev_arg(ev, "this"), this,                                                             "It's the client");
+        is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_connect",               "Got a server connect event");
+        test_server_request = SXE_CAST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
+
+#define TEST_GOOD_REQUEST "GET / HTTP/1.0\r\n" "B:C\r\n" "\r\n"
+        test_sxe_send(this, TEST_GOOD_REQUEST, SXE_LITERAL_LENGTH(TEST_GOOD_REQUEST), client_sent, "client_sent", q_client, TEST_WAIT, &ev);
+        is_eq(test_tap_ev_queue_identifier_wait(q_httpd, TEST_WAIT, &ev), "h_respond",        "Got request on server");
+
+        /* Well formed HTTP, but missing the header *we* (as the application) were looking for */
+        sxe_httpd_set_state_error(test_server_request);
+        test_sxe_send(this, TEST_GOOD_REQUEST, SXE_LITERAL_LENGTH(TEST_GOOD_REQUEST), client_sent, "client_sent", q_client, TEST_WAIT, &ev);
+
+        test_process_all_libev_events();
+        is(tap_ev_length(),                0, "No events lurking");
+        is(tap_ev_queue_length(q_httpd),   0, "No server events lurking");
+        is(tap_ev_queue_length(q_client),  0, "No client events lurking");
+    }
 
     return exit_status();
 }

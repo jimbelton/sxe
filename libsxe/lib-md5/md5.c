@@ -35,11 +35,12 @@
  * compile-time configuration.
  */
 
-#ifndef HAVE_OPENSSL
+#ifdef SXE_DISABLE_OPENSSL
 
 #include <string.h>
 
 #include "md5.h"
+#undef MD5_Final    /* Remove wrapper macro */
 
 /*
  * The basic MD5 functions.

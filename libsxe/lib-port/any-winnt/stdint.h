@@ -30,7 +30,7 @@
 #   ifdef _WIN64
     typedef unsigned __int64 uintptr_t;
 #   else
-    typedef unsigned __int32 uintptr_t;
+    typedef unsigned   int   uintptr_t; /* how mingw defines this elsewhere! */
 #   endif
 #else
 #   include <stddef.h>    /* For [u]intptr_t */

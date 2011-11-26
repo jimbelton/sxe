@@ -43,9 +43,9 @@ static void
 test_event_connect(SXE * this)
 {
     tap_ev_queue q = SXE_USER_DATA(this);
-    SXEE60I("test_event_connect()");
+    SXEE6I("test_event_connect()");
     tap_ev_queue_push(q, __func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
@@ -53,28 +53,30 @@ test_event_read(SXE * this, int length)
 {
     tap_ev_queue q = SXE_USER_DATA(this);
     SXE_UNUSED_PARAMETER(length);
-    SXEE61I("test_event_read(length=%d)", length);
+    SXEE6I("test_event_read(length=%d)", length);
     tap_ev_queue_push(q, __func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
     sxe_buf_clear(this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
     tap_ev_queue q = SXE_USER_DATA(this);
-    SXEE60I("test_event_close()");
+    SXEE6I("test_event_close()");
     tap_ev_queue_push(q, __func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
-test_event_sent(SXE * this, SXE_RETURN sxe_return)
+test_event_sent(void * user_data, SXE_BUFFER * buffer)
 {
-    tap_ev_queue q = SXE_USER_DATA(this);
-    SXEE62I("test_event_sent(sxe_return=%s/%u)", sxe_return_to_string(sxe_return), sxe_return);
-    tap_ev_queue_push(q, __func__, 2, "this", this, "sxe_return", sxe_return);
-    SXER60I("return");
+    SXE *        this = (SXE *)user_data;
+    tap_ev_queue q    = SXE_USER_DATA(this);
+
+    SXEE6I("test_event_sent(buffer=%p)", buffer);
+    tap_ev_queue_push(q, __func__, 2, "this", this, "buffer", buffer);
+    SXER6I("return");
 }
 
 int
@@ -85,13 +87,14 @@ main(void)
     SXE             * server;
     SXE_RETURN        result;
     SXE_BUFFER        buffers[1024];
-    SXE_LIST          buflist;
     tap_ev_queue      q_client;
     tap_ev_queue      q_server;
     tap_ev            ev;
     char              readbuf[1024];
 
-    sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_LIST=5");
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=5");
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE=5");  // Increase this if you're debugging this particular test
     plan_tests(7);
     sxe_register(3, 0);
 
@@ -99,7 +102,6 @@ main(void)
     q_server = tap_ev_queue_new();
 
     sxe_init();
-
     listener = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_connect, test_event_read, test_event_close);
     client   = sxe_new_tcp(NULL, "INADDR_ANY", 0, test_event_connect, test_event_read, test_event_close);
 
@@ -112,48 +114,45 @@ main(void)
     is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "test_event_connect", "Client connected");
     is_eq(test_tap_ev_queue_identifier_wait(q_server, TEST_WAIT, &ev), "test_event_connect", "Server connected");
     server = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
-    sxe_buffer_construct_const(&buffers[0], "Hello",    SXE_LITERAL_LENGTH("Hello"   ));
-    sxe_buffer_construct_const(&buffers[1], ", world!", SXE_LITERAL_LENGTH(", world!"));
+    sxe_buffer_construct_const(&buffers[0], "Hello", SXE_LITERAL_LENGTH("Hello"));
+    sxe_send_buffer(client, &buffers[0]);
+    sxe_buffer_construct_plus(&buffers[1], SXE_CAST_NOCONST(char *, ", world!"), SXE_LITERAL_LENGTH(", world!"),
+                              SXE_LITERAL_LENGTH(", world!"), client, test_event_sent);
 
-    SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
-    sxe_list_push(&buflist, &buffers[0]);
-    sxe_list_push(&buflist, &buffers[1]);
-
-    if ((result = sxe_send_buffers(client, &buflist, test_event_sent)) == SXE_RETURN_IN_PROGRESS) {
+    if ((result = sxe_send_buffer(client, &buffers[1])) == SXE_RETURN_IN_PROGRESS) {
         is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "test_event_sent", "Client send completed");
     }
     else {
-        is(result, SXE_RETURN_OK, "sxe_send_buffers sent all data at once");
+        is(result, SXE_RETURN_OK, "sxe_send_buffer sent all data at once");
     }
 
     memset(readbuf, 0, sizeof readbuf);
     test_ev_queue_wait_read(q_server, TEST_WAIT, &ev, server, "test_event_read", readbuf, 5 + 8, "server");
     is_eq(readbuf, "Hello, world!", "Server got correct contents");
 
-    /* Now send the current binary file TEST_COPIES times. That ought to require
-     * multiple attempts! */
+    /* Now send the current binary file TEST_COPIES times. That ought to require multiple attempts! */
     {
-        const char sendbuf[] = LARGE_BUFFER;
-        char     * tempbuf;
-        int        i;
+        char   sendbuf[] = LARGE_BUFFER;
+        char * tempbuf;
+        int    i;
 
-        tempbuf = calloc(TEST_COPIES, sizeof sendbuf);
-        SXEA11(tempbuf != NULL, "failed to allocate %u bytes", TEST_COPIES * sizeof(sendbuf));
-        SXE_LIST_CONSTRUCT(&buflist, 0, SXE_BUFFER, node);
+        tempbuf = calloc(TEST_COPIES, sizeof(sendbuf));
+        SXEA1(tempbuf != NULL, "failed to allocate %u bytes", SXE_CAST(unsigned, TEST_COPIES * sizeof(sendbuf)));
 
-        for (i = 0; i < TEST_COPIES; i++) {
+        for (i = 0; i < TEST_COPIES - 1; i++) {
             sxe_buffer_construct_const(&buffers[i], sendbuf, sizeof(sendbuf));
-            sxe_list_push(&buflist, &buffers[i]);
+            sxe_send_buffer(client, &buffers[i]);
         }
 
-        result = sxe_send_buffers(client, &buflist, test_event_sent);
-        test_ev_queue_wait_read(q_server, TEST_WAIT, &ev, server, "test_event_read", tempbuf, TEST_COPIES * sizeof sendbuf, "server");
+        sxe_buffer_construct_plus(&buffers[i], sendbuf, sizeof(sendbuf), sizeof(sendbuf), client, test_event_sent);
+        result = sxe_send_buffer(client, &buffers[i]);
+        test_ev_queue_wait_read(q_server, TEST_WAIT, &ev, server, "test_event_read", tempbuf, TEST_COPIES * sizeof(sendbuf), "server");
 
         if (result == SXE_RETURN_IN_PROGRESS) {
             is_eq(test_tap_ev_queue_identifier_wait(q_client, TEST_WAIT, &ev), "test_event_sent", "Client send completed");
         }
         else {
-            is(result, SXE_RETURN_OK, "sxe_send_buffers sent all data at once");
+            is(result, SXE_RETURN_OK, "sxe_send_buffer sent all data at once");
         }
 
         free(tempbuf);

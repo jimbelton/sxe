@@ -39,9 +39,9 @@
 static unsigned
 sxe_prehashed_key_hash(const void * key, unsigned size)
 {
-    SXEE83("sxe_prehashed_key_hash(key=%.*s, size=%u)", size, key, size);
+    SXEE6("sxe_prehashed_key_hash(key=%.*s, size=%u)", size, SXE_CAST(char *, key), size);
     SXE_UNUSED_PARAMETER(size);
-    SXER81("return sum=%u", *(const unsigned *)key);
+    SXER6("return sum=%u", *(const unsigned *)key);
     return *(const unsigned *)key;
 }
 
@@ -65,11 +65,11 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
     SXE_HASH * hash;
     unsigned   size;
 
-    SXEE86("sxe_hash_new_plus(name=%s,element_count=%u,element_size=%u,key_offset=%u,key_size=%u,options=%u)", name, element_count,
+    SXEE6("sxe_hash_new_plus(name=%s,element_count=%u,element_size=%u,key_offset=%u,key_size=%u,options=%u)", name, element_count,
            element_size, key_offset, key_size, options);
     size = sizeof(SXE_HASH) + sxe_pool_size(element_count, element_size, element_count + SXE_HASH_BUCKETS_RESERVED);
-    SXEA12((hash = malloc(size)) != NULL, "Unable to allocate %u bytes of memory for hash %s", size, name);
-    SXEL82("Base address of hash %s = %p", name, hash);
+    SXEA1((hash = malloc(size)) != NULL, "Unable to allocate %u bytes of memory for hash %s", size, name);
+    SXEL6("Base address of hash %s = %p", name, hash);
 
     /* Note: hash + 1 == pool base */
     hash->pool   = sxe_pool_construct(hash + 1, name, element_count, element_size, element_count + SXE_HASH_BUCKETS_RESERVED,
@@ -81,7 +81,7 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
     hash->options    = options;
     hash->hash_key   = options & SXE_HASH_OPTION_LOOKUP3_HASH ? lookup3_hash : sxe_prehashed_key_hash;
 
-    SXER81("return array=%p", hash->pool);
+    SXER6("return array=%p", hash->pool);
     return hash->pool;
 }
 
@@ -89,11 +89,11 @@ void
 sxe_hash_reconstruct(void * array)
 {
     SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
-    SXEE81("sxe_hash_reconstruct(hash=%s)", sxe_pool_get_name(array));
+    SXEE6("sxe_hash_reconstruct(hash=%s)", sxe_pool_get_name(array));
     hash->pool  = sxe_pool_construct(hash + 1, sxe_pool_get_name(array),
                                      hash->count, hash->size, hash->count + SXE_HASH_BUCKETS_RESERVED,
                                      hash->options & SXE_HASH_OPTION_LOCKED ? SXE_POOL_OPTION_LOCKED : 0);
-    SXER80("return");
+    SXER6("return");
 }
 /**
  * Delete a hash created with sxe_hash_new()
@@ -104,9 +104,9 @@ void
 sxe_hash_delete(void * array)
 {
     SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
-    SXEE81("sxe_hash_delete(hash=%s)", sxe_pool_get_name(array));
+    SXEE6("sxe_hash_delete(hash=%s)", sxe_pool_get_name(array));
     free(hash);
-    SXER80("return");
+    SXER6("return");
 }
 
 /**
@@ -124,14 +124,14 @@ sxe_hash_take(void * array)
     SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
     unsigned   id;
 
-    SXEE81("sxe_hash_take(hash=%s)", sxe_pool_get_name(array));
+    SXEE6("sxe_hash_take(hash=%s)", sxe_pool_get_name(array));
     id = sxe_pool_set_oldest_element_state(hash->pool, SXE_HASH_UNUSED_BUCKET, SXE_HASH_NEW_BUCKET);
 
     if (id == SXE_POOL_NO_INDEX) {
         id = SXE_HASH_FULL;
     }
 
-    SXER82(id == SXE_HASH_FULL ? "%sSXE_HASH_FULL" : "%s%u", "return id=", id);
+    SXER6(id == SXE_HASH_FULL ? "%sSXE_HASH_FULL" : "%s%u", "return id=", id);
     return id;
 }
 
@@ -151,9 +151,9 @@ sxe_hash_look(void * array, const void * key)
     unsigned        bucket;
     SXE_POOL_WALKER walker;
 
-    SXEE82("sxe_hash_look(hash=%s,key=%p)", sxe_pool_get_name(array), key);
+    SXEE6("sxe_hash_look(hash=%s,key=%p)", sxe_pool_get_name(array), key);
     bucket = hash->hash_key(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
-    SXEL81("Looking in bucket %u", bucket);
+    SXEL6("Looking in bucket %u", bucket);
     sxe_pool_walker_construct(&walker, array, bucket);
 
     while ((id = sxe_pool_walker_step(&walker)) != SXE_HASH_KEY_NOT_FOUND) {
@@ -162,7 +162,7 @@ sxe_hash_look(void * array, const void * key)
         }
     }
 
-    SXER82(id == SXE_HASH_KEY_NOT_FOUND ? "%sSXE_HASH_KEY_NOT_FOUND" : "%s%u", "return id=", id);
+    SXER6(id == SXE_HASH_KEY_NOT_FOUND ? "%sSXE_HASH_KEY_NOT_FOUND" : "%s%u", "return id=", id);
     return id;
 }
 
@@ -179,13 +179,13 @@ sxe_hash_add(void * array, unsigned id)
     void     * key;
     unsigned   bucket;
 
-    SXEE82("sxe_hash_add(hash=%s,id=%u)", sxe_pool_get_name(array), id);
+    SXEE6("sxe_hash_add(hash=%s,id=%u)", sxe_pool_get_name(array), id);
 
     key = &((char *)array)[id * hash->size + hash->key_offset];
     bucket = hash->hash_key(key, hash->key_size) % hash->count + SXE_HASH_BUCKETS_RESERVED;
-    SXEL82("Adding element %u to bucket %u", id, bucket);
+    SXEL6("Adding element %u to bucket %u", id, bucket);
     sxe_pool_set_indexed_element_state(array, id, SXE_HASH_NEW_BUCKET, bucket);
-    SXER80("return");
+    SXER6("return");
 }
 
 void
@@ -193,7 +193,49 @@ sxe_hash_give(void * array, unsigned id)
 {
     SXE_HASH * hash  = SXE_HASH_ARRAY_TO_IMPL(array);
 
-    SXEE82("sxe_hash_give(hash=%s,id=%u)", sxe_pool_get_name(array), id);
+    SXEE6("sxe_hash_give(hash=%s,id=%u)", sxe_pool_get_name(array), id);
     sxe_pool_set_indexed_element_state(hash->pool, id, sxe_pool_index_to_state(array, id), SXE_HASH_UNUSED_BUCKET);
-    SXER80("return");
+    SXER6("return");
 }
+
+/*
+ * Walk all the populated elements in the hash
+ */
+void
+sxe_hash_walk(void * array, void (*cb)(unsigned))
+{
+    SXE_HASH * hash  = SXE_HASH_ARRAY_TO_IMPL(array);
+    unsigned   id;
+    unsigned   state;
+
+    SXEE6("sxe_hash_walk(hash=%s)", sxe_pool_get_name(array));
+    for (id = 0; id < hash->count; id++) {
+        state = sxe_pool_index_to_state(hash->pool, id);
+        if ((state != SXE_HASH_UNUSED_BUCKET   ) &&
+            (state != SXE_HASH_NEW_BUCKET      ) &&
+            (state != SXE_HASH_BUCKETS_RESERVED)  )
+        {
+            (*cb)(id);
+        }
+    }
+    SXER6("return");
+}
+
+/**
+ * Returns the count of UNUSED hash elements available
+ *
+ * @param array, a pointer to the hash array
+ *
+ * @return The count of elements that are 'UNUSED'
+ */
+unsigned
+sxe_hash_get_unused_count(void * array)
+{
+    unsigned count;
+    SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
+    SXEE6("sxe_hash_get_unused_count(hash=%s)", sxe_pool_get_name(array));
+    count = sxe_pool_get_number_in_state(hash->pool, SXE_HASH_UNUSED_BUCKET);
+    SXER6("return unused_count=%u", count);
+    return count;
+}
+

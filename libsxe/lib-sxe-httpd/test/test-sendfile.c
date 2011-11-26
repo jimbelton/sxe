@@ -30,7 +30,7 @@
 
 #define TEST_WAIT 5.0
 
-#ifdef WINDOWS_NT
+#ifdef _WIN32
 
 int
 main(void)
@@ -42,88 +42,87 @@ main(void)
 #else
 
 static void
-handle_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN final, void *user_data)
+test_httpd_sent(SXE_HTTPD_REQUEST *request, SXE_RETURN final, void *user_data)
 {
     SXE * this = request->sxe;
     SXE_UNUSED_PARAMETER(this);
     SXE_UNUSED_PARAMETER(request);
     SXE_UNUSED_PARAMETER(final);
     SXE_UNUSED_PARAMETER(user_data);
-    SXEE62I("%s(final=%s)", __func__, sxe_return_to_string(final));
+    SXEE6I("%s(final=%s)", __func__, sxe_return_to_string(final));
     tap_ev_push(__func__, 2, "request", request, "final", final);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
-http_respond(SXE_HTTPD_REQUEST *request)
+test_httpd_respond(SXE_HTTPD_REQUEST *request)
 {
     SXE * this = request->sxe;
     SXE_UNUSED_PARAMETER(this);
-    SXEE61I("%s()", __func__);
+    SXEE6I("%s()", __func__);
     tap_ev_push(__func__, 1, "request", request);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
-client_connect(SXE * this)
+test_client_connect(SXE * this)
 {
-    SXEE61I("%s()", __func__);
+    SXEE6I("%s()", __func__);
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
-client_read(SXE * this, int length)
+test_client_read(SXE * this, int length)
 {
     SXE_UNUSED_PARAMETER(length);
-    SXEE62I("%s(length=%u)", __func__, length);
+    SXEE6I("%s(length=%u)", __func__, length);
     tap_ev_push(__func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
     sxe_buf_clear(this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 int
 main(void)
 {
-    SXE_HTTPD httpd;
+    SXE_HTTPD           httpd;
     SXE_HTTPD_REQUEST * request;
-    tap_ev ev;
-    SXE *listener;
-    SXE *c;
+    tap_ev              ev;
+    SXE               * listener;
+    SXE               * client;
 
-    plan_tests(5);
-
+    plan_tests(4);
     sxe_register(4, 0);        /* http listener and connections */
     sxe_register(8, 0);        /* http clients */
     sxe_init();
 
     sxe_httpd_construct(&httpd, 3, 10, 512, 0);
-    SXE_HTTPD_SET_HANDLER(&httpd, respond, http_respond);
+    SXE_HTTPD_SET_HANDLER(&httpd, respond, test_httpd_respond);
 
     listener = sxe_httpd_listen(&httpd, "0.0.0.0", 0);
 
-    c = sxe_new_tcp(NULL, "0.0.0.0", 0, client_connect, client_read, NULL);
-    sxe_connect(c, "127.0.0.1", SXE_LOCAL_PORT(listener));
+    client = sxe_new_tcp(NULL, "0.0.0.0", 0, test_client_connect, test_client_read, NULL);
+    sxe_connect(client, "127.0.0.1", SXE_LOCAL_PORT(listener));
 
-    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "client_connect",                   "Client connected to HTTPD");
-    SXE_WRITE_LITERAL(c, "GET /file HTTP/1.1\r\n\r\n");
-    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "http_respond",                     "HTTPD ready to respond");
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_client_connect", "Client connected to HTTPD");
+    SXE_WRITE_LITERAL(client, "GET /file HTTP/1.1\r\n\r\n");
+    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_httpd_respond",  "HTTPD ready to respond");
     request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
 
     {
         char        readbuf[65536];
-        SXE_BUFFER  buffer;
-        SXE_BUFFER  buffer2;
-        SXE_BUFFER  buffer3;
-        SXE_BUFFER  buffer4;
+        SXE_HTTPD_BUFFER  buffer;
+        SXE_HTTPD_BUFFER  buffer2;
+        SXE_HTTPD_BUFFER  buffer3;
+        SXE_HTTPD_BUFFER  buffer4;
         struct stat sb;
         unsigned    expected_length;
         int         fd;
 
-        SXEA11((fd = open("sxe-httpd-proto.h", O_RDONLY)) >= 0, "Failed to open sxe-httpd-proto.h: %s", strerror(errno));
-        SXEA11(fstat(fd, &sb) >= 0, "Failed to fstat sxe-httpd-proto.h: %s", strerror(errno));
+        SXEA1((fd = open("sxe-httpd-proto.h", O_RDONLY)) >= 0, "Failed to open sxe-httpd-proto.h: %s", strerror(errno));
+        SXEA1(fstat(fd, &sb) >= 0, "Failed to fstat sxe-httpd-proto.h: %s", strerror(errno));
 
-        sxe_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"));
+        sxe_httpd_buffer_construct_const(&buffer, "Hello, world", SXE_LITERAL_LENGTH("Hello, world"), NULL, NULL);
         buffer2     = buffer;
         buffer3     = buffer;
 
@@ -145,16 +144,15 @@ main(void)
 #define X_V7700 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770 X_V770
 #define X_V30800 X_V770 X_V770 X_V770 X_V770
 
-        sxe_buffer_construct_const(&buffer4, X_V30800, SXE_LITERAL_LENGTH(X_V30800));
-
+        sxe_httpd_buffer_construct_const(&buffer4, X_V30800, SXE_LITERAL_LENGTH(X_V30800), NULL, NULL);
         expected_length = SXE_LITERAL_LENGTH("HTTP/1.1 200 OK\r\n")                                 //   17 =   17      =   17
                         + SXE_LITERAL_LENGTH("Content-Type: text/plain; charset=.UTF-8.\r\n")       // + 43 =   60      =   60
-                        + SXE_LITERAL_LENGTH("Content-Length: dddd\r\n")                            // + 22 =   82      =   82
-                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  159      =  159
-                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  236      =  236
-                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  313      =  313
-                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  390      =  390
-                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  467      =  467
+                        + SXE_LITERAL_LENGTH("Content-Length: ddddd\r\n") /* BRITTLE LENGTH HERE */ // + 22 =   83      =   83
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  160      =  160
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  237      =  236
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  314      =  313
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  391      =  390
+                        + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  468      =  467
                         /* end of first buffer */
                         + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =   77      =  544
                         + SXE_LITERAL_LENGTH(X_NAM "x: " X_V77 "\r\n")                              // + 77 =  154      =  621
@@ -166,14 +164,16 @@ main(void)
                         /* end of second buffer */
                         + SXE_LITERAL_LENGTH("\r\n")                                                // +  2 =    2      =  980
                         /* end of headers - rest is body */
-                        + buffer.len                                                                // + 12 =   12      =  992
-                        + buffer.len                                                                // + 12 =   12      = 1004
-                        + buffer.len                                                                // + 12 =   12      = 1016
-                        + buffer4.len
+                        + SXE_LITERAL_LENGTH("Hello, world")                                        // + 12 =   12      =  992
+                        + sxe_httpd_buffer_length(&buffer)                                                // + 12 =   12      = 1004
+                        + sxe_httpd_buffer_length(&buffer2)                                               // + 12 =   12      = 1016
+                        + sxe_httpd_buffer_length(&buffer4)
                         /* remainder is file */
                         + sb.st_size
-                        + buffer.len
-                        + buffer.len
+#ifdef FUTURE /* May want to add the ability to continue sending data after a sendfile; here is some old test code for that */
+                        + SXE_LITERAL_LENGTH("Hello, world")
+                        + sxe_httpd_buffer_length(&buffer3)
+#endif
                         ;
 
         /* NOTE: sizeof readbuf just happens to be >> size of sxe-httpd-proto.h, so that's why we use it here */
@@ -195,17 +195,21 @@ main(void)
         sxe_httpd_response_header(request, X_NAM "C", X_V49, 0);
         sxe_httpd_response_copy_body_data(request, "Hello, world", 0);
         sxe_httpd_response_add_body_buffer(request, &buffer);
-        sxe_httpd_response_add_raw_buffer(request, &buffer2);
-        sxe_httpd_response_add_raw_buffer(request, &buffer4);
-        sxe_httpd_response_sendfile(request, fd, sb.st_size, handle_sent, NULL);
-        is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished sending");
+        sxe_httpd_response_add_raw_buffer( request, &buffer2);
+        sxe_httpd_response_add_raw_buffer( request, &buffer4);
+        sxe_httpd_response_sendfile(request, fd, sb.st_size, test_httpd_sent, NULL);
+        is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_httpd_sent", "HTTPD finished sending");
         close(fd);
+
+#ifdef FUTURE /* May want to add the ability to continue sending data after a sendfile; here are some old tests for that */
         sxe_httpd_response_copy_body_data(request, "Hello, world", 0);
         sxe_httpd_response_add_body_buffer(request, &buffer3);
-        sxe_httpd_response_end(request, handle_sent, NULL);
-        is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "handle_sent", "HTTPD finished request");
+        sxe_httpd_response_end(request, test_httpd_sent, NULL);
+        test_process_all_libev_events();
+        ok(tap_ev_shift_next("test_httpd_sent") != NULL, "HTTPD finished request");
+#endif
 
-        test_ev_wait_read(TEST_WAIT, &ev, c, "client_read", readbuf, expected_length, "client");
+        test_ev_wait_read(TEST_WAIT, &ev, client, "test_client_read", readbuf, expected_length, "client");
         /* TODO: actually test that we got the correct contents of buf */
     }
 

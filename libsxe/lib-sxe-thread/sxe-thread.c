@@ -30,8 +30,8 @@ sxe_thread_create(SXE_THREAD * thread, SXE_THREAD_RETURN (SXE_STDCALL * thread_m
     SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
     int        error;
 
-    SXEE84("sxe_thread_create(thread=%p, thread_main=%p, user_data=%p, options=%p)", thread, thread_main, user_data, options);
-    SXEA11(options == SXE_THREAD_OPTION_DEFAULTS, "sxe_thread_create: options must be %u", SXE_THREAD_OPTION_DEFAULTS);
+    SXEE6("sxe_thread_create(thread=%p, thread_main=%p, user_data=%p, options=%08x)", thread, thread_main, user_data, options);
+    SXEA1(options == SXE_THREAD_OPTION_DEFAULTS, "sxe_thread_create: options must be %u", SXE_THREAD_OPTION_DEFAULTS);
 
 #ifdef _WIN32
 #   define WINDOWS_DEFAULT_SECURITY   NULL
@@ -43,7 +43,7 @@ sxe_thread_create(SXE_THREAD * thread, SXE_THREAD_RETURN (SXE_STDCALL * thread_m
     }
 
     switch (error = sxe_socket_get_last_error()) { /* Coverage Exclusion - todo: win32 coverage */
-    default: SXEL21("sxe_thread_create: Failed to create a thread: %s", sxe_socket_error_as_str(error)); break;
+    default: SXEL2("sxe_thread_create: Failed to create a thread: %s", sxe_socket_error_as_str(error)); break;
     }
 
 #else /* POSIX */
@@ -55,13 +55,13 @@ sxe_thread_create(SXE_THREAD * thread, SXE_THREAD_RETURN (SXE_STDCALL * thread_m
     }
 
     switch (error) {                                                                                             /* Coverage Exclusion - Failure case */
-    case EAGAIN: SXEL20("sxe_thread_create: Not enough resources to create a thread");                 break;    /* Coverage Exclusion - Failure case */
-    default:     SXEL21("sxe_thread_create: Unexpected error creating a thread: %s", strerror(error)); break;    /* Coverage Exclusion - Failure case */
+    case EAGAIN: SXEL2("sxe_thread_create: Not enough resources to create a thread");                 break;    /* Coverage Exclusion - Failure case */
+    default:     SXEL2("sxe_thread_create: Unexpected error creating a thread: %s", strerror(error)); break;    /* Coverage Exclusion - Failure case */
     }
 
 #endif
 
 SXE_EARLY_OUT:
-    SXER81("return %s", sxe_return_to_string(result));
+    SXER6("return %s", sxe_return_to_string(result));
     return result;
 }

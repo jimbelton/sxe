@@ -618,8 +618,14 @@ exit_status(void)
     return r;
 }
 
+const char *
+tap_get_test_case_name(void)
+{
+    return test_case_name;
+}
+
 void
-tap_test_case_name(const char * name)
+tap_set_test_case_name(const char * name)
 {
     test_case_name = name;
 }

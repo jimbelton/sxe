@@ -38,8 +38,8 @@ extern char **environ;
 SXE_RETURN
 sxe_spawn_init(void)
 {
-    SXEE60("sxe_spawn_init()");
-    SXER60("return SXE_RETURN_OK");
+    SXEE6("sxe_spawn_init()");
+    SXER6("return SXE_RETURN_OK");
     return SXE_RETURN_OK;
 }
 
@@ -87,14 +87,14 @@ sxe_spawn(SXE                    * this,
 
     SXE_UNUSED_PARAMETER(this);
 
-    SXEE67I("sxe_spawn(that=%p, command=%s, arg1=%s, arg2=%s, in_event_connected=%p, in_event_read=%p, in_event_close=%p)",
+    SXEE6I("sxe_spawn(that=%p, command=%s, arg1=%s, arg2=%s, in_event_connected=%p, in_event_read=%p, in_event_close=%p)",
                        that,    command,    arg1,    arg2,    in_event_connected,    in_event_read,    in_event_close);
 
-    SXEL60I("creating socket pair");
+    SXEL6I("creating socket pair");
 
     if ((that->sxe = sxe_new_socketpair(NULL, &sock, in_event_connected, in_event_read, in_event_close)) == NULL)
     {                                                                                   /* COVERAGE EXCLUSION */
-        SXEL21("Couldn't allocate SXE to spawn the '%s' command", command);             /* COVERAGE EXCLUSION */
+        SXEL2("Couldn't allocate SXE to spawn the '%s' command", command);             /* COVERAGE EXCLUSION */
         goto SXE_ERROR_OUT;                                                             /* COVERAGE EXCLUSION */
     }                                                                                   /* COVERAGE EXCLUSION */
 
@@ -117,7 +117,7 @@ sxe_spawn(SXE                    * this,
 
         err = posix_spawnp(&that->pid, command, &fa, NULL, SXE_CAST_NOCONST(char * const *, argv), environ);
         if (err != 0) {
-            SXEL13I("posix_spawnp failed to run '%s': %d:%s\n", command, err, strerror(err));
+            SXEL1I("posix_spawnp failed to run '%s': %d:%s\n", command, err, strerror(err));
             result = SXE_RETURN_ERROR_COMMAND_NOT_RUN;
             SXE_EVENT_CLOSE(that->sxe) = NULL;
             sxe_close(that->sxe);
@@ -129,24 +129,24 @@ sxe_spawn(SXE                    * this,
         posix_spawn_file_actions_destroy(&fa);
 
         err = close(sock);
-        SXEA61I(err != -1, "Can't close socket to self: %s", strerror(errno));
+        SXEA6I(err != -1, "Can't close socket to self: %s", strerror(errno));
     }
 #else
     switch (that->pid = fork()) {
     case -1:
-        SXEA10I(0, "Aborting: fork failed");    /* Intentionally aborting at level 1; don't change to level 6         */
+        SXEA1I(0, "Aborting: fork failed");    /* Intentionally aborting at level 1; don't change to level 6         */
         break;                                  /* Coverage exclusion: fork failure after an abort (can't reach this) */
 
     case 0:
-        SXEL60I("Spawned child process");
+        SXEL6I("Spawned child process");
         sxe_close(that->sxe);
         close(0);    /* Should not need this (see dup2 manual page) */
         close(1);    /* Should not need this (see dup2 manual page) */
-        SXEV61(dup2(sock, 0), == 0, "Couldn't duplicate child socket to STDIN: %s",  strerror(errno));
-        SXEV61(dup2(sock, 1), == 1, "Couldn't duplicate child socket to STDOUT: %s", strerror(errno));
+        SXEV6(dup2(sock, 0), == 0, "Couldn't duplicate child socket to STDIN: %s",  strerror(errno));
+        SXEV6(dup2(sock, 1), == 1, "Couldn't duplicate child socket to STDOUT: %s", strerror(errno));
         close(sock);
         execlp(command, command, arg1, arg2, NULL);
-        SXEL22I("Child process: failed to execute '%s' in directory '%s'", command, getcwd(path, sizeof(path)));
+        SXEL2I("Child process: failed to execute '%s' in directory '%s': %d: '%s'", command, getcwd(path, sizeof(path)), errno, strerror(errno));
         exit(-1);
 
     default:
@@ -169,12 +169,12 @@ sxe_spawn(SXE                    * this,
             }
         }
 
-        SXEL63I("Spawned '%s': pid %d (0x%x)", path, that->pid, that->pid);
+        SXEL6I("Spawned '%s': pid %d (0x%x)", path, that->pid, that->pid);
         SXE_USER_DATA_AS_INT(that->sxe) = that->pid;    /* Give SXE user access to the pid */
     }
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER61I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 } // sxe_spawn()
 #endif
@@ -191,17 +191,17 @@ sxe_spawn_kill(SXE_SPAWN * spawn, int sig)
     SXE_UNUSED_PARAMETER(this); /* Used only for diagnostics */
     SXE_UNUSED_PARAMETER(sig); /* Used only for diagnostics */
 
-    SXEE62I("sxe_spawn_kill(spawn->pid=%d,sig=%d)", SXE_SPAWN_GET_PID(spawn), sig);
+    SXEE6I("sxe_spawn_kill(spawn->pid=%d,sig=%d)", SXE_SPAWN_GET_PID(spawn), sig);
 
     if (kill(SXE_SPAWN_GET_PID(spawn), sig) < 0) {
-        SXEL63I("Couldn't kill process %d with signal %d: %s", SXE_SPAWN_GET_PID(spawn), sig, strerror(errno));
+        SXEL6I("Couldn't kill process %d with signal %d: %s", SXE_SPAWN_GET_PID(spawn), sig, strerror(errno));
         goto SXE_ERROR_OUT;
     }
 
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER61I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 #endif
@@ -226,8 +226,8 @@ sxe_spawn_backticks(const char * cmd, char * buf, unsigned int buf_max)
     unsigned int   bytes_read    = 0;
     unsigned int   bytes_written = 0;
 
-    SXEE83("sxe_spawn_backticks(cmd=%s, buf=%p, buf_max=%u)", cmd, buf, buf_max);
-    SXEA80(buf_max > 1, "sxe_spawn_backticks: Parameter buf_max is zero!");
+    SXEE6("sxe_spawn_backticks(cmd=%s, buf=%p, buf_max=%u)", cmd, buf, buf_max);
+    SXEA6(buf_max > 1, "sxe_spawn_backticks: Parameter buf_max is zero!");
 
 #ifdef _WIN32
     fp = _popen(cmd, "r");
@@ -235,21 +235,21 @@ sxe_spawn_backticks(const char * cmd, char * buf, unsigned int buf_max)
     fp = popen(cmd, "r");
 #endif
 
-    SXEA81(fp != NULL, "sxe_spawn_backticks: popen failed to exec command '%s'", cmd);
+    SXEA6(fp != NULL, "sxe_spawn_backticks: popen failed to exec command '%s'", cmd);
 
     while ((bytes_read = fread(buf + bytes_written, sizeof(char), (buf_max - bytes_written - 1), fp)) != 0) {
-        SXEL81("read %u bytes from the pipe", bytes_read);
+        SXEL6("read %u bytes from the pipe", bytes_read);
         bytes_written += bytes_read;
     }
 
     buf[bytes_written] = '\0';
 #ifdef _WIN32
-    SXEV80(_pclose(fp), == 0, "sxe_spawn_backticks: failed to close pipe");
+    SXEV6(_pclose(fp), == 0, "sxe_spawn_backticks: failed to close pipe");
 #else
-    SXEV80(pclose(fp), == 0, "sxe_spawn_backticks: failed to close pipe");
+    SXEV6(pclose(fp), == 0, "sxe_spawn_backticks: failed to close pipe");
 #endif
 
-    SXER80("return");
+    SXER6("return");
     return bytes_written;
 } // sxe_spawn_backticks()
 

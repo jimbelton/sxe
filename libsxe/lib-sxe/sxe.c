@@ -65,6 +65,7 @@
 #include "sxe-pool.h"
 #include "sxe-socket.h"
 #include "sxe-util.h"
+#include "sxe-test.h"         /* for test_tap_ev_queue_shift_wait_get_deferred_count */
 
 #ifndef _WIN32
 #define PIPE_PATH_MAX sizeof(((struct sockaddr_un *)NULL)->sun_path)    /* Maximum size of a UNIX pipe path  */
@@ -81,21 +82,66 @@ typedef union SXE_CONTROL_MESSAGE_FD {
 typedef enum SXE_STATE {
     SXE_STATE_FREE,
     SXE_STATE_USED,
+    SXE_STATE_DEFERRED,
     SXE_STATE_NUMBER_OF_STATES
 } SXE_STATE;
 
+static const char *
+sxe_state_to_string(unsigned state)                     /* coverage exclusion: state to string */
+{                                                       /* coverage exclusion: state to string */
+    switch (state) {                                    /* coverage exclusion: state to string */
+    case SXE_STATE_FREE:     return "FREE";             /* coverage exclusion: state to string */
+    case SXE_STATE_USED:     return "USED";             /* coverage exclusion: state to string */
+    case SXE_STATE_DEFERRED: return "DEFERRED";         /* coverage exclusion: state to string */
+    default: return NULL;                               /* coverage exclusion: state to string */
+    }                                                   /* coverage exclusion: state to string */
+}                                                       /* coverage exclusion: state to string */
+
 int                     sxe_caller_read_udp_length;      /* If is_caller_reads_udp caller returns length read here */
-struct ev_loop        * sxe_private_main_loop = NULL;    /* Private to this package; do not export via sxe.h       */
+struct ev_loop        * sxe_private_main_loop = NULL;
 
 static unsigned         sxe_extra_size        = 0;
 static unsigned         sxe_array_total       = 0;
 static SXE            * sxe_array             = NULL;
+static SXE_POOL_DEFER   sxe_defer;
 static unsigned         sxe_stat_total_accept = 0;
 static unsigned         sxe_stat_total_read   = 0;
-static unsigned         sxe_has_been_inited   = 0;
+static bool             sxe_has_been_inited   = false;
 static int              sxe_listen_backlog    = SOMAXCONN;
 
 static inline bool sxe_is_free(SXE * this) {return sxe_pool_index_to_state(sxe_array, this->id) == SXE_STATE_FREE;}
+
+static unsigned
+sxe_get_deferred_count(void)
+{
+    return sxe_pool_get_number_in_state(sxe_array, SXE_STATE_DEFERRED);
+}
+
+static void
+sxe_event_deferred_resume(void * array, unsigned i)
+{
+    SXE * this = &((SXE *)array)[i];
+
+    SXEE6I("()");
+    SXEL6I("Invoking read event for %u bytes of cached data", SXE_BUF_USED(this));
+    sxe_pool_set_indexed_element_state(array, i, SXE_STATE_DEFERRED, SXE_STATE_USED);
+    (*this->in_event_read)(this, SXE_BUF_USED(this));
+    SXER6I("return");
+}
+
+
+#ifndef SXE_DISABLE_OPENSSL
+static void
+sxe_event_deferred_ssl_restart_reading(void * array, unsigned i)
+{
+    SXE * this = &((SXE *)array)[i];
+
+    SXEE6I("()");
+    sxe_pool_set_indexed_element_state(array, i, SXE_STATE_DEFERRED, SXE_STATE_USED);
+    sxe_ssl_private_restart_reading_buffer_drained(this);
+    SXER6I("return");
+}
+#endif
 
 /**
  * Check the validity of a SXE
@@ -110,17 +156,17 @@ sxe_is_valid(SXE * this)
 {
     bool valid = false;
 
-    SXEE81("sxe_is_valid(this=%p)", this);
-    SXEL93("SXE array %p, total %u and size %u", sxe_array, sxe_array_total, sizeof(SXE) + sxe_extra_size);
+    SXEE6("(this=%p)", this);
+    SXEL7("SXE array %p, total %u and size %zu", sxe_array, sxe_array_total, sizeof(SXE) + sxe_extra_size);
 
     if ((this < sxe_array) || ((char *)this > (char *)sxe_array + (sxe_array_total - 1) * (sizeof(SXE) + sxe_extra_size))) {
-        SXEL83("SXE pointer %p is not in the valid range %p to %p", this, sxe_array,
+        SXEL6("SXE pointer %p is not in the valid range %p to %p", this, sxe_array,
                (char *)sxe_array + (sxe_array_total - 1) * (sizeof(SXE) + sxe_extra_size));
         goto SXE_EARLY_OUT;
     }
 
     if (((char *)this - (char *)sxe_array) % (sizeof(SXE) + sxe_extra_size) != 0) {
-        SXEL83("SXE pointer %p is not a multiple of %u bytes from the base address %p", this, sizeof(SXE) + sxe_extra_size,
+        SXEL6("SXE pointer %p is not a multiple of %zu bytes from the base address %p", this, sizeof(SXE) + sxe_extra_size,
                sxe_array);
         goto SXE_EARLY_OUT;
     }
@@ -128,7 +174,7 @@ sxe_is_valid(SXE * this)
     valid = true;
 
 SXE_EARLY_OUT:
-    SXER81("return %s", SXE_BOOL_TO_STR(valid));
+    SXER6("return %s", SXE_BOOL_TO_STR(valid));
     return valid;
 }
 
@@ -162,18 +208,15 @@ sxe_diag_get_used_count(void)
 void
 sxe_register(unsigned number_of_connections, unsigned extra_size)
 {
-    SXEE82("sxe_register(number_of_connections=%u,extra_size=%u)", number_of_connections, extra_size);
+    SXEE6("(number_of_connections=%u,extra_size=%u)", number_of_connections, extra_size);
+    SXEA1(!sxe_has_been_inited, "SXE has already been initialized");
     sxe_array_total += number_of_connections;
-
-    SXEA10(sxe_has_been_inited == 0, "SXE has already been init()'d");
-
-    /* TODO: sxe_register() should assert if sxe_init() has already been called (because it signifies registration is too late) */
 
     if (extra_size > sxe_extra_size) {
         sxe_extra_size = extra_size;
     }
 
-    SXER80("return");
+    SXER6("return");
 }
 
 /* Under Windows, stub out signal handling; libev doesn't grab the SIGCHLD signal in Windows
@@ -211,24 +254,27 @@ sxe_init(void)
     SXE_RETURN       result = SXE_RETURN_ERROR_INTERNAL;
     struct sigaction sigaction_saved;
 
-    SXEE80("sxe_init()");
-    SXEA10(!sxe_has_been_inited, "sxe_init: SXE is already initialized");
-    SXEA10(sxe_array_total > 0,  "sxe_init: Error: sxe_register() must be called before sxe_init()");
+    SXEE6("()");
+    SXEA1(!sxe_has_been_inited, "sxe_init: SXE is already initialized");
+    SXEA1(sxe_array_total > 0,  "sxe_init: Error: sxe_register() must be called before sxe_init()");
     sxe_socket_init();
+
+    test_tap_ev_queue_shift_wait_get_deferred_count = &sxe_get_deferred_count;
 
     /* TODO: Check that sxe_array_total is smaller than system ulimit -n */
 
-    SXEL82("Allocating %u SXEs of %u bytes each", sxe_array_total, sizeof(SXE) + sxe_extra_size);
+    SXEL6("Allocating %u SXEs of %zu bytes each", sxe_array_total, sizeof(SXE) + sxe_extra_size);
     sxe_array = sxe_pool_new("sxe_pool", sxe_array_total, sizeof(SXE) + sxe_extra_size, SXE_STATE_NUMBER_OF_STATES,
                              SXE_POOL_OPTION_TIMED);
+    sxe_pool_set_state_to_string(sxe_array, sxe_state_to_string);
 
     if (!sxe_private_main_loop) {
         /* Initialize libev, but don't let it take over the SIGCHLD signal.
          */
-        SXEV81(sigaction(SIGCHLD, NULL, &sigaction_saved), == 0, "Unable to save SIGCHLD's sigaction: %s", strerror(errno));
+        SXEV6(sigaction(SIGCHLD, NULL, &sigaction_saved), == 0, "Unable to save SIGCHLD's sigaction: %s", strerror(errno));
         sxe_private_main_loop = ev_default_loop(0);
-        SXEV81(sigaction(SIGCHLD, &sigaction_saved, NULL), == 0, "Unable to restore SIGCHLD's sigaction: %s", strerror(errno));
-        SXEL82("got main loop = %p, backend=%s", (void*)sxe_private_main_loop,
+        SXEV6(sigaction(SIGCHLD, &sigaction_saved, NULL), == 0, "Unable to restore SIGCHLD's sigaction: %s", strerror(errno));
+        SXEL6("got main loop = %p, backend=%s", (void*)sxe_private_main_loop,
             ev_backend(sxe_private_main_loop) == EVBACKEND_SELECT  ? "EVBACKEND_SELECT"  :
             ev_backend(sxe_private_main_loop) == EVBACKEND_POLL    ? "EVBACKEND_POLL"    :
             ev_backend(sxe_private_main_loop) == EVBACKEND_EPOLL   ? "EVBACKEND_EPOLL"   :
@@ -237,9 +283,10 @@ sxe_init(void)
             ev_backend(sxe_private_main_loop) == EVBACKEND_PORT    ? "EVBACKEND_PORT"    : "Unknown backend!" );
     }
 
-    sxe_has_been_inited = 1;
+    sxe_pool_defer_allow(sxe_array, &sxe_defer, sxe_private_main_loop, SXE_STATE_DEFERRED);
+    sxe_has_been_inited = true;
     result = SXE_RETURN_OK;
-    SXER81("return %s", sxe_return_to_string(result));
+    SXER6("return %s", sxe_return_to_string(result));
     return result;
 }
 
@@ -247,10 +294,12 @@ SXE_RETURN
 sxe_fini(void)
 {
     SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
-    SXEE80("sxe_fini()");
+    SXEE6("()");
+
+    sxe_pool_defer_private_fini();
 
     if (sxe_array == NULL) {
-        SXEL80("sxe_fini(): called before successful sxe_init()");
+        SXEL6("sxe_fini(): called before successful sxe_init()");
         goto SXE_ERROR_OUT;
     }
 
@@ -264,9 +313,20 @@ sxe_fini(void)
     result                = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
-
-    SXER81("return %d", result);
+    SXER6("return %d", result);
     return result;
+}
+
+void
+sxe_private_set_watch_events(SXE * this, void (*func)(EV_P_ ev_io * io, int revents), int events, int stop)
+{
+    if (stop) {
+        ev_io_stop(sxe_private_main_loop, &this->io);
+    }
+
+    ev_io_init(&this->io, func, this->socket_as_fd, events);
+    this->io.data = this;
+    ev_io_start(sxe_private_main_loop, &this->io);
 }
 
 static SXE *
@@ -275,18 +335,18 @@ sxe_new_internal(SXE                    * this              ,
                  SXE_IN_EVENT_CONNECTED   in_event_connected,
                  SXE_IN_EVENT_READ        in_event_read     ,
                  SXE_IN_EVENT_CLOSE       in_event_close    ,
-                 SXE_BOOL                 is_stream            ,
+                 SXE_BOOL                 is_stream         ,
                  const char             * path              )
 {
     unsigned id;
     SXE    * that = NULL;
 
-    SXEE87I("sxe_new_internal(local_addr=%08x:%hu,in_event_connected=%p,in_event_read=%p,in_event_close=%p,is_stream=%s,path=%s)",
+    SXEE6I("(local_addr=%08x:%hu,in_event_connected=%p,in_event_read=%p,in_event_close=%p,is_stream=%s,path=%s)",
             local_addr->sin_addr.s_addr, ntohs(local_addr->sin_port), in_event_connected, in_event_read, in_event_close,
             SXE_BOOL_TO_STR(is_stream), path);
 
     if ((id = sxe_pool_set_oldest_element_state(sxe_array, SXE_STATE_FREE, SXE_STATE_USED)) == SXE_POOL_NO_INDEX) {
-        SXEL30I("sxe_new: Warning: ran out of connections; concurrency too high");
+        SXEL3I("sxe_new_internal: Warning: ran out of connections; concurrency too high");
         goto SXE_EARLY_OUT;
     }
 
@@ -297,15 +357,19 @@ sxe_new_internal(SXE                    * this              ,
     that->in_event_connected  = in_event_connected;
     that->in_event_read       = in_event_read;
     that->in_event_close      = in_event_close;
+    that->out_event_written   = NULL;
+    that->ssl_id              = SXE_POOL_NO_INDEX;
     that->socket_as_fd        = -1;
     that->socket              = SXE_SOCKET_INVALID;
     that->next_socket         = SXE_SOCKET_INVALID;
     that->in_total            = 0;
     that->in_consumed         = 0;
     memcpy(&that->local_addr, local_addr, sizeof(that->local_addr));
+    sxe_buffer_list_construct(&that->send_list);                                     /* Initialized to empty */
+    sxe_buffer_construct(&that->send_buffer, SXE_CAST_NOCONST(char *, ""), 0, 1);    /* Initialized to empty */
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER83I((that != NULL ? "%s%p // id=%u" : "%sNULL"), "return that=", that, (that != NULL ? that->id : ~0U));
+    SXER6I((that != NULL ? "%s%p // id=%u" : "%sNULL"), "return that=", that, (that != NULL ? that->id : ~0U));
     return that;
 }
 
@@ -322,19 +386,19 @@ sxe_new(SXE                    * this              ,
     SXE                * that = NULL;
     struct sockaddr_in   local_addr;
 
-    SXEE84I("sxe_new(local_ip=%s,local_port=%hu,is_stream=%s,path=%s)", local_ip, local_port, SXE_BOOL_TO_STR(is_stream), path);
+    SXEE6I("(local_ip=%s,local_port=%hu,is_stream=%s,path=%s)", local_ip, local_port, SXE_BOOL_TO_STR(is_stream), path);
     memset(&local_addr, 0, sizeof(local_addr));
 
 #ifndef _WIN32
     if (path) {
-        SXEA12I(strlen(path) < PIPE_PATH_MAX, "Unix domain socket path length is %u but must be less than %u characters",
-                strlen(path),  PIPE_PATH_MAX);
-        SXEL80I("caller wants new sxe using: pipe: unix domain socket path");
+        SXEA1I(strlen(path) < PIPE_PATH_MAX, "Unix domain socket path length is %u but must be less than %u characters",
+               SXE_CAST(unsigned, strlen(path)), SXE_CAST(unsigned, PIPE_PATH_MAX));
+        SXEL6I("caller wants new sxe using: pipe: unix domain socket path");
     }
     else
 #endif
     {
-        SXEL80I("caller wants new sxe using: inet: ip & port; i.e. tcp or udp");
+        SXEL6I("caller wants new sxe using: inet: ip & port; i.e. tcp or udp");
         local_addr.sin_family = AF_INET;
         local_addr.sin_port   = htons(local_port);
 
@@ -349,7 +413,7 @@ sxe_new(SXE                    * this              ,
     that = sxe_new_internal(this, &local_addr, in_event_connected, in_event_read, in_event_close, is_stream, path);
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER83I("return that=%p; // id=%u, port=%hu", that, (that == NULL ? ~0U : that->id),
+    SXER6I("return that=%p; // id=%u, port=%hu", that, (that == NULL ? ~0U : that->id),
             (that == NULL ? 0 : ntohs(that->local_addr.sin_port)) );
     return that;
 }
@@ -394,17 +458,17 @@ sxe_new_udp(SXE               * this         ,
 #endif
 
 static void
-sxe_set_socket_options(SXE * this, int sock)
+sxe_set_socket_options(SXE * this, int sock, int rcvbuf, int sndbuf)
 {
     struct linger linger_option;
     int           flags;
-    int           so_rcvbuf_size;
-    SXE_SOCKLEN_T so_rcvbuf_size_length = sizeof(so_rcvbuf_size);
-    //debug int           so_sndbuf_size;
-    //debug SXE_SOCKLEN_T so_sndbuf_size_length = sizeof(so_sndbuf_size);
+    int           rcvbuf_got;
+    int           sndbuf_got;
+    SXE_SOCKLEN_T rcvbuf_size = sizeof(rcvbuf);
+    SXE_SOCKLEN_T sndbuf_size = sizeof(sndbuf);
 
-    SXEE81I("sxe_set_socket_options(sock=%d)", sock);
-    SXEV82I(sxe_socket_set_nonblock(sock, 1), >= 0, "socket=%d: couldn't set non-blocking flag: %s", sock, sxe_socket_get_last_error_as_str());
+    SXEE6I("(sock=%d, rcvbuf=%d, sndbuf=%d) // rcv/sndbuf=0 to use default", sock, rcvbuf, sndbuf);
+    SXEV6I(sxe_socket_set_nonblock(sock, 1), >= 0, "socket=%d: couldn't set non-blocking flag: %s", sock, sxe_socket_get_last_error_as_str());
 
 #ifndef WINDOWS_NT
     /* If this is a pipe, we're done.
@@ -414,39 +478,38 @@ sxe_set_socket_options(SXE * this, int sock)
     }
 #endif
 
-    /* Windows Sockets implementation of SO_REUSEADDR seems to be badly broken.
-     */
     if (this->flags & SXE_FLAG_IS_STREAM) {
+        /* Windows Sockets implementation of SO_REUSEADDR seems to be badly broken.
+         */
 #ifndef WINDOWS_NT
         flags = 1;
-        SXEV83I(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
+        SXEV6I(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
             >= 0, "socket=%d: couldn't set reuse address flag: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 #endif
         //do we need this? flags = 1;
-        //do we need this? SXEV83I(setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
+        //do we need this? SXEV6I(setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
         //do we need this?        >= 0, "socket=%d: couldn't set keepalive flag: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 
         linger_option.l_onoff  = 0;
         linger_option.l_linger = 0;
-        SXEV83I(setsockopt(sock, SOL_SOCKET, SO_LINGER, SXE_WINAPI_CAST_CHAR_STAR &linger_option, sizeof(linger_option)),
+        SXEV6I(setsockopt(sock, SOL_SOCKET, SO_LINGER, SXE_WINAPI_CAST_CHAR_STAR &linger_option, sizeof(linger_option)),
                >= 0, "socket=%d: couldn't set linger to 0 secs: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 
         flags = 1;
-        SXEV83I(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
+        SXEV6I(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
                >= 0, "socket=%d: couldn't set TCP no delay flag: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 
 #ifdef __APPLE__
         /* Prevent firing SIGPIPE */
         flags = 1;
-        SXEV83I(setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
+        SXEV6I(setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
                 >= 0, "socket=%d: couldn't set SO_NOSIGPIPE flag: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 #endif
     }
-    else {
-        //debug SXEV83I(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &so_rcvbuf_size, &so_rcvbuf_size_length), >= 0, "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
-        //debug SXEV83I(getsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &so_sndbuf_size, &so_sndbuf_size_length), >= 0, "socket=%d: couldn't get SO_SNDBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
-        //debug SXEL12I("SO_RCVBUF %d, SO_SNDBUF %d", so_rcvbuf_size, so_sndbuf_size);
 
+    /* If UDP and no receive buffer size specified, crank it up to avoid packet loss.
+     */
+    else if (rcvbuf == 0) {
 #ifdef __APPLE__
 # define SXE_UDP_SO_RCVBUF_SIZE (     1024 * 1024)
 #elif defined(__FreeBSD__)
@@ -454,26 +517,88 @@ sxe_set_socket_options(SXE * this, int sock)
 #else
 # define SXE_UDP_SO_RCVBUF_SIZE (32 * 1024 * 1024)
 #endif
+        rcvbuf = SXE_UDP_SO_RCVBUF_SIZE;
+        //do we need this? sndbuf = (128 * 1024 * 1024);
+    }
 
-        so_rcvbuf_size = SXE_UDP_SO_RCVBUF_SIZE;
-        SXEV83I(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &so_rcvbuf_size, sizeof(so_rcvbuf_size)), >= 0, "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
-        //do we need this? so_sndbuf_size = (128 * 1024 * 1024);
-        //do we need this? SXEV83I(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &so_sndbuf_size, sizeof(so_sndbuf_size)), >= 0, "socket=%d: couldn't get SO_SNDBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+    SXEA6I(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &rcvbuf_got, &rcvbuf_size) >= 0,
+           "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+    SXEA6I(getsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &sndbuf_got, &sndbuf_size) >= 0,
+           "socket=%d: couldn't get SO_SNDBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+    SXEL7I("Before setting, SO_RCVBUF=%d, SO_SNDBUF=%d", rcvbuf_got, sndbuf_got);
 
-        so_rcvbuf_size = 0;
-        SXEV83I(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &so_rcvbuf_size, &so_rcvbuf_size_length), >= 0, "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
-        if (so_rcvbuf_size < SXE_UDP_SO_RCVBUF_SIZE) {
-            SXEL33I("Warning: could not set SO_RCVBUF to %u; instead it is set to %u; consider e.g. sysctl -w net.core.rmem_max=%u; continuing but packet loss will occur at higher loads", SXE_UDP_SO_RCVBUF_SIZE, so_rcvbuf_size, SXE_UDP_SO_RCVBUF_SIZE); /* COVERAGE EXCLUSION */
+    if (rcvbuf != 0) {
+        SXEV6I(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &rcvbuf, sizeof(rcvbuf)), >= 0,
+               "socket=%d: couldn't set SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEV6I(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &rcvbuf_got, &rcvbuf_size), >= 0,
+               "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+
+        if (!(this->flags & SXE_FLAG_IS_STREAM) && (rcvbuf_got < rcvbuf)) {
+            SXEL3I("Warning: could not set SO_RCVBUF to %u; instead it is set to %u; consider e.g. sysctl -w net.core.rmem_max=%u;" /* COVERAGE EXCLUSION: Not all setups will hit this condition */
+                   "continuing but packet loss may occur at higher loads", rcvbuf, rcvbuf_got, SXE_UDP_SO_RCVBUF_SIZE);             /* COVERAGE EXCLUSION: Not all setups will hit this condition */
         }
+        else {
+            SXEL6I("Socket receive buffer set to %d", rcvbuf_got);
+        }
+    }
 
-        //debug SXEV83I(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, SXE_WINAPI_CAST_CHAR_STAR &so_rcvbuf_size, &so_rcvbuf_size_length), >= 0, "socket=%d: couldn't get SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
-        //debug SXEV83I(getsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &so_sndbuf_size, &so_sndbuf_size_length), >= 0, "socket=%d: couldn't get SO_SNDBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
-        //debug SXEL12I("SO_RCVBUF %d, SO_SNDBUF %d", so_rcvbuf_size, so_sndbuf_size);
+    if (sndbuf != 0) {
+        SXEV6I(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &sndbuf, sizeof(sndbuf)), >= 0,
+               "socket=%d: couldn't set SO_RCVBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEV6I(getsockopt(sock, SOL_SOCKET, SO_SNDBUF, SXE_WINAPI_CAST_CHAR_STAR &sndbuf_got, &sndbuf_size), >= 0,
+               "socket=%d: couldn't get SO_SNDBUF: (%d) %s", sock, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEL6I("Socket send buffer set to %d", sndbuf_got);
     }
 
 SXE_EARLY_OR_ERROR_OUT:
+    SXER6I("return");
+}
 
-    SXER80I("return");
+void
+sxe_private_handle_read_data(SXE * this, int length, int *reads_remaining)
+{
+    SXEE6I("(length=%d)", length);
+
+    SXED7I(this->in_buf + this->in_total, length);
+    this->in_total += length;
+
+    /* for now... quick and dirty statistics */
+    sxe_stat_total_read++;
+
+    //debug if ((sxe_stat_total_read % 5000) == 0) {
+    //debug     SXEL5I("sxe_stat_total_read=%u, sxe_stat_total_accept=%u", sxe_stat_total_read, sxe_stat_total_accept); /* COVERAGE EXCLUSION: Statistics */
+    //debug }
+
+    if (!(this->flags & SXE_FLAG_IS_PAUSED)) {
+        SXEL7I("About to pass read event up (%u new bytes in buffer)", length);
+        (*this->in_event_read)(this, length);
+        if (reads_remaining) {
+            --*reads_remaining;
+        }
+    }
+
+    /* If the buffer is full, SXE must wait for the caller to clear it before asking ev for more EVREAD events.
+     */
+    if (this->in_total == SXE_BUF_SIZE) {
+        if (this->in_consumed) {
+            SXEL6I("Shuffling the buffer to make room for more data");
+            memmove(this->in_buf, SXE_BUF(this), SXE_BUF_USED(this));
+            this->in_total -= this->in_consumed;
+            this->in_consumed = 0;
+        }
+        else {
+            SXEL6I("Buffer is full: stopping read events");
+            ev_io_stop(sxe_private_main_loop, &this->io);
+
+#ifndef SXE_DISABLE_OPENSSL
+            if (this->ssl_id != SXE_POOL_NO_INDEX) {
+                sxe_ssl_private_stop_reading_buffer_full(this);
+            }
+#endif
+        }
+    }
+
+    SXER6I("return");
 }
 
 #define SXE_IO_CB_READ_MAXIMUM 64
@@ -499,10 +624,10 @@ sxe_io_cb_read(EV_P_ ev_io * io, int revents)
     SXE_UNUSED_PARAMETER(loop);
 #endif
 
-    SXEE83I("sxe_io_cb_read(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    SXEE6I("(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
 
     if (this->socket == SXE_SOCKET_INVALID) {
-        SXEL10I("ERROR: Unexpected read event on closed SXE object");
+        SXEL1I("ERROR: Unexpected read event on closed SXE object");
         goto SXE_EARLY_OUT;
     }
 
@@ -510,6 +635,8 @@ sxe_io_cb_read(EV_P_ ev_io * io, int revents)
 SXE_TRY_AND_READ_AGAIN:
         if (this->path) {
 #ifndef _WIN32
+            int recv_flags = 0;
+
             memset(&message_header, 0, sizeof message_header);
 
             io_vector[0].iov_base =        this->in_buf  + this->in_total;
@@ -521,60 +648,62 @@ SXE_TRY_AND_READ_AGAIN:
             message_header.msg_iov        = io_vector;
             message_header.msg_iovlen     = sizeof(io_vector) / sizeof(io_vector[0]);    /* == 1 :) */
 
-            length = recvmsg(this->socket, &message_header, 0);
+#ifdef MSG_CMSG_CLOEXEC
+            recv_flags |= MSG_CMSG_CLOEXEC;
+#endif
+
+            length = recvmsg(this->socket, &message_header, recv_flags);
 
             if (length > 0) {
                 if ((control_message_ptr = CMSG_FIRSTHDR(&message_header)) == NULL) {
-                    SXEL82I("Read %d bytes from peer via path %s without a control message", length, this->path);
+                    SXEL6I("Read %d bytes from peer via path %s without a control message", length, this->path);
                 }
                 else if (control_message_ptr->cmsg_len != CMSG_LEN(sizeof(fd_from_recvmsg))) {
-                    SXEL22("sxe_io_cb_read(): control message length is %u, expected %u",        /* Coverage Exclusion: TODO */
-                           CMSG_LEN(sizeof(fd_from_recvmsg)), control_message_ptr->cmsg_len);    /* Coverage Exclusion: TODO */
+                    SXEL2("sxe_io_cb_read(): control message length is %u, expected %u",        /* Coverage Exclusion: TODO */
+                           SXE_CAST(unsigned, CMSG_LEN(sizeof(fd_from_recvmsg))),               /* Coverage Exclusion: TODO */
+                           SXE_CAST(unsigned, control_message_ptr->cmsg_len));                  /* Coverage Exclusion: TODO */
                 }
                 else if (control_message_ptr->cmsg_level != SOL_SOCKET) {
-                    SXEL21("sxe_io_cb_read(): control message level %d != SOL_SOCKET", control_message_ptr->cmsg_level);    /* Coverage Exclusion: TODO */
+                    SXEL2("sxe_io_cb_read(): control message level %d != SOL_SOCKET", control_message_ptr->cmsg_level);    /* Coverage Exclusion: TODO */
                 }
                 else if (control_message_ptr->cmsg_type != SCM_RIGHTS) {
-                    SXEL21("sxe_io_cb_read(): control message type %d != SCM_RIGHTS", control_message_ptr->cmsg_type);    /* Coverage Exclusion: TODO */
+                    SXEL2("sxe_io_cb_read(): control message type %d != SCM_RIGHTS", control_message_ptr->cmsg_type);    /* Coverage Exclusion: TODO */
                 }
                 else {
                     if (this->next_socket >= 0) {
-                        SXEL32I("sxe_io_cb_read(): Received fd %d on pipe, and already received %d",    /* Coverage Exclusion: TODO */
+                        SXEL3I("sxe_io_cb_read(): Received fd %d on pipe, and already received %d",    /* Coverage Exclusion: TODO */
                                 *(int *)CMSG_DATA(control_message_ptr), this->next_socket);             /* Coverage Exclusion: TODO */
                     }
 
-                    SXEL83I("Read %d bytes from peer via path %s with a control message (fd=%d)", length, this->path, this->next_socket);
+                    SXEL6I("Read %d bytes from peer via path %s with a control message (fd=%d)", length, this->path, this->next_socket);
                     this->next_socket = *(int *)CMSG_DATA(control_message_ptr);
                 }
 
                 if (this->next_socket >= 0) {
                     getpeername(this->next_socket, (struct sockaddr *)&this->peer_addr, &peer_addr_size);
-                    SXEA81I(this->peer_addr.sin_family == AF_UNIX || peer_addr_size == sizeof(this->peer_addr), "Peer address is not an IPv4 address (peer_addr_size=%d)",
+                    SXEA6I(this->peer_addr.sin_family == AF_UNIX || peer_addr_size == sizeof(this->peer_addr), "Peer address is not an IPv4 address (peer_addr_size=%d)",
                             peer_addr_size);
 
                     if (ioctl(this->socket, SIOCINQ, &input_data_left) < 0) {
-                        SXEL22("sxe_io_cb_read(): ioctl(socket=%d,SIOCINQ) failed: %s", this->socket,    /* Coverage Exclusion: TODO */
+                        SXEL2("sxe_io_cb_read(): ioctl(socket=%d,SIOCINQ) failed: %s", this->socket,    /* Coverage Exclusion: TODO */
                                sxe_socket_error_as_str(errno));                                          /* Coverage Exclusion: TODO */
                     }
                     else if (input_data_left == 0) {
-                        SXEL81I("No more data on pipe: closing pipe socket=%d", this->socket);
+                        SXEL6I("No more data on pipe: closing pipe socket=%d", this->socket);
                         close(this->socket);
-#ifdef EV_MULTIPLICITY
-                        ev_io_stop(sxe_private_main_loop, &this->io);
-#else
-                        ev_io_stop(&this->io);
-#endif
                         this->socket       = this->next_socket;
                         this->socket_as_fd = this->next_socket;    /* Same thing, since pipes are UNIX only    */
                         this->next_socket  = -1;                   /* Won't be used again, but clear it anyway */
                         this->path         = NULL;
                         this->flags       |=  SXE_FLAG_IS_STREAM;
 
+#if !defined(MSG_CMSG_CLOEXEC) && defined(F_SETFD)
+                        fcntl(this->socket_as_fd, F_SETFD, FD_CLOEXEC);
+#endif
+
                         ev_async_init(&this->async, NULL);
-                        ev_io_init(&this->io, sxe_io_cb_read, this->socket, EV_READ);
-                        this->io.data = this;
-                        ev_io_start(sxe_private_main_loop, &this->io);
-                        SXEL81I("Set connection to use received TCP socket=%d", this->socket);
+                        sxe_private_set_watch_events(this, sxe_io_cb_read, EV_READ, 1);
+                        SXEL6I("Set connection to use received TCP socket=%d", this->socket);
                     }
                 }
             }
@@ -598,47 +727,14 @@ SXE_TRY_AND_READ_AGAIN:
             length = recvfrom(this->socket, this->in_buf + this->in_total, sizeof(this->in_buf) - this->in_total, 0,
                               (struct sockaddr *)&this->peer_addr, &peer_addr_size);
             last_socket_error = sxe_socket_get_last_error();
-            SXEA81I(peer_addr_size == sizeof(this->peer_addr), "Peer address is not an IPV4 address (peer_addr_size=%d)",
+            SXEA6I(peer_addr_size == sizeof(this->peer_addr), "Peer address is not an IPV4 address (peer_addr_size=%d)",
                     peer_addr_size);
-            SXEL83I("Read %d bytes from peer IP %s:%hu", length, inet_ntoa(this->peer_addr.sin_addr),
+            SXEL6I("Read %d bytes from peer IP %s:%hu", length, inet_ntoa(this->peer_addr.sin_addr),
                     ntohs(this->peer_addr.sin_port));
         }
 
         if (length > 0) {
-            SXED90I(this->in_buf + this->in_total, length);
-            this->in_total += length;
-
-            /* If the buffer is full, SXE must wait for the caller to clear it before asking ev for more EVREAD events.
-             */
-            if (this->in_total == SXE_BUF_SIZE) {
-                if (this->in_consumed) {
-                    SXEL80I("Shuffling the buffer to make room for more data");
-                    memmove(this->in_buf, SXE_BUF(this), SXE_BUF_USED(this));
-                    this->in_total -= this->in_consumed;
-                    this->in_consumed = 0;
-                }
-                else {
-                    SXEL80I("Buffer is full: stopping read events");
-#ifdef EV_MULTIPLICITY
-                    ev_io_stop(sxe_private_main_loop, &this->io);
-#else
-                    ev_io_stop(&this->io);
-#endif
-                }
-            }
-
-            /* for now... quick and dirty statistics */
-            sxe_stat_total_read++;
-
-            //debug if ((sxe_stat_total_read % 5000) == 0) {
-            //debug     SXEL52I("sxe_stat_total_read=%u, sxe_stat_total_accept=%u", sxe_stat_total_read, sxe_stat_total_accept); /* COVERAGE EXCLUSION: Statistics */
-            //debug }
-
-            if (!(this->flags & SXE_FLAG_IS_PAUSED)) {
-                SXEL91I("About to pass read event up (%u new bytes in buffer)", length);
-                (*this->in_event_read)(this, length);
-                reads_remaining_this_event--;
-            }
+            sxe_private_handle_read_data(this, length, &reads_remaining_this_event);
 
             if (!(this->flags & SXE_FLAG_IS_STREAM) && reads_remaining_this_event) {
                 goto SXE_TRY_AND_READ_AGAIN;
@@ -649,26 +745,26 @@ SXE_TRY_AND_READ_AGAIN:
                 switch ((last_socket_error == 0) ? sxe_socket_get_last_error() : last_socket_error) {
 
                 case SXE_SOCKET_ERROR(EWOULDBLOCK): // EAGAIN
-                    SXEL81I("socket=%d is not ready", this->socket);
+                    SXEL6I("socket=%d is not ready", this->socket);
                     goto SXE_EARLY_OUT;
 
                 /* Expected error codes:
                  */
                 case SXE_SOCKET_ERROR(ECONNRESET):
-                    SXEL83I("Failed to read from socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+                    SXEL6I("Failed to read from socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
                     break; /* Coverage Exclusion: TODO */
 
                 /* Should never get here.
                  */
                 default:
-                    SXEL23I("Failed to read from socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+                    SXEL2I("Failed to read from socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
                 }
             }
 
             /* Under Linux, a received disconnect request may lead to a zero byte read.
              */
             else {
-                SXEL81I("Failed to read from socket=%d: (0) zero bytes read - disconnect", this->socket);
+                SXEL6I("Failed to read from socket=%d: (0) zero bytes read - disconnect", this->socket);
             }
 
             if (this->flags & SXE_FLAG_IS_STREAM) {
@@ -681,29 +777,39 @@ SXE_TRY_AND_READ_AGAIN:
                     (*this->in_event_close)(this);
                 }
                 else {
-                    SXEL90I("No close event callback: cannot report");
+                    SXEL7I("No close event callback: cannot report");
                 }
             }
         }
     }
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER80I("return");
+    SXER6I("return");
 }
 
 void
 sxe_buf_clear(SXE * this)
 {
-    SXEE80I("sxe_buf_clear()");
+    SXEE7I("()");
 
-    if (this->in_total == SXE_BUF_SIZE) {
-        SXEL80I("Buffer was full: restarting read events");
-        ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
-    }
+    SXEL6("%s->in_consumed was %u, ->in_total was %u", sxe_log_control.level == 6 ? "sxe_buf_clear(){} // " : "", this->in_consumed, this->in_total);
 
     this->in_consumed = 0;
     this->in_total    = 0;
-    SXER80I("return");
+
+    if ((this->socket_as_fd != -1) && !ev_is_active(&this->io)) {
+        ev_io_start(sxe_private_main_loop, &this->io);
+
+#ifndef SXE_DISABLE_OPENSSL
+        if (this->ssl_id != SXE_POOL_NO_INDEX) {
+            SXEA6I(this->id == (unsigned)(this - sxe_array), "SXE id %u different from SXE array element index %u", this->id,
+                   (unsigned)(this - sxe_array));
+            sxe_pool_defer_event(sxe_array, this - sxe_array, &sxe_event_deferred_ssl_restart_reading);
+        }
+#endif
+    }
+
+    SXER7I("return");
 }
 
 /**
@@ -717,18 +823,22 @@ sxe_buf_clear(SXE * this)
 void
 sxe_buf_consume(SXE * this, unsigned bytes)
 {
-    SXEE81I("sxe_buf_consume(bytes=%u)", bytes);
-    SXEA82I(bytes <= SXE_BUF_SIZE,       "attempt to consume %u bytes, which is more than SXE_BUF_SIZE (%u)", bytes, SXE_BUF_SIZE);
-    SXEA82I(bytes <= SXE_BUF_USED(this), "attempt to consume %u bytes, which is more than SXE_BUF_USED (%u)", bytes, SXE_BUF_USED(this));
+    SXEE7I("(bytes=%u)", bytes);
+    SXEA6I(bytes <= SXE_BUF_SIZE,       "attempt to consume %u bytes, which is more than SXE_BUF_SIZE (%u)", bytes, SXE_BUF_SIZE);
+    SXEA6I(bytes <= SXE_BUF_USED(this), "attempt to consume %u bytes, which is more than SXE_BUF_USED (%u)", bytes, SXE_BUF_USED(this));
+
     this->in_consumed += bytes;
+
+    SXEL6("%sbytes=%u, ->in_consumed now %u", sxe_log_control.level == 6 ? "sxe_buf_consume(){} // " : "", bytes, this->in_consumed);
+
     sxe_pause(this);
 
     if (this->in_consumed == this->in_total) {
-        SXEL80I("Consumed the whole buffer; clearing");
+        SXEL7I("Consumed the whole buffer; clearing");
         sxe_buf_clear(this);
     }
 
-    SXER80I("return");
+    SXER7I("return");
 }
 
 /**
@@ -744,7 +854,7 @@ sxe_buf_consume(SXE * this, unsigned bytes)
 void
 sxe_buf_resume(SXE * this, SXE_BUF_RESUME invoke_callback)
 {
-    SXEE83I("%s(this=%p, invoke_callback=%s)", __func__, this,
+    SXEE6I("(this=%p, invoke_callback=%s)", this,
             invoke_callback == SXE_BUF_RESUME_IMMEDIATE ? "IMMEDIATE" : "WHEN_MORE_DATA");
     this->flags &= ~SXE_FLAG_IS_PAUSED;
 
@@ -752,19 +862,23 @@ sxe_buf_resume(SXE * this, SXE_BUF_RESUME invoke_callback)
      * is room for more data to read, otherwise we won't ever actually get
      * more data! */
     if (this->in_consumed && this->in_total == SXE_BUF_SIZE) {
-        SXEA10I(!ev_is_active((struct ev_io*)&this->io), "IO watcher was already active!");
-        SXEL80I("Watcher was paused: making room for more data, and restarting read events");
+        SXEL6I("Watcher was paused: making room for more data, and restarting read events");
         memmove(this->in_buf, SXE_BUF(this), SXE_BUF_USED(this));
         this->in_total -= this->in_consumed;
         this->in_consumed = 0;
-        ev_io_start(sxe_private_main_loop, (struct ev_io*)&this->io);
+        ev_io_start(sxe_private_main_loop, &this->io);
     }
 
     if (invoke_callback == SXE_BUF_RESUME_IMMEDIATE && SXE_BUF_USED(this) != 0) {
-        (*this->in_event_read)(this, SXE_BUF_USED(this));
+        SXEA6I(this->id == (unsigned)(this - sxe_array), "SXE id %u different from SXE array element index %u", this->id,
+               (unsigned)(this - sxe_array));
+        sxe_pool_defer_event(sxe_array, this - sxe_array, &sxe_event_deferred_resume);
+    }
+    else {
+        SXEL6I("Ignoring SXE_BUF_RESUME_IMMEDIATE: buffer is empty: in_total=%u", this->in_total);
     }
 
-    SXER80I("return");
+    SXER6I("return");
 }
 
 static void
@@ -781,64 +895,70 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
 #endif
     SXE_UNUSED_PARAMETER(revents);
 
-    SXEE83I("sxe_io_cb_accept(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
-    SXEA80I(revents == EV_READ, "sxe_io_cb_accept: revents is not EV_READ");
+    SXEE6I("(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    SXEA6I(revents == EV_READ, "sxe_io_cb_accept: revents is not EV_READ");
 
     do {
         /* TODO: Track SXE & open socket count and disable / enable accept() event as appropriate */
-        SXEL90I("Accept()");
+        SXEL7I("Accept()");
 
-        if ((that_socket = accept(this->socket, (struct sockaddr *)&peer_addr, &peer_addr_size)) == SXE_SOCKET_INVALID)
+#ifdef SOCK_CLOEXEC
+        that_socket = accept4(this->socket, (struct sockaddr *)&peer_addr, &peer_addr_size, SOCK_CLOEXEC);
+#else
+        that_socket = accept(this->socket, (struct sockaddr *)&peer_addr, &peer_addr_size);
+#endif
+
+        if (that_socket == SXE_SOCKET_INVALID)
         {
             if (sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EWOULDBLOCK)) {
-                SXEL81I("No more connections to accept on listening socket=%d", this->socket);
+                SXEL6I("No more connections to accept on listening socket=%d", this->socket);
                 goto SXE_EARLY_OUT;
             }
 
-            SXEL23I("Error accepting on socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+            SXEL2I("Error accepting on socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
             goto SXE_ERROR_OUT;
         }
 
 #if SXE_DEBUG
-#ifndef _WIN32
+#   ifndef _WIN32
         if (this->path) {
-#if defined(__APPLE__) || defined(__FreeBSD__)
+#       if defined(__APPLE__) || defined(__FreeBSD__)
             uid_t euid;
             gid_t egid;
 
-            SXEV80(getpeereid(that_socket, &euid, &egid), >= 0, "could not obtain credentials from unix domain socket");
+            SXEV6(getpeereid(that_socket, &euid, &egid), >= 0, "could not obtain credentials from unix domain socket");
 
-            SXEL82I("Accepted connection from uid %d, gid %d",
+            SXEL6I("Accepted connection from uid %d, gid %d",
                 euid,  /* the effective UID         of the process on the other side of the socket */
                 egid); /* the effective primary GID of the process on the other side of the socket */
-#else
+#       else /* neither __APPLE__ nor __FreeBSD__ */
             struct ucred credentials;
             unsigned ucred_length = sizeof(struct ucred);
 
-            SXEV80I(getsockopt(that_socket, SOL_SOCKET, SO_PEERCRED, &credentials, &ucred_length), >= 0, "could obtain credentials from unix domain socket");
+            SXEV6I(getsockopt(that_socket, SOL_SOCKET, SO_PEERCRED, &credentials, &ucred_length), >= 0, "could obtain credentials from unix domain socket");
 
-            SXEL83I("Accepted connection from pid %d, uid %d, gid %d",
+            SXEL6I("Accepted connection from pid %d, uid %d, gid %d",
                 credentials.pid,  /* the process ID            of the process on the other side of the socket */
                 credentials.uid,  /* the effective UID         of the process on the other side of the socket */
                 credentials.gid); /* the effective primary GID of the process on the other side of the socket */
-#endif
+#       endif /* neither __APPLE__ nor __FreeBSD__ */
         }
         else
-#endif
+#   endif /* !defined(_WIN32) */
         {
-            SXEL85I("Accepted connection from ip=%d.%d.%d.%d:%hu",
+            SXEL6I("Accepted connection from ip=%d.%d.%d.%d:%hu",
                     (ntohl(peer_addr.sin_addr.s_addr) >> 24) & 0xff,
                     (ntohl(peer_addr.sin_addr.s_addr) >> 16) & 0xff,
                     (ntohl(peer_addr.sin_addr.s_addr) >> 8 ) & 0xff,
                      ntohl(peer_addr.sin_addr.s_addr)        & 0xff,
                      ntohs(peer_addr.sin_port       )              );
         }
-#endif
+#endif /* defined(SXE_DEBUG) */
 
-        sxe_set_socket_options(this, that_socket);
+        sxe_set_socket_options(this, that_socket, 0, 0);    /* SO_RCVBUF and SO_SNDBUF are 0 = inheritted from listener */
 
         if (this->flags & SXE_FLAG_IS_ONESHOT) {
-            SXEL80I("Closing one-shot listening socket and replacing with accepted socket");
+            SXEL6I("Closing one-shot listening socket and replacing with accepted socket");
             ev_io_stop(sxe_private_main_loop, &this->io);
             close(this->socket_as_fd);
             this->socket_as_fd = -1;
@@ -846,28 +966,38 @@ sxe_io_cb_accept(EV_P_ ev_io * io, int revents)
             that = this;
         }
         else {
-            SXEL80I("Creating a new SXE");
+            SXEL6I("Creating a new SXE");
             that = sxe_new_internal(this, &this->local_addr, this->in_event_connected, this->in_event_read,
                                     this->in_event_close, this->flags & SXE_FLAG_IS_STREAM, this->path);
 
             if (that == NULL) {
-                SXEL31I("Warning: failed to allocate a connection from socket=%d: out of connections", this->socket);
+                SXEL3I("Warning: failed to allocate a connection from socket=%d: out of connections", this->socket);
                 goto SXE_ERROR_OUT;
             }
         }
 
         that->socket               = that_socket;
         that->socket_as_fd         = _open_osfhandle(that_socket, 0);
+
+#if !defined(SOCK_CLOEXEC) && defined(F_SETFD)
+        fcntl(that->socket_as_fd, F_SETFD, FD_CLOEXEC);
+#endif
+
         SXE_USER_DATA_AS_INT(that) = SXE_USER_DATA_AS_INT(this);
         memcpy(&that->peer_addr, &peer_addr, sizeof(that->peer_addr));
 
-        SXEL82I("add accepted connection to watch list, socket==%d, socket_as_fd=%d", that_socket, that->socket_as_fd);
+        SXEL6I("add accepted connection to watch list, socket==%d, socket_as_fd=%d", that_socket, that->socket_as_fd);
         ev_async_init(&that->async, NULL);
-        ev_io_init(&that->io, sxe_io_cb_read, that->socket_as_fd, EV_READ);
-        that->io.data = that;
-        ev_io_start(sxe_private_main_loop, &that->io);
+        sxe_private_set_watch_events(that, sxe_io_cb_read, EV_READ, 0);
         sxe_stat_total_accept++;
 
+#ifndef SXE_DISABLE_OPENSSL
+        if (this->flags & SXE_FLAG_IS_SSL) {
+            that->flags |= SXE_FLAG_IS_SSL;
+            sxe_ssl_accept(that);
+        }
+        else
+#endif
         if (that->in_event_connected != NULL) {
             (*that->in_event_connected)(that);
         }
@@ -883,17 +1013,17 @@ SXE_ERROR_OUT:
     }
 
 SXE_EARLY_OUT:
-    SXER80I("return");
+    SXER6I("return");
 }
 
 static void
 sxe_io_cb_connect(EV_P_ ev_io * io, int revents)
 {
-    SXE         * this                    = (SXE *)io->data;
-    int           error_indication;
-    SXE_SOCKLEN_T error_indication_length = sizeof(error_indication);
+    SXE                * this                    = (SXE *)io->data;
+    int                  error;
+    SXE_SOCKLEN_T        error_length = sizeof(error);
 
-    SXEE86I("sxe_io_cb_connect(this=%p, revents=%u) // socket=%d, EV_READ=0x%x, EV_WRITE=0x%x, EV_ERROR=0x%x", this, revents,
+    SXEE6I("(this=%p, revents=%u) // socket=%d, EV_READ=0x%x, EV_WRITE=0x%x, EV_ERROR=0x%x", this, revents,
             this->socket, EV_READ, EV_WRITE, EV_ERROR);
 
 #if EV_MULTIPLICITY
@@ -901,25 +1031,30 @@ sxe_io_cb_connect(EV_P_ ev_io * io, int revents)
 #endif
     SXE_UNUSED_PARAMETER(revents);
 
-    if (getsockopt(this->socket, SOL_SOCKET, SO_ERROR, (void*)&error_indication, &error_indication_length) == SXE_SOCKET_ERROR_OCCURRED) {
-        SXEL22I("Failed to get error indication (socket=%d): %s", this->socket, sxe_socket_get_last_error_as_str());
+    if (getsockopt(this->socket, SOL_SOCKET, SO_ERROR, (void*)&error, &error_length) == SXE_SOCKET_ERROR_OCCURRED) {
+        SXEL2I("Failed to get error indication (socket=%d): %s", this->socket, sxe_socket_get_last_error_as_str());
         goto SXE_ERROR_OUT;
     }
 
-    SXEA81I(error_indication_length == sizeof(error_indication), "Unexpected size of result returned by getsockopt(): %d bytes", error_indication_length);
+    SXEA6I(error_length == sizeof(error), "Unexpected size of result returned by getsockopt(): %d bytes", error_length);
 
-    if (error_indication != 0) {
-        SXEL51I("Failed to connect: %s", sxe_socket_error_as_str(error_indication));
+    if (error != 0) {
+        SXEL5I("Failed to connect to %s:%hu: %s", inet_ntoa(SXE_PEER_ADDR(this)->sin_addr), SXE_PEER_PORT(this),
+               sxe_socket_error_as_str(error));
         goto SXE_ERROR_OUT;
     }
 
-    SXEL81I("setup read event to call sxe_io_cb_read callback (socket==%d)", this->socket);
-    ev_io_stop(sxe_private_main_loop, &this->io);
-    ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
-    this->io.data = this;
-    ev_io_start(sxe_private_main_loop, &this->io);
+    SXEL6I("setup read event to call sxe_io_cb_read callback (socket==%d)", this->socket);
+    sxe_private_set_watch_events(this, sxe_io_cb_read, EV_READ, 1);
 
-    SXEL80I("connection complete; notify sxe application");
+#ifndef SXE_DISABLE_OPENSSL
+    if (this->flags & SXE_FLAG_IS_SSL) {
+        sxe_ssl_connect(this);
+        goto SXE_EARLY_OUT;
+    }
+#endif
+
+    SXEL6I("connection complete; notify sxe application");
 
     if (this->in_event_connected != NULL) {
         (*this->in_event_connected)(this);
@@ -935,7 +1070,7 @@ SXE_ERROR_OUT:
     sxe_close(this);
 
 SXE_EARLY_OUT:
-    SXER80I("return");
+    SXER6I("return");
 }
 
 /**
@@ -952,61 +1087,68 @@ sxe_get_local_addr(SXE * this)
 {
     SXE_SOCKLEN_T address_length = sizeof(this->local_addr);
 
-    SXEA11I(this->path == NULL, "sxe_get_local_addr: SXE is a pipe '%s'", this->path);
-    SXEE82I("%s(this=%p)", __func__, this);
+    SXEE6I("(this=%p)", this);
+    SXEA1I(this->path == NULL, "sxe_get_local_addr: SXE is a pipe '%s'", this->path);
 
     if (this->local_addr.sin_port != 0) {
         goto SXE_EARLY_OUT;
     }
 
     if (getsockname(this->socket, (struct sockaddr *)&this->local_addr, &address_length) < 0 ) {
-        SXEL22I("%s: getsockname() failed: %s\n", __func__, sxe_socket_get_last_error_as_str());    /* COVERAGE EXCLUSION : TODO - when we are able to mock */
+        SXEL2I("%s: getsockname() failed: %s\n", __func__, sxe_socket_get_last_error_as_str());    /* COVERAGE EXCLUSION : TODO - when we are able to mock */
     }
 
 SXE_EARLY_OUT:
-    SXER81I("return %p", &this->local_addr);
+    SXER6I("return %p", &this->local_addr);
     return &this->local_addr;
 }
 
 /**
  * Listen for connections (or packets for UDP) on a SXE
  *
- * @param this  SXE to listen on
- * @param flags 0 or SXE_FLAG_IS_ONESHOT to specify a one-shot listener that turns into the connection on accept
+ * @param this   SXE to listen on
+ * @param flags  0 or SXE_FLAG_IS_ONESHOT to specify a one-shot listener that turns into the connection on accept
+ * @param rcvbuf Size of the socket receive buffer (SO_RCVBUF) or 0 to use the default
+ * @param sndbuf Size of the socket send    buffer (SO_SNDBUF) or 0 to use the default
  *
  * @return SXE_RETURN_OK on success, SXE_RETURN_ERROR_ADDRESS_IN_USE if the SXE's address is in use, or
  *         SXE_RETURN_ERROR_INTERNAL
  */
 SXE_RETURN
-sxe_listen_plus(SXE * this, unsigned flags)
+sxe_listen_plus(SXE * this, unsigned flags, int rcvbuf, int sndbuf)
 {
     SXE_RETURN         result        = SXE_RETURN_ERROR_INTERNAL;
     SXE_SOCKET         socket_listen = SXE_SOCKET_INVALID;
     struct sockaddr  * address;
     SXE_SOCKLEN_T      address_length;
+    int                socket_flags  = 0;
 #ifndef _WIN32
     struct sockaddr_un pipe_address;
 #endif
 
-    SXEE82I("sxe_listen(this=%p, flags=%p)", this, flags);
-    SXEA10I(this  != NULL,                   "sxe_listen: object pointer is NULL");
-    SXEA10I(!sxe_is_free(this),              "sxe_listen: connection has not been allocated (state=FREE)");
-    SXEA11I(!(flags & ~SXE_FLAG_IS_ONESHOT), "sxe_listen: a flag other than SXE_FLAG_IS_ONESHOT was given: 0x%08x",
+    SXEE6I("(this=%p, flags=%08x, rcvbuf=%d, sndbuf=%d)", this, flags, rcvbuf, sndbuf);
+    SXEA1I(this  != NULL,                   "sxe_listen: object pointer is NULL");
+    SXEA1I(!sxe_is_free(this),              "sxe_listen: connection has not been allocated (state=FREE)");
+    SXEA1I(!(flags & ~SXE_FLAG_IS_ONESHOT), "sxe_listen: a flag other than SXE_FLAG_IS_ONESHOT was given: 0x%08x",
             flags & ~SXE_FLAG_IS_ONESHOT);
 
     if (this->socket != SXE_SOCKET_INVALID) {
-        SXEL21I("Listener is already in use (socket=%d)", this->socket);
+        SXEL2I("Listener is already in use (socket=%d)", this->socket);
         goto SXE_EARLY_OUT;
     }
 
-    socket_listen = socket(this->path ? AF_UNIX : AF_INET, ((this->flags & SXE_FLAG_IS_STREAM) ? SOCK_STREAM : SOCK_DGRAM), 0);
+    socket_flags |= (this->flags & SXE_FLAG_IS_STREAM) ? SOCK_STREAM : SOCK_DGRAM;
+#ifdef SOCK_CLOEXEC
+    socket_flags |= SOCK_CLOEXEC;
+#endif
+    socket_listen = socket(this->path ? AF_UNIX : AF_INET, socket_flags, 0);
 
     if (socket_listen == SXE_SOCKET_INVALID) {
-        SXEL22I("Error creating listening socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEL2I("Error creating listening socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         goto SXE_EARLY_OUT;
     }
 
-    SXEL83I("socket=%d == listen_socket = socket(%s, %s, 0)", socket_listen, this->path ? "AF_UNIX" : "AF_INET",
+    SXEL6I("socket=%d == listen_socket = socket(%s, %s, 0)", socket_listen, this->path ? "AF_UNIX" : "AF_INET",
             (this->flags & SXE_FLAG_IS_STREAM) ? "SOCK_STREAM" : "SOCK_DGRAM");
 
 #ifndef _WIN32
@@ -1025,12 +1167,12 @@ sxe_listen_plus(SXE * this, unsigned flags)
         address_length = sizeof(             this->local_addr);
     }
 
-    sxe_set_socket_options(this, socket_listen);
+    sxe_set_socket_options(this, socket_listen, rcvbuf, sndbuf);
 
     if (bind(socket_listen, address, address_length) < 0) {
         int error = sxe_socket_get_last_error();    /* Save due to Windows resetting it in inet_ntoa */
 
-        SXEL25I("Error binding address to listening socket: inet: address=%s:%hu, path=%s: (errno=%d) %s",
+        SXEL2I("Error binding address to listening socket: inet: address=%s:%hu, path=%s: (errno=%d) %s",
                 inet_ntoa(this->local_addr.sin_addr), ntohs(this->local_addr.sin_port), this->path, error, sxe_socket_error_as_str(error));
         sxe_socket_set_last_error(error);
 
@@ -1042,41 +1184,44 @@ sxe_listen_plus(SXE * this, unsigned flags)
     }
 
     if ((this->flags & SXE_FLAG_IS_STREAM) && (listen(socket_listen, sxe_listen_backlog) < 0)) {
-        SXEL22I("Error listening on socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEL2I("Error listening on socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         goto SXE_EARLY_OUT;
     }
 
     this->flags       |= flags;            /* Set one-shot, if specified by the caller */
     this->socket       = socket_listen;
     this->socket_as_fd = _open_osfhandle(socket_listen, 0);
+
+#if !defined(SOCK_CLOEXEC) && defined(F_SETFD)
+    fcntl(this->socket_as_fd, F_SETFD, FD_CLOEXEC);
+#endif
+
     socket_listen      = SXE_SOCKET_INVALID;
-    SXEL86I("connection id of new listen socket is %d, socket_as_fd=%d, backlog=%d, address=%s:%hu, path=%s", this->id,
+    SXEL6I("connection id of new listen socket is %d, socket_as_fd=%d, backlog=%d, address=%s:%hu, path=%s", this->id,
             this->socket_as_fd, sxe_listen_backlog, inet_ntoa(this->local_addr.sin_addr), ntohs(this->local_addr.sin_port), this->path);
 
     ev_async_init(&this->async, NULL);
-    ev_io_init(&this->io, ((this->flags & SXE_FLAG_IS_STREAM) ? sxe_io_cb_accept : sxe_io_cb_read), this->socket_as_fd, EV_READ);
-    this->io.data = this;
-    ev_io_start(sxe_private_main_loop, &this->io);
+    sxe_private_set_watch_events(this, ((this->flags & SXE_FLAG_IS_STREAM) ? sxe_io_cb_accept : sxe_io_cb_read), EV_READ, 0);
 
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
     if (socket_listen != SXE_SOCKET_INVALID) {
-        SXEL81I("socket=%d is unusable, so must be closed", socket_listen);
+        SXEL6I("socket=%d is unusable, so must be closed", socket_listen);
         CLOSESOCKET(socket_listen);
     }
 
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 
 void
 sxe_set_listen_backlog(int listen_backlog)
 {
-    SXEE81("sxe_set_listen_backlog(listen_backlog=%d)", listen_backlog);
-    SXEL82("backlog was %d; now setting to %d", sxe_listen_backlog, listen_backlog);
+    SXEE6("sxe_set_listen_backlog(listen_backlog=%d)", listen_backlog);
+    SXEL6("backlog was %d; now setting to %d", sxe_listen_backlog, listen_backlog);
     sxe_listen_backlog = listen_backlog;
-    SXER80("return");
+    SXER6("return");
 }
 
 #ifdef WINDOWS_NT
@@ -1086,11 +1231,11 @@ sxe_connect_pipe(SXE * this)
 {
     SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
 
-    SXEE83I("sxe_connect_pipe(this=%p) // socket=%d, path=%s", this, this->socket, this->path);
+    SXEE6I("(this=%p) // socket=%d, path=%s", this, this->socket, this->path);
 
     result = sxe_connect(this, NULL, 0);
 
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 #endif
@@ -1121,6 +1266,8 @@ sxe_construct_address(struct sockaddr_in * address_out, const char * ip, unsigne
  * @param this Pointer to the SXE
  * @param ip   Pointer to '\0' terminated IP address in dotted decimal
  * @param port Port number in host byte order
+ * @param rcvbuf Size of the socket receive buffer (SO_RCVBUF) or 0 to use the default
+ * @param sndbuf Size of the socket send    buffer (SO_SNDBUF) or 0 to use the default
  *
  * @return SXE_RETURN_ERROR_ALREADY_CONNECTED if already connected, SXE_RETURN_ERROR_INTERNAL on unexpected error
  *         creating/binding/connecting socket, SXE_RETURN_ERROR_ADDRESS_IN_USE if SXE local address is already in use, or
@@ -1130,31 +1277,38 @@ sxe_construct_address(struct sockaddr_in * address_out, const char * ip, unsigne
  */
 
 SXE_RETURN
-sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
+sxe_connect_plus(SXE * this, const char * peer_ip, unsigned short peer_port, int rcvbuf, int sndbuf)
 {
     SXE_RETURN         result = SXE_RETURN_ERROR_INTERNAL;
     SXE_SOCKET         that_socket;
     struct sockaddr  * peer_address;
     SXE_SOCKLEN_T      peer_address_length;
+    int                socket_flags = 0;
 #ifndef _WIN32
     struct sockaddr_un pipe_address;
 #endif
 
-    SXEE85I("sxe_connect(this=%p, peer_ip==%s, peer_port=%hu) // socket=%d, path=%s", this, peer_ip, peer_port, this->socket,
-            this->path);
-    SXEA10I(this != NULL,       "sxe_connect: connection pointer is NULL");
-    SXEA10I(!sxe_is_free(this), "sxe_connect: connection has not been allocated (state=FREE)");
+    SXEE6I("(this=%p, peer_ip==%s, peer_port=%hu, rcvbuf=%d, sndbuf=%d) // socket=%d, path=%s",
+           this, peer_ip, peer_port, rcvbuf, sndbuf, this->socket, this->path);
+    SXEA1I(this != NULL,       "%s: connection pointer is NULL",                     __func__);
+    SXEA1I(!sxe_is_free(this), "%s: connection has not been allocated (state=FREE)", __func__);
 
     if (this->socket != SXE_SOCKET_INVALID) {
-        SXEL21I("Connection is already in use (socket=%d)", this->socket);
+        SXEL2I("Connection is already in use (socket=%d)", this->socket);
         result = SXE_RETURN_ERROR_ALREADY_CONNECTED;
         goto SXE_EARLY_OUT;
     }
 
-    SXEL80I("TODO: Add a timeout parameter");
+    SXEL6I("TODO: Add a timeout parameter");
 
-    if ((that_socket = socket(this->path ? AF_UNIX : PF_INET, SOCK_STREAM, this->path ? 0 : IPPROTO_TCP)) == SXE_SOCKET_INVALID) {
-        SXEL22I("error creating socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+    socket_flags |= SOCK_STREAM;
+#ifdef SOCK_CLOEXEC
+    socket_flags |= SOCK_CLOEXEC;
+#endif
+    that_socket = socket(this->path ? AF_UNIX : PF_INET, socket_flags, this->path ? 0 : IPPROTO_TCP);
+
+    if (that_socket == SXE_SOCKET_INVALID) {
+        SXEL2I("error creating socket: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         goto SXE_ERROR_OUT;
     }
 
@@ -1183,20 +1337,20 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
          *                                           ^^^^^^^^^^^^
          * Therefore: If the local address is not INADDR_ANY:0, bind it to the socket. */
         if (this->local_addr.sin_port == 0) {
-            SXEA10I(this->local_addr.sin_addr.s_addr == htonl(INADDR_ANY), "Port must be non-zero if IP is not INADDR_ANY; see ip(7) Linux man page");
-            SXEL80I("Connecting using local TCP port: randomly allocated by the stack on IP INADDR_ANY");
+            SXEA1I(this->local_addr.sin_addr.s_addr == htonl(INADDR_ANY), "Port must be non-zero if IP is not INADDR_ANY; see ip(7) Linux man page");
+            SXEL6I("Connecting using local TCP port: randomly allocated by the stack on IP INADDR_ANY");
         }
         else {
-            SXEL81I("Connecting using local TCP port: %hu", ntohs(this->local_addr.sin_port));
+            SXEL6I("Connecting using local TCP port: %hu", ntohs(this->local_addr.sin_port));
 
             if (bind(that_socket, (struct sockaddr *)&this->local_addr, sizeof(this->local_addr)) == SXE_SOCKET_ERROR_OCCURRED) {
                 if (sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EADDRINUSE)) {
-                    SXEL33I("Can't connect using local TCP port: %hu (%d) %s", ntohs(this->local_addr.sin_port),
+                    SXEL3I("Can't connect using local TCP port: %hu (%d) %s", ntohs(this->local_addr.sin_port),
                             sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
                     result = SXE_RETURN_ERROR_ADDRESS_IN_USE;
                 }
                 else {
-                    SXEL22I("Unexpected error calling bind: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+                    SXEL2I("Unexpected error calling bind: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
                 }
 
                 goto SXE_ERROR_OUT;
@@ -1208,12 +1362,12 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
         peer_address_length = sizeof(             this->peer_addr);
     }
 
-    sxe_set_socket_options(this, that_socket);
+    sxe_set_socket_options(this, that_socket, rcvbuf, sndbuf);
 
     /* Connect non-blocking.
      */
 
-    SXEL82I("add connection to watch list, socket==%d, socket_as_fd=%d", that_socket, _open_osfhandle(that_socket, 0));
+    SXEL6I("add connection to watch list, socket==%d, socket_as_fd=%d", that_socket, _open_osfhandle(that_socket, 0));
     ev_async_init(&this->async, NULL);
     ev_io_init(&this->io, sxe_io_cb_connect, _open_osfhandle(that_socket, 0), EV_WRITE);
     this->io.data = this;
@@ -1222,15 +1376,19 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
     if ((connect(that_socket, peer_address, peer_address_length) == SXE_SOCKET_ERROR_OCCURRED)
             && (sxe_socket_get_last_error() != SXE_SOCKET_ERROR(EINPROGRESS))
             && (sxe_socket_get_last_error() != SXE_SOCKET_ERROR(EWOULDBLOCK))) {
-        SXEL22I("connect failed: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEL2I("connect failed: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         ev_io_stop(sxe_private_main_loop, &this->io);
         goto SXE_ERROR_OUT;
     }
 
-    SXEL84I("Connection to server: ip:port %s:%hu, path %s: %s", peer_ip, peer_port, this->path,
+    SXEL6I("Connection to server: ip:port %s:%hu, path %s: %s", peer_ip, peer_port, this->path,
             ((sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EINPROGRESS) || sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EWOULDBLOCK)) ? "in progress" : "completed"));
     this->socket       = that_socket;
     this->socket_as_fd = _open_osfhandle(that_socket, 0);
+
+#if !defined(SOCK_CLOEXEC) && defined(F_SETFD)
+    fcntl(this->socket_as_fd, F_SETFD, FD_CLOEXEC);
+#endif
 
 #if SXE_DEBUG
     /* Display the local socket's bound port and IP; TODO: use sxe_get_local_addr and inet_ntoa */
@@ -1239,7 +1397,7 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
         SXE_SOCKLEN_T      address_length = sizeof(local_addr);
 
         if (getsockname(that_socket, (struct sockaddr *)&local_addr, &address_length) >= 0 ) {
-            SXEL87I("Connection id of new connecting socket is %d, socket_as_fd=%d, ip=%d.%d.%d.%d:%hu", this->id,
+            SXEL6I("Connection id of new connecting socket is %d, socket_as_fd=%d, ip=%d.%d.%d.%d:%hu", this->id,
                      this->socket_as_fd                             ,
                      ntohl(local_addr.sin_addr.s_addr) >> 24        ,
                     (ntohl(local_addr.sin_addr.s_addr) >> 16) & 0xff,
@@ -1253,17 +1411,14 @@ sxe_connect(SXE * this, const char * peer_ip, unsigned short peer_port)
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
-
-/* TODO: new sxe_write() parameter to auto close after writing all data */
-/* TODO: sxe_write() auto configures write_cb() if didn't write all data */
 
 #ifdef WINDOWS_NT
 #else
 SXE_RETURN
-sxe_write_pipe(SXE * this, const void * buf, unsigned size, int fd_to_send)
+sxe_write_pipe(SXE * this, const void * data, unsigned size, int fd_to_send)
 {
     SXE_RETURN               result = SXE_RETURN_ERROR_INTERNAL;
     SXE_CONTROL_MESSAGE_FD   control_message_buf;
@@ -1271,17 +1426,17 @@ sxe_write_pipe(SXE * this, const void * buf, unsigned size, int fd_to_send)
     struct cmsghdr         * control_message_ptr;
     struct iovec             io_vector[1];           /* This is intentional. It's a vector of length 1 */
 
-    SXEA80I(this != NULL, "sxe_write_pipe(): connection pointer is NULL");
-    SXEA80I(this->path  , "sxe_write_pipe(): connection is not a unix domain socket");
-    SXEA80I(size != 0,    "sxe_write_pipe(): Must send at least 1 byte of data");
-    SXEE84I("sxe_write_pipe(this=%p,size=%u,fd_to_send=%d) // socket=%d", this, size, fd_to_send, this->socket);
-    SXED90I(buf, size);
+    SXEA6I(this != NULL, "sxe_write_pipe(): connection pointer is NULL");
+    SXEA6I(this->path  , "sxe_write_pipe(): connection is not a unix domain socket");
+    SXEA6I(size != 0,    "sxe_write_pipe(): Must send at least 1 byte of data");
+    SXEE6I("(this=%p,size=%u,fd_to_send=%d) // socket=%d", this, size, fd_to_send, this->socket);
+    SXED7I(data, size);
 
     memset(&message_header, 0, sizeof message_header);
 
     /* This may be the worst API yet: move over Windows.
      */
-    io_vector[0].iov_base                  = SXE_CAST_NOCONST(void *, buf);
+    io_vector[0].iov_base                  = SXE_CAST_NOCONST(void *, data);
     io_vector[0].iov_len                   = size;
     message_header.msg_control             = &control_message_buf;
     message_header.msg_controllen          = CMSG_LEN(sizeof(fd_to_send));
@@ -1306,7 +1461,7 @@ sxe_write_pipe(SXE * this, const void * buf, unsigned size, int fd_to_send)
      */
 
     if (sendmsg(this->socket, &message_header, 0) < 0) {
-        SXEL23I("sxe_write_pipe(): Error writing to socket=%d: (%d) %s", this->socket,    /* Coverage Exclusion: TODO */
+        SXEL2I("sxe_write_pipe(): Error writing to socket=%d: (%d) %s", this->socket,    /* Coverage Exclusion: TODO */
                 sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());         /* Coverage Exclusion: TODO */
         goto SXE_ERROR_OUT; /* Coverage Exclusion: TODO */
     }
@@ -1314,29 +1469,29 @@ sxe_write_pipe(SXE * this, const void * buf, unsigned size, int fd_to_send)
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 #endif
 
 SXE_RETURN
-sxe_write_to(SXE * this, const void * buf, unsigned size, const struct sockaddr_in * dest_addr)
+sxe_write_to(SXE * this, const void * data, unsigned size, const struct sockaddr_in * dest_addr)
 {
     SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
     int        ret;
 
-    SXEA80I(this != NULL,                        "sxe_write_to(): connection pointer is NULL");
-    SXEA80I(!(this->flags & SXE_FLAG_IS_STREAM), "sxe_write_to(): SXE is not a UDP SXE");
-    SXEE85I("sxe_write_to(this=%p,size=%u,sockaddr_in=%s:%hu) // socket=%d", this, size, inet_ntoa(dest_addr->sin_addr),
+    SXEA6I(this != NULL,                        "sxe_write_to(): connection pointer is NULL");
+    SXEA6I(!(this->flags & SXE_FLAG_IS_STREAM), "sxe_write_to(): SXE is not a UDP SXE");
+    SXEE6I("(this=%p,size=%u,sockaddr_in=%s:%hu) // socket=%d", this, size, inet_ntoa(dest_addr->sin_addr),
             ntohs(dest_addr->sin_port), this->socket);
-    SXED90I(buf, size);
+    SXED7I(data, size);
 
-    if ((ret = sendto(this->socket, buf, size, 0, (const struct sockaddr *)dest_addr, sizeof(*dest_addr))) != (int)size) {
+    if ((ret = sendto(this->socket, data, size, 0, (const struct sockaddr *)dest_addr, sizeof(*dest_addr))) != (int)size) {
         if (ret >= 0) {
-            SXEL23I("sxe_write_to(): Only %d of %u bytes written to socket=%d", ret, size, this->socket);   /* COVERAGE EXCLUSION: Logging for UDP truncation on sendto */
+            SXEL2I("sxe_write_to(): Only %d of %u bytes written to socket=%d", ret, size, this->socket);   /* COVERAGE EXCLUSION: Logging for UDP truncation on sendto */
         }
         else {
-            SXEL23I("sxe_write_to(): Error writing to socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+            SXEL2I("sxe_write_to(): Error writing to socket=%d: (%d) %s", this->socket, sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
         }
 
         goto SXE_ERROR_OUT;
@@ -1345,50 +1500,45 @@ sxe_write_to(SXE * this, const void * buf, unsigned size, const struct sockaddr_
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 
+/* TODO: Implement in terms of a helper that takes a pointer to bytes written as a parameter */
+
 SXE_RETURN
-sxe_write(SXE * this, const void * buf, unsigned size)
+sxe_write(SXE * this, const void * data, unsigned size)
 {
     SXE_RETURN  result = SXE_RETURN_ERROR_INTERNAL;
-    int         ret;
+    int         written;
     int         socket_error;
 
-    SXEA80I(this != NULL,                       "SXE pointer is NULL");
-    SXEA80I((this->flags & SXE_FLAG_IS_STREAM), "SXE is not a stream SXE");
-    SXEE86I("sxe_write(buf='%c%c%c%c...', size=%u) // socket=%d",
-        *((const char *)buf + 0),
-        *((const char *)buf + 1),
-        *((const char *)buf + 2),
-        *((const char *)buf + 3),
-        size,
-        this->socket);
-    SXED90I(buf, size);
+    SXEA6I(this != NULL,                       "SXE pointer is NULL");
+    SXEA6I((this->flags & SXE_FLAG_IS_STREAM), "SXE is not a stream SXE");
+    SXEA6I(this->ssl_id == SXE_POOL_NO_INDEX,  "sxe_write() on an SSL socket: use sxe_send()");
+    SXEE7I("(data=%p, size=%u) // socket=%d", data, size, this->socket);
 
     if (this->socket == SXE_SOCKET_INVALID) {
-        SXEL20I("Send on a disconnected socket");
+        SXEL2I("Send on a disconnected socket");
         result = SXE_RETURN_ERROR_NO_CONNECTION;
         goto SXE_ERROR_OUT;
     }
 
-    /* Use send(), not write(), for WSA compatibility
+    /* Use send(), not write(), for WSA (Windows Socket API) compatibility
      *
      * Note: Use SXE_SOCKET_MSG_NOSIGNAL to avoid rare occurrence when connection closed by peer but locally the TCP
      *       stack thinks the connection is still open.  On Windows, this is the normal behaviour.
      */
-    if ((ret = send(this->socket, buf, size, SXE_SOCKET_MSG_NOSIGNAL)) != (int)size) {
-        /* TODO: Need to support TCP flow control
-         */
-        if (ret >= 0) {
-            SXEL83I("sxe_write(): Only %d of %u bytes written to socket=%d", ret, size, this->socket);
-            this->last_write = ret;
+    if ((written = send(this->socket, data, size, SXE_SOCKET_MSG_NOSIGNAL)) != (int)size) {
+        if (written >= 0) {
+            SXED7I(data, written);
+            this->last_write = written;
             result = SXE_RETURN_WARN_WOULD_BLOCK; /* Coverage Exclusion - todo: win32 coverage */
         }
         else {
             socket_error = sxe_socket_get_last_error();
-            SXEL23I("sxe_write(): Error writing to socket=%d: (%d) %s", this->socket, socket_error, sxe_socket_get_last_error_as_str());
+            SXEL2I("sxe_write(): Error writing to socket=%d: (%d) %s", this->socket, socket_error, sxe_socket_get_last_error_as_str());
+            written          = 0;
             this->last_write = 0;
 
             if ((socket_error == SXE_SOCKET_ERROR(ECONNRESET  ))
@@ -1401,155 +1551,185 @@ sxe_write(SXE * this, const void * buf, unsigned size)
                 result = SXE_RETURN_WARN_WOULD_BLOCK;
             }
         }
+
         goto SXE_ERROR_OUT;
     }
 
     this->last_write = size;
-    SXEL82I("Wrote %u bytes to socket=%d", size, this->socket);
+    SXED7I(data, size);
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OR_ERROR_OUT:
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXEL6I("%sWrote %u of %u bytes @ %p to socket=%d", sxe_log_control.level == 6 ? "sxe_write(){} // " : "", written, size, data, this->socket);
+    SXER7I("return %s", sxe_return_to_string(result));
     return result;
 }
 
-static SXE_RETURN sxe_send_buffers_again(SXE * this);
+static void sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents);    /* To allow mutually recursive references */
+
+/* Shared between sxe_io_cb_send_buffers and sxe_send_buffer
+ */
+static SXE_RETURN
+sxe_send_buffers_again(SXE * this)
+{
+    SXE_RETURN   result = SXE_RETURN_OK;
+    SXE_BUFFER * buffer;
+
+    SXEE6I("(this=%p) // socket=%d", this, this->socket);
+
+    for (buffer = sxe_list_peek_head(&this->send_list); buffer != NULL; buffer = sxe_list_peek_head(&this->send_list)) {
+        result = sxe_write(this, sxe_buffer_get_data(buffer), sxe_buffer_length(buffer));
+
+        if (result != SXE_RETURN_OK && result != SXE_RETURN_WARN_WOULD_BLOCK) {
+            break;
+        }
+
+        if (this->last_write >= 0 && sxe_buffer_length(buffer) == (unsigned)this->last_write) {
+            /* Done with this buffer, consume will notify the owner of the buffer through their callback
+             * Note: Removing buffer from send_list before the consume callback in case this buffer is
+             *       added back on the send_list within the callback (e.g. a sxe_send from the callback */
+            sxe_list_shift(&this->send_list);
+        }
+
+        sxe_buffer_consume(buffer, this->last_write);
+
+        if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
+            result = SXE_RETURN_IN_PROGRESS;
+            SXEL6("sxe_write wrote %u bytes with %u left; scheduling another write", this->last_write, sxe_buffer_length(buffer));
+            sxe_private_set_watch_events(this, sxe_io_cb_send_buffers, EV_WRITE, 1);
+            break;
+        }
+    }
+
+    SXER6I("return %s", sxe_return_to_string(result));
+    return result;
+}
 
 static void
 sxe_io_cb_send_buffers(EV_P_ ev_io * io, int revents)
 {
     SXE_RETURN result = SXE_RETURN_OK;
-    SXE * this = (SXE *)io->data;
+    SXE      * this   = (SXE *)io->data;
     SXE_UNUSED_PARAMETER(revents);
 
 #if EV_MULTIPLICITY
     SXE_UNUSED_PARAMETER(loop);
 #endif
 
-    SXEE83I("sxe_io_cb_send_buffers(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    SXEE6I("(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
     result = sxe_send_buffers_again(this);
 
     if (result != SXE_RETURN_IN_PROGRESS) {
-        SXEL80I("Re-enabling read events on this SXE");
-        ev_io_stop(sxe_private_main_loop, &this->io);
-        ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
-        this->io.data = this;
-        ev_io_start(sxe_private_main_loop, &this->io);
-
-        (*this->out_event_written)(this, result);
+        SXEL6I("Re-enabling read events on this SXE");
+        sxe_private_set_watch_events(this, sxe_io_cb_read, EV_READ, 1);
     }
 
-    SXER80I("return");
+    SXER6I("return");
 }
 
-static SXE_RETURN
-sxe_send_buffers_again(SXE * this)
-{
-    SXE_RETURN   result = SXE_RETURN_OK;
-    SXE_BUFFER * buffers;
-
-    SXEE82I("sxe_send_buffers_again(this=%p) // socket=%d", this, this->socket);
-
-    buffers = sxe_list_walker_find(&this->send_list_walk);
-    while (buffers) {
-        result = sxe_write(this, buffers->ptr + buffers->sent, buffers->len - buffers->sent);
-        buffers->sent += this->last_write;
-
-        if (buffers->sent == buffers->len) {
-            buffers = sxe_list_walker_step(&this->send_list_walk);
-        }
-
-        if (result == SXE_RETURN_WARN_WOULD_BLOCK) {
-            result = SXE_RETURN_IN_PROGRESS;
-
-            SXEL82("sxe_write wrote %u bytes of %u; scheduling another write", buffers->sent, buffers->len);
-
-            ev_io_stop(sxe_private_main_loop, &this->io);
-            ev_io_init(&this->io, sxe_io_cb_send_buffers, this->socket_as_fd, EV_WRITE);
-            this->io.data = this;
-            ev_io_start(sxe_private_main_loop, &this->io);
-            break;
-        }
-        else if (result != SXE_RETURN_OK) {
-            break;
-        }
-    }
-
-    SXER81I("return %s", sxe_return_to_string(result));
-    return result;
-}
-
+/**
+ * Send or enqueue a buffer
+ *
+ * @param this   The SXE to send or enqueue the buffer on
+ * @param buffer The buffer
+ *
+ * @return SXE_RETURN_OK on successful send, SXE_RETURN_IN_PROGRESS if the buffer was enqueued, SXE_RETURN_ERROR_NO_CONNECTION
+ *         if the SXE has been disconnected, or SXE_RETURN_ERROR_INTERNAL if an unexpected error occurred.
+ */
 SXE_RETURN
-sxe_send_buffers(SXE * this, SXE_LIST * buffers, SXE_OUT_EVENT_WRITTEN on_complete)
+sxe_send_buffer(SXE * this, SXE_BUFFER * buffer)
 {
     SXE_RETURN result = SXE_RETURN_OK;
 
-    SXEE83I("sxe_send_buffers(buffers=%p,on_complete=%p) // socket=%d", buffers, on_complete, this->socket);
-    SXEA10I(buffers != NULL,     "sxe_send_buffers: buffers pointer can't be NULL");
-    SXEA10I(on_complete != NULL, "sxe_send_buffers: on_complete callback function pointer can't be NULL");
+    SXEE6I("(buffer=%p) // socket=%d", buffer, this->socket);
+    SXEA1I(buffer != NULL, "sxe_send_buffer: buffer pointer can't be NULL");
+    sxe_list_push(&this->send_list, buffer);
 
-    SXEL81I("sxe_send_buffers(): preparing to send %u buffers", SXE_LIST_GET_LENGTH(buffers));
-
-    sxe_list_walker_construct(&this->send_list_walk, buffers);
-    sxe_list_walker_step(&this->send_list_walk); /* advance to the first entry */
-    this->out_event_written = on_complete;
+#ifndef SXE_DISABLE_OPENSSL
+    if (this->ssl_id != SXE_POOL_NO_INDEX) {
+        result = sxe_ssl_send_buffers(this);
+        goto SXE_EARLY_OUT;
+    }
+#endif
 
     result = sxe_send_buffers_again(this);
 
-    SXER81I("return %s", sxe_return_to_string(result));
+#ifndef SXE_DISABLE_OPENSSL
+SXE_EARLY_OUT:
+#endif
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 
+static void
+sxe_send_complete(void * user_data, SXE_BUFFER * buffer)
+{
+    SXE                 * this = (SXE *)user_data;
+    SXE_OUT_EVENT_WRITTEN on_complete;
+
+    SXEE6I("(buffer=%p)", buffer);
+    SXE_UNUSED_PARAMETER(buffer);
+    on_complete = this->out_event_written;
+
+    if (on_complete != NULL) {
+        this->out_event_written = NULL;
+        (*on_complete)(this, SXE_RETURN_OK);    /* TODO: Is there a need to pass output errors on a delayed send? */
+    }
+
+    SXER6I("return");
+} /* Coverage Exclusion - todo: win32 coverage */
+
 SXE_RETURN
-sxe_send(SXE * this, const void * buf, unsigned size, SXE_OUT_EVENT_WRITTEN on_complete)
+sxe_send(SXE * this, const void * data, unsigned size, SXE_OUT_EVENT_WRITTEN on_complete)
 {
     SXE_RETURN result;
 
-    SXEE83I("sxe_send(buf=%p, size=%u, on_complete=%p)", buf, size, on_complete);
-    SXEA10I(on_complete != NULL, "sxe_send: on_complete callback function pointer can't be NULL");
+    SXEE6I("(data=%p, size=%u, on_complete=%p)", data, size, on_complete);
+    SXEA1I(size                                  != 0,    "%s: you must send more than 0 bytes",                     __func__);
+    SXEA1I(on_complete                           != NULL, "%s: on_complete callback function pointer can't be NULL", __func__);
+    SXEA1I(sxe_buffer_length(&this->send_buffer) == 0,    "%s: there is already a sxe_send() in progress",           __func__);
+    SXEA1I(this->out_event_written               == NULL, "%s: there is already a sxe_notify_writable in progress",  __func__);
 
-    SXE_LIST_CONSTRUCT(&this->send_list, 0, SXE_BUFFER, node);
-    sxe_buffer_construct_const(&this->send_buffer, buf, size);
-    sxe_list_push(&this->send_list, &this->send_buffer);
-    result = sxe_send_buffers(this, &this->send_list, on_complete);
-    SXER81I("return %s", sxe_return_to_string(result));
+    sxe_buffer_construct_plus(&this->send_buffer, SXE_CAST_NOCONST(void *, data), size, size, this, sxe_send_complete);
+
+    if ((result = sxe_send_buffer(this, &this->send_buffer)) == SXE_RETURN_IN_PROGRESS) {
+        this->out_event_written = on_complete;
+    }
+
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 
 static void
 sxe_io_cb_notify_writable(EV_P_ ev_io * io, int revents)
 {
-    SXE_OUT_EVENT_WRITTEN cb;
-    SXE * this = (SXE *)io->data;
+    SXE *                 this = (SXE *)io->data;
+    SXE_OUT_EVENT_WRITTEN on_complete;
+
     SXE_UNUSED_PARAMETER(revents);
 #if EV_MULTIPLICITY
     SXE_UNUSED_PARAMETER(loop);
 #endif
-    SXEE83I("sxe_io_cb_notify_writable(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
-    SXEL80I("Re-enabling read events on this SXE");
-    ev_io_stop(sxe_private_main_loop, &this->io);
-    ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
-    this->io.data = this;
-    ev_io_start(sxe_private_main_loop, &this->io);
+    SXEE6I("(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    SXEL6I("Re-enabling read events on this SXE");
+    sxe_private_set_watch_events(this, sxe_io_cb_read, EV_READ, 1);
 
     if (this->out_event_written) {
-        cb = this->out_event_written;
+        on_complete             = this->out_event_written;
         this->out_event_written = NULL;
-        (*cb)(this, SXE_RETURN_OK);
+        (*on_complete)(this, SXE_RETURN_OK);
     }
-    SXER80I("return");
+
+    SXER6I("return");
 }
 
 void
 sxe_notify_writable(SXE * this, SXE_OUT_EVENT_WRITTEN writable_cb)
 {
-    SXEE81I("sxe_notify_writable(on_complete=%p)", writable_cb);
+    SXEE6I("(on_complete=%p)", writable_cb);
     this->out_event_written = writable_cb;
-    ev_io_stop(sxe_private_main_loop, &this->io);
-    ev_io_init(&this->io, sxe_io_cb_notify_writable, this->socket_as_fd, EV_WRITE);
-    this->io.data = this;
-    ev_io_start(sxe_private_main_loop, &this->io);
-    SXER80I("return");
+    sxe_private_set_watch_events(this, sxe_io_cb_notify_writable, EV_WRITE, 1);
+    SXER6I("return");
 }
 
 #ifndef WINDOWS_NT
@@ -1560,9 +1740,9 @@ sxe_io_cb_sendfile(EV_P_ ev_io * io, int revents)
     SXE_UNUSED_PARAMETER(loop);
     SXE_UNUSED_PARAMETER(revents);
 
-    SXEE83I("sxe_io_cb_sendfile(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
+    SXEE6I("(this=%p, revents=%u) // socket=%d", this, revents, this->socket);
     sxe_sendfile(this, this->sendfile_in_fd, this->sendfile_offset, this->sendfile_bytes, this->out_event_written);
-    SXER80("return");
+    SXER6("return");
 }
 
 SXE_RETURN
@@ -1571,11 +1751,12 @@ sxe_sendfile(SXE * this, int in_fd, off_t * offset, unsigned total_bytes, SXE_OU
     SXE_RETURN result = SXE_RETURN_ERROR_WRITE_FAILED;
     ssize_t    sent;
 
-    SXEE84I("sxe_sendfile(in_fd=%d, offset=%lu, total_bytes=%u, on_complete=%p)", in_fd, (unsigned long)*offset, total_bytes, on_complete);
+    SXEE6I("(in_fd=%d, offset=%lu, total_bytes=%u, on_complete=%p)", in_fd, (unsigned long)*offset, total_bytes, on_complete);
 
-    SXEA10I(on_complete != NULL, "sxe_sendfile: on_complete callback function pointer can't be NULL");
-    SXEA10I(offset      != NULL, "sxe_sendfile: offset pointer can't be NULL");
-    SXEA10I(total_bytes != 0,    "sxe_sendfile: total_bytes can't be zero"); /* Apple and FreeBSD: send '0' means send until EOF */
+    SXEA6I(this->ssl_id == SXE_POOL_NO_INDEX, "sxe_sendfile(): SSL socket: use sxe_send()");
+    SXEA1I(on_complete != NULL,               "sxe_sendfile(): on_complete callback function pointer can't be NULL");
+    SXEA1I(offset      != NULL,               "sxe_sendfile(): offset pointer can't be NULL");
+    SXEA1I(total_bytes != 0,                  "sxe_sendfile(): total_bytes can't be zero"); /* Apple and FreeBSD: send '0' means send until EOF */
 
     this->sendfile_in_fd    = in_fd;
     this->sendfile_offset   = offset;
@@ -1587,11 +1768,11 @@ sxe_sendfile(SXE * this, int in_fd, off_t * offset, unsigned total_bytes, SXE_OU
         int   res;
 
 #ifdef __APPLE__
-        SXEL84I("apple:sendfile(in=%u, s=%u, off=%lu, total_bytes=%u, ...)", in_fd, this->socket, (unsigned long)*offset, total_bytes);
-        res = sendfile(in_fd, this->socket, *offset, &len, /* No preamble or postamble data */NULL, /* reserved */0);
+        SXEL6I("apple:sendfile(in=%u, s=%u, off=%lu, total_bytes=%u, ...)", in_fd, this->socket, (unsigned long)*offset, total_bytes);
+        res = sendfile(in_fd, this->socket, *offset, &len, /* No preamble or postamble data */ NULL, /* reserved */ 0);
 #else /* FreeBSD */
-        SXEL84I("bsd:sendfile(in=%u, s=%u, off=%u, total_bytes=%u, ...)", in_fd, this->socket, (unsigned)*offset, total_bytes);
-        res = sendfile(in_fd, this->socket, *offset, total_bytes, /* No preamble or postamble data*/NULL, &len, /* no flags */0);
+        SXEL6I("bsd:sendfile(in=%u, s=%u, off=%u, total_bytes=%u, ...)", in_fd, this->socket, (unsigned)*offset, total_bytes);
+        res = sendfile(in_fd, this->socket, *offset, total_bytes, /* No preamble or postamble data*/ NULL, &len, /* no flags */ 0);
 #endif
 
         if (res < 0) {
@@ -1604,17 +1785,21 @@ sxe_sendfile(SXE * this, int in_fd, off_t * offset, unsigned total_bytes, SXE_OU
                 sent = -1; /* error; see below */
         }
         else {
-            SXEL81I("apple:sendfile() sent={%lu}", (unsigned long)len);
+            SXEL6I("apple:sendfile() sent={%lu}", (unsigned long)len);
             *offset += len;
             sent = (ssize_t)len;
         }
     }
 #else
     sent = sendfile(this->socket, in_fd, offset, total_bytes);
+    if (sent < 0 && errno == EAGAIN) {
+        sent = 0;               /* Coverage exclusion: write on a non-writable socket */
+        goto SXE_PARTIAL_WRITE; /* Coverage exclusion: write on a non-writable socket */
+    }
 #endif
 
     if (sent < 0) {
-        SXEL22I("sendfile() failed: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
+        SXEL2I("sendfile() failed: (%d) %s", sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 
         if (this->out_event_written) {
             (*this->out_event_written)(this, result);
@@ -1624,26 +1809,21 @@ sxe_sendfile(SXE * this, int in_fd, off_t * offset, unsigned total_bytes, SXE_OU
     }
 
     if ((sent > 0) && ((unsigned)sent < total_bytes)) {
-#if defined(__APPLE__) || defined(__FreeBSD__)
 SXE_PARTIAL_WRITE:
-#endif
-        SXEL82I("sendfile() sent %d bytes of %u, filling send buffer", sent, total_bytes);
+        SXEL6I("sendfile() sent %zd bytes of %u, filling send buffer", sent, total_bytes);
         result = SXE_RETURN_IN_PROGRESS;
         this->sendfile_bytes = total_bytes - sent;
 
-        ev_io_stop(sxe_private_main_loop, &this->io);
-        ev_io_init(&this->io, sxe_io_cb_sendfile, this->socket_as_fd, EV_WRITE);
-        this->io.data = this;
-        ev_io_start(sxe_private_main_loop, &this->io);
+        sxe_private_set_watch_events(this, sxe_io_cb_sendfile, EV_WRITE, 1);
         goto SXE_EARLY_OUT;
     }
 
     if (sent == 0) {
-        SXEL80I("sendfile() sent 0 bytes (EOF)");
+        SXEL6I("sendfile() sent 0 bytes (EOF)");
         result = SXE_RETURN_END_OF_FILE;
     }
     else {
-        SXEL82I("sendfile() sent %d bytes of %u", sent, total_bytes);
+        SXEL6I("sendfile() sent %zd bytes of %u", sent, total_bytes);
         result = SXE_RETURN_OK;
     }
 
@@ -1651,10 +1831,7 @@ SXE_PARTIAL_WRITE:
         (*this->out_event_written)(this, result);
     }
 
-    ev_io_stop(sxe_private_main_loop, &this->io);
-    ev_io_init(&this->io, sxe_io_cb_read, this->socket_as_fd, EV_READ);
-    this->io.data = this;
-    ev_io_start(sxe_private_main_loop, &this->io);
+    sxe_private_set_watch_events(this, sxe_io_cb_read, EV_READ, 1);
 
 SXE_CLEANUP_OUT:
     this->sendfile_in_fd    = -1;
@@ -1662,7 +1839,7 @@ SXE_CLEANUP_OUT:
     this->out_event_written = NULL;
 
 SXE_EARLY_OUT:
-    SXER82I("return %d // %s", result, sxe_return_to_string(result));
+    SXER6I("return %d // %s", result, sxe_return_to_string(result));
     return result;
 }
 #endif
@@ -1676,14 +1853,14 @@ sxe_dump(SXE * this)
 
     SXE_UNUSED_PARAMETER(this);
 
-    SXEE80I("sxe_dump()");
-    SXEL80I("Dumping sxes");
+    SXEE6I("()");
+    SXEL6I("Dumping sxes");
 
     for (i = 0; i < sxe_array_total; i++) {
-        SXEL81I("SXE id=%u", i);
+        SXEL6I("SXE id=%u", i);
     }
 
-    SXER80I("return");
+    SXER6I("return");
 }
 
 /**
@@ -1697,48 +1874,71 @@ sxe_dump(SXE * this)
 SXE_RETURN
 sxe_close(SXE * this)
 {
-    SXE_RETURN result = SXE_RETURN_OK;
+    SXE_RETURN   result = SXE_RETURN_OK;
+    SXE_STATE    state  = sxe_pool_index_to_state(sxe_array, this->id);
+    SXE_BUFFER * buffer;
 
-    SXEE81I("sxe_close(this=%p)", this);
-    SXEA80I(sxe_array != NULL,                                                "sxe_close: SXE is not initialized");
-    SXEA80I((this >= sxe_array) && (this <= &sxe_array[sxe_array_total - 1]), "sxe_close: connection pointer is not valid");
+    SXEE6I("(this=%p)", this);
+    SXEA6I(sxe_array != NULL,                                                "sxe_close: SXE is not initialized");
+    SXEA6I((this >= sxe_array) && (this <= &sxe_array[sxe_array_total - 1]), "sxe_close: connection pointer is not valid");
 
     /* Close is idempotent with a warning.
      */
-    if (sxe_pool_index_to_state(sxe_array, this->id) == SXE_STATE_FREE) {
-        SXEL31I("sxe_close: ignoring close of a free connection object %u", this->id);
+    switch (state) {
+    case SXE_STATE_FREE:
+        SXEL3I("sxe_close: ignoring close of a free connection object %u", this->id);
         result = SXE_RETURN_WARN_ALREADY_CLOSED;
         goto SXE_EARLY_OUT;
+
+    case SXE_STATE_DEFERRED:
+    case SXE_STATE_USED:
+        break;
+
+    default:
+        SXEA1I(0, "Internal error: unexpected SXE state %s", sxe_state_to_string(state)); /* coverage exclusion: can't get here */
     }
+
+#ifndef SXE_DISABLE_OPENSSL
+    /* If we have an open SSL socket, close that first. */
+    if (this->ssl_id != SXE_POOL_NO_INDEX) {
+        result = sxe_ssl_close(this);
+        goto SXE_EARLY_OUT;
+    }
+#endif
 
     /* Close socket if open.
      */
     if (this->socket != SXE_SOCKET_INVALID) {
+        ev_io_stop(sxe_private_main_loop, &this->io);
+        ev_async_stop(sxe_private_main_loop, &this->async);
+
         /* Call CLOSESOCKET() as well as close() for Windows Sockets API compatibility.
          */
-        SXEL82I("About to close fd %d (this=%p)", this->socket_as_fd, this);
+        SXEL6I("About to close fd %d (this=%p)", this->socket_as_fd, this);
+
         if (this->socket_as_fd >= 0) {
             close(this->socket_as_fd);
             this->socket_as_fd = -1;
         }
         CLOSESOCKET(this->socket);
-#ifdef EV_MULTIPLICITY
-        ev_io_stop(sxe_private_main_loop, &this->io);
-        ev_async_stop(sxe_private_main_loop, &this->async);
-#else
-        ev_io_stop(&this->io);
-        ev_io_stop(&this->async);
-#endif
-
         this->socket = SXE_SOCKET_INVALID;
     }
 
-    this->in_total    = 0;
-    this->in_consumed = 0;
-    sxe_pool_set_indexed_element_state(sxe_array, this->id, SXE_STATE_USED, SXE_STATE_FREE);
+    while ((buffer = sxe_list_shift(&this->send_list)) != NULL) {
+        sxe_buffer_clear(buffer);    /* Call the buffer's on_empty event handler */
+    }
+
+    this->in_event_connected = NULL;
+    this->in_event_read      = NULL;
+    this->out_event_written  = NULL;
+    this->in_total           = 0;
+    this->in_consumed        = 0;
+
+    state = sxe_pool_index_to_state(sxe_array, this->id);
+    sxe_pool_set_indexed_element_state(sxe_array, this->id, state, SXE_STATE_FREE);
 
 SXE_EARLY_OUT:
-    SXER81I("return %s", sxe_return_to_string(result));
+    SXER6I("return %s", sxe_return_to_string(result));
     return result;
 }
 
@@ -1750,7 +1950,7 @@ sxe_socketpair_connected_cb(EV_P_ struct ev_async *w, int revents)
 
     SXE_UNUSED_PARAMETER(revents);
 
-    SXEE82I("sxe_socketpair_connected_cb(w=%p,revents=%d)", w, revents);
+    SXEE6I("(w=%p,revents=%d)", w, revents);
 
     ev_async_stop(EV_A_ &this->async);
 
@@ -1760,7 +1960,7 @@ sxe_socketpair_connected_cb(EV_P_ struct ev_async *w, int revents)
 
     ev_io_start(EV_A_ &this->io);
 
-    SXER80I("return");
+    SXER6I("return");
 }
 
 SXE *
@@ -1774,10 +1974,10 @@ sxe_new_socketpair(SXE                    * this              ,
     struct sockaddr_in   local_addr;
     int                  pair[2];
 
-    SXEE82I("sxe_new_socketpair(in_event_read=%p,in_event_close=%p)",
+    SXEE6I("(in_event_read=%p,in_event_close=%p)",
             in_event_read, in_event_close);
 
-    SXEA12(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) >= 0, "socketpair() failed: (%d) %s", errno, strerror(errno));
+    SXEA1(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) >= 0, "socketpair() failed: (%d) %s", errno, strerror(errno));
 
     memset(&local_addr, 0, sizeof local_addr);
     keeper = sxe_new_internal(this, &local_addr, in_event_connected, in_event_read, in_event_close, SXE_TRUE, NULL);
@@ -1796,7 +1996,7 @@ sxe_new_socketpair(SXE                    * this              ,
 #ifdef __APPLE__
         /* Prevent firing SIGPIPE */
         flags = 1;
-        SXEV83I(setsockopt(pair[0], SOL_SOCKET, SO_NOSIGPIPE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
+        SXEV6I(setsockopt(pair[0], SOL_SOCKET, SO_NOSIGPIPE, SXE_WINAPI_CAST_CHAR_STAR &flags, sizeof(flags)),
                 >= 0, "socket=%d: couldn't set SO_NOSIGPIPE flag: (%d) %s", pair[0], sxe_socket_get_last_error(), sxe_socket_get_last_error_as_str());
 #endif
 
@@ -1814,8 +2014,9 @@ sxe_new_socketpair(SXE                    * this              ,
         close(pair[1]);         /* COVERAGE EXCLUSION */
     }                           /* COVERAGE EXCLUSION */
 
-    SXER82I("return keeper=%p // out_pairedsocket=%d", keeper, pair[1]);
+    SXER6I("return keeper=%p // out_pairedsocket=%d", keeper, pair[1]);
     return keeper;
 }
 #endif
 
+/* vim: set expandtab: */

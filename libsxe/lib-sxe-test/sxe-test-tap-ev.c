@@ -40,7 +40,7 @@ local_get_time(void)
 {
     struct timeval tv;
 
-    SXEA11(gettimeofday(&tv, NULL) >= 0, "gettimeofday failed: %s", strerror(errno));
+    SXEA1(gettimeofday(&tv, NULL) >= 0, "gettimeofday failed: %s", strerror(errno));
     return SXE_TIME_FROM_TIMEVAL(&tv);
 }
 
@@ -51,8 +51,17 @@ test_tap_ev_length_nowait(void)
     return tap_ev_length();
 }
 
+/* This callback is a workaround to avoid introducing a circular dependency on
+ * lib-sxe, which actually implements the "normal" version of it: get_deferred_count().
+ * sxe_init() sets this function pointer.
+ */
+unsigned (*test_tap_ev_queue_shift_wait_get_deferred_count)(void);
+
+#define AT_TIMEOUT_THEN_TIMEOUT 0
+#define AT_TIMEOUT_THEN_ASSERT  1
+
 tap_ev
-test_tap_ev_queue_shift_wait(tap_ev_queue queue, ev_tstamp seconds)
+test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int at_timeout)
 {
     tap_ev event;
     SXE_TIME deadline;
@@ -60,28 +69,31 @@ test_tap_ev_queue_shift_wait(tap_ev_queue queue, ev_tstamp seconds)
     SXE_TIME wait_time;
 
     wait_time = SXE_TIME_FROM_DOUBLE_SECONDS(seconds);
-    event     = tap_ev_queue_shift(queue);
-
-    /* If the tap event queue was not empty, return the event.
-     */
-    if (event != NULL) {
-        return event;
-    }
-
-    deadline = local_get_time() + wait_time;
+    deadline  = local_get_time() + wait_time;
 
     for (;;) {
-        test_ev_loop_wait(SXE_TIME_TO_DOUBLE_SECONDS(wait_time));
+        ev_loop(ev_default_loop(EVFLAG_AUTO), EVLOOP_NONBLOCK); /* run deferred events from before the loop or last loop pass */
         event = tap_ev_queue_shift(queue);
-
         if (event != NULL) {
             return event;
+        }
+
+        if (!test_tap_ev_queue_shift_wait_get_deferred_count || (*test_tap_ev_queue_shift_wait_get_deferred_count)() == 0) {
+            test_ev_loop_wait(SXE_TIME_TO_DOUBLE_SECONDS(wait_time));
+            event = tap_ev_queue_shift(queue);
+            if (event != NULL) {
+                return event;
+            }
         }
 
         current = local_get_time();
 
         if (current >= deadline) {
-            return NULL;
+            if (AT_TIMEOUT_THEN_TIMEOUT == at_timeout) {
+                return NULL;
+            }
+
+            SXEA1(current < deadline, "test_tap_ev_queue_shift_wait(): Timeout waiting for event");
         }
 
         wait_time = deadline - current;
@@ -89,9 +101,33 @@ test_tap_ev_queue_shift_wait(tap_ev_queue queue, ev_tstamp seconds)
 }
 
 tap_ev
-test_tap_ev_shift_wait(ev_tstamp seconds)
+test_tap_ev_queue_shift_wait_or_timeout(tap_ev_queue queue, ev_tstamp seconds)
+{
+    return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_TIMEOUT);
+}
+
+tap_ev
+test_tap_ev_queue_shift_wait_or_assert(tap_ev_queue queue, ev_tstamp seconds)
+{
+    return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_ASSERT);
+}
+
+tap_ev
+test_tap_ev_queue_shift_wait(tap_ev_queue queue, ev_tstamp seconds)
+{
+    return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_ASSERT);
+}
+
+tap_ev
+test_tap_ev_shift_wait(ev_tstamp seconds) /* _or_assert */
 {
     return test_tap_ev_queue_shift_wait(tap_ev_queue_get_default(), seconds);
+}
+
+tap_ev
+test_tap_ev_shift_wait_or_timeout(ev_tstamp seconds)
+{
+    return test_tap_ev_queue_shift_wait_or_timeout(tap_ev_queue_get_default(), seconds);
 }
 
 const char *
@@ -112,7 +148,6 @@ test_tap_ev_queue_identifier_wait(tap_ev_queue queue, ev_tstamp seconds, tap_ev 
     }
 
     *ev_ptr = test_tap_ev_queue_shift_wait(queue, seconds);
-
     return tap_ev_identifier(*ev_ptr);
 }
 
@@ -136,7 +171,13 @@ test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, 
     unsigned i;
 
     for (i = 0; i < expected_length; i++) {
-        if (strcmp(test_tap_ev_queue_identifier_wait(queue, seconds, ev_ptr), read_event_name) != 0) {
+        if ((*ev_ptr = test_tap_ev_queue_shift_wait_or_timeout(queue, seconds)) == NULL) {
+            fail("%s expected read event '%s', timed out after %f seconds (already read %u fragments, %u bytes of %u expected)",
+                 who, read_event_name, seconds, i, used, expected_length);
+            goto SXE_ERROR_OUT;
+        }
+
+        if (strcmp(tap_ev_identifier(*ev_ptr), read_event_name) != 0) {
             fail("%s expected read event '%s', got event '%s' (already read %u fragments, %u bytes of %u expected)", who,
                  read_event_name, (const char *)tap_ev_identifier(*ev_ptr), i, used, expected_length);
             goto SXE_ERROR_OUT;
@@ -162,7 +203,7 @@ test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, 
         }
     }
 
-    SXEA12(used == expected_length, "test_ev_wait_read: Must have read %u bytes, but only read %u", expected_length, used);
+    SXEA1(used == expected_length, "test_ev_wait_read: Must have read %u bytes, but only read %u", expected_length, used);
 
 SXE_ERROR_OUT:
     if (used == 0) {
@@ -189,4 +230,4 @@ test_ev_wait_read(ev_tstamp seconds, tap_ev * ev_ptr, void * this, const char * 
                   unsigned expected_length, const char * who)
 {
     test_ev_queue_wait_read(tap_ev_queue_get_default(), seconds, ev_ptr, this, read_event_name, buffer, expected_length, who);
-        }
+}

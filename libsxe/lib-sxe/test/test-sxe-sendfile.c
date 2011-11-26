@@ -43,16 +43,16 @@ static unsigned test_buf_length = 0;
 static void
 test_event_connected(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE63I("test_event_read(length=%d) // received %u of %u", length, test_buf_length + length, test_buf_size);
-    SXEA12(test_buf_length + length <= test_buf_size, "Received %u bytes, but file has only %u", test_buf_length + length,
+    SXEE6I("test_event_read(length=%d) // received %u of %u", length, test_buf_length + length, test_buf_size);
+    SXEA1(test_buf_length + length <= test_buf_size, "Received %u bytes, but file has only %u", test_buf_length + length,
            test_buf_size);
     memcpy(&test_buf[test_buf_length], SXE_BUF(this), length);
 
@@ -65,23 +65,23 @@ test_event_read(SXE * this, int length)
 
     test_buf_length += length;
     SXE_BUF_CLEAR(this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE60I("test_event_close()");
+    SXEE6I("test_event_close()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_sendfile_complete(SXE * this, SXE_RETURN sxe_return)
 {
-    SXEE61I("test_event_sendfile_complete(sxe_return=%s)", sxe_return_to_string(sxe_return));
+    SXEE6I("test_event_sendfile_complete(sxe_return=%s)", sxe_return_to_string(sxe_return));
     tap_ev_push(__func__, 2, "this", this, "sxe_return", sxe_return);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 #ifdef __APPLE__
@@ -94,11 +94,11 @@ test_mock_sendfile(int in_fd, int out_fd, off_t offset, off_t *len, struct sf_hd
     SXE_UNUSED_ARGUMENT(len);
     SXE_UNUSED_ARGUMENT(ign);
     SXE_UNUSED_ARGUMENT(reserved);
-    SXEE64("test_mock_sendfile(in_fd=%d, out_fd=%d, offset=%lu, len=%lu)", in_fd, out_fd, (unsigned long)offset, (unsigned long)*len);
+    SXEE6("test_mock_sendfile(in_fd=%d, out_fd=%d, offset=%lu, len=%lu)", in_fd, out_fd, (unsigned long)offset, (unsigned long)*len);
 
     errno = EBADF;
 
-    SXER60("return -1 // errno=EBADF");
+    SXER6("return -1 // errno=EBADF");
     return -1;
 }
 #elif defined(__FreeBSD__)
@@ -112,11 +112,11 @@ test_mock_sendfile(int out_fd, int in_fd, off_t offset, size_t count, struct sf_
     SXE_UNUSED_ARGUMENT(hdr);
     SXE_UNUSED_ARGUMENT(sent);
     SXE_UNUSED_ARGUMENT(flags);
-    SXEE67("test_mock_sendfile(out_fd=%d, in_fd=%d, offset=%p, count=%lu, hdr=%p, sent=%p, flags=%u)", out_fd, in_fd, offset, count, hdr, sent, flags);
+    SXEE6("test_mock_sendfile(out_fd=%d, in_fd=%d, offset=%p, count=%lu, hdr=%p, sent=%p, flags=%u)", out_fd, in_fd, offset, count, hdr, sent, flags);
 
     errno = EBADF;
 
-    SXER60("return -1 // errno=EBADF");
+    SXER6("return -1 // errno=EBADF");
     return -1;
 }
 #else /* !__APPLE__ */
@@ -127,11 +127,11 @@ test_mock_sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
     SXE_UNUSED_ARGUMENT(in_fd);
     SXE_UNUSED_ARGUMENT(offset);
     SXE_UNUSED_ARGUMENT(count);
-    SXEE64("test_mock_sendfile(out_fd=%d, in_fd=%d, offset=%p, count=%lu)", out_fd, in_fd, offset, count);
+    SXEE6("test_mock_sendfile(out_fd=%d, in_fd=%d, offset=%p, count=%lu)", out_fd, in_fd, offset, SXE_CAST(unsigned long, count));
 
     errno = EBADF;
 
-    SXER60("return -1 // errno=EBADF");
+    SXER6("return -1 // errno=EBADF");
     return -1;
 }
 #endif /* !__APPLE__ */
@@ -156,7 +156,7 @@ main(void)
     char        buffer[4096];
     off_t       offset;
 
-    sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);
+    sxe_log_set_level(SXE_LOG_LEVEL_TRACE);
     plan_tests(22);
     sxe_register(3, 0);
 
@@ -172,7 +172,7 @@ main(void)
 
     /* Write a file larger than the send buffer size */
     size = sizeof(tcp_send_buffer_size);
-    SXEA13(getsockopt(client->socket, SOL_SOCKET, SO_SNDBUF, &tcp_send_buffer_size, &size) >= 0,
+    SXEA1(getsockopt(client->socket, SOL_SOCKET, SO_SNDBUF, &tcp_send_buffer_size, &size) >= 0,
            "socket %d: couldn't get SO_SNDBUF: (%d) %s", client->socket, sxe_socket_get_last_error(),
            sxe_socket_get_last_error_as_str());
 
@@ -182,7 +182,7 @@ main(void)
                            "I am slowly going crazy, one two three four five six switch; "
                            "crazy going slowly am I, six five four three two one switch\n");
         snprintf(tempfile, sizeof tempfile, "./test-XXXXXX");
-        SXEA11((fd = mkstemp(tempfile)) >= 0,                            "Failed to mkstemp '%s'", tempfile);
+        SXEA1((fd = mkstemp(tempfile)) >= 0,                            "Failed to mkstemp '%s'", tempfile);
         for (i = 0; i < tcp_send_buffer_size * 4 + 1024; ) {
             i += write(fd, buffer, len);
         }
@@ -191,13 +191,13 @@ main(void)
         in_fd = fd;
     }
 
-    SXEA11(stat(tempfile, &in_stat) >= 0,                                "Failed to stat '%s'", tempfile);
-    SXEA11((test_buf = malloc(test_buf_size = in_stat.st_size)) != NULL, "Failed to allocate %u byte buffer", test_buf_size);
-    SXEL12("Created a tempfile %u bytes (send buffer %u)", in_stat.st_size, tcp_send_buffer_size);
+    SXEA1(stat(tempfile, &in_stat) >= 0,                                "Failed to stat '%s'", tempfile);
+    SXEA1((test_buf = malloc(test_buf_size = in_stat.st_size)) != NULL, "Failed to allocate %u byte buffer", test_buf_size);
+    SXEL1("Created a tempfile %ld bytes (send buffer %u)", SXE_CAST(long, in_stat.st_size), tcp_send_buffer_size);
 
     /* Test a small send */
 
-    SXEA12(tcp_send_buffer_size > TEST_SMALL_SEND_SIZE, "TCP send buffer size %u is <= %u; make TEST_SMALL_SEND_SIZE smaller!",
+    SXEA1(tcp_send_buffer_size > TEST_SMALL_SEND_SIZE, "TCP send buffer size %u is <= %u; make TEST_SMALL_SEND_SIZE smaller!",
            tcp_send_buffer_size, TEST_SMALL_SEND_SIZE);
     offset = 0;
     is(sxe_sendfile(client, in_fd, &offset, TEST_SMALL_SEND_SIZE, test_event_sendfile_complete), SXE_RETURN_OK,
@@ -209,7 +209,7 @@ main(void)
 
     /* Test a big send; size required to overun the output buffer was determined experimentally */
 
-    SXEA12(test_buf_size > (unsigned)tcp_send_buffer_size * 3 + 1024, "File size %u is <= %u; use a bigger file!",
+    SXEA1(test_buf_size > (unsigned)tcp_send_buffer_size * 3 + 1024, "File size %u is <= %u; use a bigger file!",
            test_buf_size,  (unsigned)tcp_send_buffer_size * 3 + 1024);
     is(sxe_sendfile(client, in_fd, &offset, tcp_send_buffer_size * 3 + 1024, test_event_sendfile_complete), SXE_RETURN_IN_PROGRESS,
        "sxe_sendfile() returns IN_PROGRESS when tcp buffer has less room that what needs to be written");
@@ -227,18 +227,18 @@ main(void)
     diag("received %u of %u", test_buf_length, test_buf_size);
     close(in_fd);
 
-    SXEA11((in_fd = open(tempfile, O_RDONLY)) >= 0, "Failed to reopen '%s'", tempfile);
+    SXEA1((in_fd = open(tempfile, O_RDONLY)) >= 0, "Failed to reopen '%s'", tempfile);
 
     for (bytes_compared = 0; (bytes_read = read(in_fd, buffer, sizeof(buffer))) > 0; bytes_compared += bytes_read) {
-        SXEA12(bytes_compared + bytes_read <= test_buf_size, "Read more (%u) from file than last time (%u)",
+        SXEA1(bytes_compared + bytes_read <= test_buf_size, "Read more (%u) from file than last time (%u)",
                bytes_compared + bytes_read, test_buf_size);
         if (memcmp(buffer, &test_buf[bytes_compared], bytes_read)) {
-            SXEL10("=== received:");
-            SXED10(buffer, bytes_read);
-            SXEL10("=== expected:");
-            SXED10(&test_buf[bytes_compared], bytes_read);
+            SXEL1("=== received:");
+            SXED1(buffer, bytes_read);
+            SXEL1("=== expected:");
+            SXED1(&test_buf[bytes_compared], bytes_read);
         }
-        SXEA12(memcmp(buffer, &test_buf[bytes_compared], bytes_read) == 0, "Mismatch in sent file in bytes %u .. %u",
+        SXEA1(memcmp(buffer, &test_buf[bytes_compared], bytes_read) == 0, "Mismatch in sent file in bytes %u .. %u",
                bytes_compared, bytes_compared + bytes_read - 1);
     }
 
@@ -247,7 +247,7 @@ main(void)
 
     /* Test the sendfail failure case.
      */
-    SXEA11((in_fd = open(tempfile, O_RDONLY)) >= 0, "Failed to open '%s' for the 3rd time", tempfile);
+    SXEA1((in_fd = open(tempfile, O_RDONLY)) >= 0, "Failed to open '%s' for the 3rd time", tempfile);
     MOCK_SET_HOOK(sendfile, test_mock_sendfile);
     offset = 0;
     is(sxe_sendfile(client, in_fd, &offset, test_buf_size, test_event_sendfile_complete), SXE_RETURN_ERROR_WRITE_FAILED,

@@ -29,9 +29,9 @@ sha1_from_hex(SOPHOS_SHA1 * sha1, const char * sha1_in_hex)
 {
     SXE_RETURN result;
 
-    SXEE83("(sha1=%p,sha1_in_hex='%.*s'", sha1, SHA1_IN_HEX_LENGTH, sha1_in_hex);
+    SXEE6("(sha1=%p,sha1_in_hex='%.*s'", sha1, SXE_CAST(int, SHA1_IN_HEX_LENGTH), sha1_in_hex);
     result = sxe_hex_to_bytes((unsigned char *)sha1, sha1_in_hex, SHA1_IN_HEX_LENGTH);
-    SXER81("return %s", sxe_return_to_string(result));
+    SXER6("return %s", sxe_return_to_string(result));
     return result;
 }
 
@@ -40,19 +40,19 @@ sha1_to_hex(SOPHOS_SHA1 * sha1, char * sha1_in_hex, unsigned sha1_in_hex_length)
 {
     SXE_RETURN result = SXE_RETURN_OK;
 
-    SXEE87("(sha1=%08x%08x%08x%08x%08x,sha1_in_hex='%p',sha1_in_hex_length='%u'",
+    SXEE6("(sha1=%08x%08x%08x%08x%08x,sha1_in_hex='%p',sha1_in_hex_length='%u'",
            sha1->word[4], sha1->word[3], sha1->word[2], sha1->word[1], sha1->word[0],
            sha1_in_hex, sha1_in_hex_length);
-    SXEA11(sha1_in_hex_length == (SHA1_IN_HEX_LENGTH + 1), "Incorrect length of char * for sha1_to_hex(): '%u'", sha1_in_hex_length);
+    SXEA1(sha1_in_hex_length == (SHA1_IN_HEX_LENGTH + 1), "Incorrect length of char * for sha1_to_hex(): '%u'", sha1_in_hex_length);
 
     snprintf(sha1_in_hex     , 9, "%08x", htonl(sha1->word[0]));
     snprintf(sha1_in_hex +  8, 9, "%08x", htonl(sha1->word[1]));
     snprintf(sha1_in_hex + 16, 9, "%08x", htonl(sha1->word[2]));
     snprintf(sha1_in_hex + 24, 9, "%08x", htonl(sha1->word[3]));
     snprintf(sha1_in_hex + 32, 9, "%08x", htonl(sha1->word[4]));
-    SXEL62("sha1_in_hex: '%.*s'", SHA1_IN_HEX_LENGTH, sha1_in_hex);
+    SXEL6("sha1_in_hex: '%.*s'", SXE_CAST(int, SHA1_IN_HEX_LENGTH), sha1_in_hex);
 
-    SXER81("return %s", sxe_return_to_string(result));
+    SXER6("return %s", sxe_return_to_string(result));
     return result;
 }
 

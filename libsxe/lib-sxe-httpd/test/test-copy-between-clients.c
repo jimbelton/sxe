@@ -28,8 +28,9 @@
 #include "sxe-test.h"
 #include "sxe-util.h"
 
-#define TEST_WAIT 5.0
-#define LONG_WAIT 15.0
+#include "common.h"
+
+#define TEST_WAIT 4.0
 
 /* This test sets up a "double-sided" server, and copies one httpd's input to
  * the output of another. It doesn't bother sending correct output; this is
@@ -47,7 +48,7 @@
  * In order to ensure we actually go through multiple sends, we arrange to
  * send and receive "lots" of content using sxe_send_buffers() on the 'sender'
  * SXE; the httpd object receives them as a sequence of 1500-byte chunks
- * passed to http_body(); and it feeds them back out (without copying) to the
+ * passed to test_event_body(); and it feeds them back out (without copying) to the
  * receiver using buffers.
  */
 
@@ -2180,97 +2181,114 @@ tap_ev_queue q_receiver;
 SXE_HTTPD_REQUEST * receiver_request;
 
 #define PUSHBUF(i, L) do { \
-    sxe_buffer_construct_const(&send_buffers[i], msg ## L, sizeof(msg ## L) - 1); \
+    sxe_buffer_construct_plus(&send_buffers[i], SXE_CAST_NOCONST(char *, msg ## L),  sizeof(msg ## L) - 1, \
+                              sizeof(msg ## L) - 1, NULL, NULL);                  \
     sxe_list_push(&send_buffer_list, &send_buffers[i]); \
 } while (0)
 
 static void
-http_eoh(SXE_HTTPD_REQUEST *request)
+test_event_eoh(SXE_HTTPD_REQUEST *request)
 {
     SXE * this = request->sxe;
     SXE_UNUSED_PARAMETER(this);
-    SXEE60I("()");
+    SXEE6I("()");
     sxe_httpd_response_start(receiver_request, 200, "OK");
     sxe_httpd_response_content_length(receiver_request, request->in_content_length);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
-on_http_body_sent(SXE_HTTPD_REQUEST * request, SXE_RETURN result, void * user_data)
+test_event_http_body_sent(void * user_data, SXE_HTTPD_BUFFER * buffer)
 {
-    SXE * this = request->sxe;
-    SXE_UNUSED_PARAMETER(this);
-    SXE_UNUSED_PARAMETER(result);
-    SXEE60I("()");
     SXE_HTTPD_REQUEST * sender_request = user_data;
+    SXE_UNUSED_PARAMETER(buffer);
+    SXEE6("()");
     sxe_httpd_resume(sender_request);
-    SXER60I("return");
+    SXER6("return");
 }
 
+SXE_HTTPD_BUFFER ridiculous[65555];
+int buffer_id;
+
 static void
-http_body(SXE_HTTPD_REQUEST *request, const char *chunk, unsigned chunk_length)
+test_event_body(SXE_HTTPD_REQUEST *request, const char *chunk, unsigned chunk_length)
 {
     SXE * this = request->sxe;
+    SXE_HTTPD_BUFFER * buffer  = &ridiculous[buffer_id++];
+    SXE_HTTPD_BUFFER * flusher = &ridiculous[buffer_id++];
+
     SXE_UNUSED_PARAMETER(this);
-    SXEE60I("()");
-    sxe_httpd_response_add_body_data(receiver_request, chunk, chunk_length);
+    SXEE6I("(request=%p, chunk=%p, chunk_length=%u)", request, chunk, chunk_length);
+
+    sxe_httpd_buffer_construct(buffer,  SXE_CAST(char *, chunk), chunk_length, chunk_length, request, test_event_http_body_sent);
+    sxe_httpd_buffer_construct(flusher, SXE_CAST(char *, ""), 0, 1, NULL, NULL);
+    ((SXE_BUFFER *) flusher)->size = 0; // stupid assertion in construct_plus: can't construct a zero-size buffer.
+
     sxe_httpd_pause(request);
-    sxe_httpd_response_send(receiver_request, on_http_body_sent, request);
-    SXER60I("return");
+    sxe_httpd_response_add_body_buffer(receiver_request, buffer);
+    sxe_httpd_response_add_body_buffer(receiver_request, flusher);
+
+    SXEL7I("request @ %p is %spaused!!!", request, request->paused ? "" : "not ");
+    //sxe_httpd_response_send(receiver_request, test_event_http_body_sent, request);
+    SXER6I("return");
 }
 
 static void
-http_respond(SXE_HTTPD_REQUEST *request)
+test_event_respond(SXE_HTTPD_REQUEST *request)
 {
     SXE * this = request->sxe;
     SXE_UNUSED_PARAMETER(this);
-    SXEE60I("()");
+    SXEE6I("()");
     tap_ev_queue_push(q_bridge, __func__, 1, "request", request);
-    SXER60I("return");
+    SXER6I("return");
 }
 
+/* Sender callbacks */
+
 static void
-sender_connect(SXE * this)
+test_event_sender_connect(SXE * this)
 {
-    SXEE60I("()");
+    SXEE6I("()");
     tap_ev_queue_push(q_sender, __func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
-sender_read(SXE * this, int length)
+test_event_sender_read(SXE * this, int length)
 {
     SXE_UNUSED_PARAMETER(length);
-    SXEE61I("(length=%u)", length);
+    SXEE6I("(length=%u)", length);
     tap_ev_queue_push(q_sender, __func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
     sxe_buf_clear(this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
-static void
-sender_sent(SXE * this, SXE_RETURN result)
-{
-    SXEE60I("()");
-    tap_ev_queue_push(q_sender, __func__, 2, "this", this, "result", result);
-    SXER60I("return");
-}
+/* Receiver callbacks */
 
 static void
-receiver_connect(SXE * this)
+test_event_receiver_connect(SXE * this)
 {
-    SXEE60I("()");
+    SXEE6I("()");
     tap_ev_queue_push(q_receiver, __func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
-receiver_read(SXE * this, int length)
+test_event_receiver_read(SXE * this, int length)
 {
     SXE_UNUSED_PARAMETER(length);
-    SXEE61I("(length=%u)", length);
+    SXEE6I("(length=%u)", length);
     tap_ev_queue_push(q_receiver, __func__, 3, "this", this, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)), "used", SXE_BUF_USED(this));
     sxe_buf_clear(this);
-    SXER60I("return");
+    SXER6I("return");
+}
+
+static void
+test_event_receiver_sent(SXE * this, SXE_RETURN result)
+{
+    SXEE6I("()");
+    tap_ev_queue_push(q_receiver, __func__, 2, "this", this, "result", result);
+    SXER6I("return");
 }
 
 int
@@ -2283,42 +2301,48 @@ main(void)
     SXE *listener;
     SXE *sender;
     SXE *receiver;
+    unsigned length;
     SXE_BUFFER send_buffers[512];
+    SXE_BUFFER *buffer;
     SXE_LIST send_buffer_list;
+    SXE_LIST_WALKER walker;
 
     q_sender   = tap_ev_queue_new();
     q_bridge   = tap_ev_queue_new();
     q_receiver = tap_ev_queue_new();
 
-    plan_tests(4);
+    plan_tests(5);
 
+    /*
+     * Dial down for this library because this is a kind of stress test and otherwise the log file is over 2MB
+     */
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_BUFFER=5");
     putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE=5");
     putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_LIST=5");
     putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=5");
     putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_HTTP=5");
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_HTTPD=6");     /* comment out this line to debug this test */
 
-    sxe_register(4, 0);        /* http listener and connections */
-    sxe_register(8, 0);        /* http clients */
-    sxe_init();
+    test_sxe_register_and_init(5);
 
     sxe_httpd_construct(&bridge, 3, 10, 512, 0);
-    SXE_HTTPD_SET_HANDLER(&bridge, respond, http_respond);
+    SXE_HTTPD_SET_HANDLER(&bridge, respond, test_event_respond);
 
-    listener = sxe_httpd_listen(&bridge, "0.0.0.0", 0);
+    listener = test_httpd_listen(&bridge, "0.0.0.0", 0);
 
-    sender = sxe_new_tcp(NULL, "0.0.0.0", 0, sender_connect, sender_read, NULL);
+    sender = test_new_tcp(NULL, "0.0.0.0", 0, test_event_sender_connect, test_event_sender_read, NULL);
     sxe_connect(sender, "127.0.0.1", SXE_LOCAL_PORT(listener));
-    is_eq(test_tap_ev_queue_identifier_wait(q_sender, TEST_WAIT, &ev), "sender_connect",                   "Sender connected to HTTPD");
+    is_eq(test_tap_ev_queue_identifier_wait(q_sender, TEST_WAIT, &ev), "test_event_sender_connect",     "Sender connected to HTTPD");
 
-    receiver = sxe_new_tcp(NULL, "0.0.0.0", 0, receiver_connect, receiver_read, NULL);
+    receiver = test_new_tcp(NULL, "0.0.0.0", 0, test_event_receiver_connect, test_event_receiver_read, NULL);
     sxe_connect(receiver, "127.0.0.1", SXE_LOCAL_PORT(listener));
-    is_eq(test_tap_ev_queue_identifier_wait(q_receiver, TEST_WAIT, &ev), "receiver_connect",               "Receiver connected to HTTPD");
+    is_eq(test_tap_ev_queue_identifier_wait(q_receiver, TEST_WAIT, &ev), "test_event_receiver_connect", "Receiver connected to HTTPD");
 
-    SXE_WRITE_LITERAL(receiver, "GET /file HTTP/1.1\r\n\r\n");
-    is_eq(test_tap_ev_queue_identifier_wait(q_bridge, TEST_WAIT, &ev), "http_respond",                     "HTTPD ready to respond to receiver");
+    TEST_SXE_SEND_LITERAL(receiver, "GET /file HTTP/1.1\r\n\r\n", test_event_receiver_sent, q_receiver, TEST_WAIT, &ev);
+    is_eq(test_tap_ev_queue_identifier_wait(q_bridge, TEST_WAIT, &ev), "test_event_respond",            "HTTPD ready to respond to receiver");
     receiver_request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
 
-    SXE_LIST_CONSTRUCT(&send_buffer_list, 0, SXE_BUFFER, node);
+    sxe_buffer_list_construct(&send_buffer_list);
 
     PUSHBUF(1, B); PUSHBUF(2, C); PUSHBUF(3, D); PUSHBUF(4, E); PUSHBUF(5, F); PUSHBUF(6, G); PUSHBUF(7, H);
     PUSHBUF(8, I); PUSHBUF(9, J); PUSHBUF(10, K); PUSHBUF(11, L); PUSHBUF(12, M); PUSHBUF(13, N); PUSHBUF(14, O); PUSHBUF(15, P);
@@ -2385,37 +2409,41 @@ main(void)
     PUSHBUF(496, C); PUSHBUF(497, D); PUSHBUF(498, E); PUSHBUF(499, F); PUSHBUF(500, G); PUSHBUF(501, H); PUSHBUF(502, I); PUSHBUF(503, J);
     PUSHBUF(504, K); PUSHBUF(505, L); PUSHBUF(506, M); PUSHBUF(507, N); PUSHBUF(508, O); PUSHBUF(509, P); PUSHBUF(510, Q); PUSHBUF(511, R);
 
-    /* Calculate the Content-Length and prepend it. */
-    {
-        SXE_LIST_WALKER walker;
-        SXE_BUFFER *buffer;
-        unsigned length = 0;
+    sxe_list_walker_construct(&walker, &send_buffer_list);
 
-        sxe_list_walker_construct(&walker, &send_buffer_list);
-
-        for (buffer = sxe_list_walker_step(&walker); buffer; buffer = sxe_list_walker_step(&walker)) {
-            length += buffer->len;
-        }
-
-        snprintf(post_buffer, sizeof(post_buffer), "POST / HTTP/1.1\r\nContent-Length: %d\r\n\r\n", length);
-        sxe_buffer_construct_const(&send_buffers[0], post_buffer, strlen(post_buffer));
-        sxe_list_unshift(&send_buffer_list, &send_buffers[0]);
+    length = 0;
+    for (buffer = sxe_list_walker_step(&walker); buffer; buffer = sxe_list_walker_step(&walker)) {
+        length += sxe_buffer_length(buffer);
     }
 
-    /* Hook the EOH and BODY events now that we're going to send the large
-     * body from the sender to the receiver. The 'eoh' handler will write the
-     * response headers to the receiver; the 'body' handler will repeatedly
-     * send a chunk of response and flush it.
-     */
-    SXE_HTTPD_SET_HANDLER(&bridge, eoh,     http_eoh);
-    SXE_HTTPD_SET_HANDLER(&bridge, body,    http_body);
+    snprintf(post_buffer, sizeof(post_buffer), "POST / HTTP/1.1\r\nContent-Length: %d\r\n\r\n", length);
+    sxe_buffer_construct_plus(&send_buffers[0], post_buffer, strlen(post_buffer), sizeof(post_buffer), NULL, NULL);
 
-    sxe_send_buffers(sender, &send_buffer_list, sender_sent);
+    sxe_list_unshift(&send_buffer_list, &send_buffers[0]);
+    SXEL6("Test: Calculated the Content-Length (%u) and prepended it", length);
 
-    is_eq(test_tap_ev_queue_identifier_wait(q_bridge, LONG_WAIT, &ev), "http_respond",                     "HTTPD ready to respond to sender");
+    SXEL6("Test: Hook the EOH and BODY events now that we're going to send the large");
+    SXEL6("Test: body from the sender to the receiver. The 'eoh' handler will write the");
+    SXEL6("Test: response headers to the receiver; the 'body' handler will repeatedly");
+    SXEL6("Test: send a chunk of response and flush it.");
+    SXE_HTTPD_SET_HANDLER(&bridge, eoh,     test_event_eoh);
+    SXE_HTTPD_SET_HANDLER(&bridge, body,    test_event_body);
+
+    SXEL6("Test: Sender sends buffers");
+
+    for (buffer = sxe_list_shift( &send_buffer_list); buffer != NULL; buffer = sxe_list_shift( &send_buffer_list)) {
+        sxe_send_buffer(sender, buffer);
+    }
+
+    SXEL6("Test: HTTPD responds to sender");
+    is_eq(test_tap_ev_queue_identifier_wait(q_bridge, TEST_WAIT, &ev), "test_event_respond",     "HTTPD ready to respond to sender");
     sender_request = SXE_CAST_NOCONST(SXE_HTTPD_REQUEST *, tap_ev_arg(ev, "request"));
     sxe_httpd_response_start(sender_request, 200, "OK");
     sxe_httpd_response_end(sender_request, NULL, NULL);
+
+    sxe_httpd_response_end(receiver_request, NULL, NULL);
+
+    SXEL1("Test: Done test");
 
     return exit_status();
 }

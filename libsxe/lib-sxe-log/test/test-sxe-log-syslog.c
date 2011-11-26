@@ -120,63 +120,63 @@ main(int argc, char *argv[]) {
     is((int)(uintptr_t)tap_ev_arg(ev, "option"), LOG_NDELAY|LOG_PID,    "sxe_log_use_syslog() calls openlog() with correct 'option' parameter");
     is((int)(uintptr_t)tap_ev_arg(ev, "facility"), LOG_USER,            "sxe_log_use_syslog() calls openlog() with correct 'facility' parameter");
 
-    SXEL10("SXEL10");
-    snprintf(expected, sizeof expected, "T=%ld ------ 1 - SXEL10\n", (long)tid);
+    SXEL1("SXEL1");
+    snprintf(expected, sizeof expected, "T=%ld ------ 1 - SXEL1\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL10() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_ERR,             "SXEL10() maps to LOG_ERR syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL10() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL1() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_ERR,             "SXEL1() maps to LOG_ERR syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL1() is logged correctly");
 
-    SXEL21("SXEL21(%s)", "arg1");
-    snprintf(expected, sizeof expected, "T=%ld ------ 2 - SXEL21(arg1)\n", (long)tid);
+    SXEL2("SXEL2(%s)", "arg1");
+    snprintf(expected, sizeof expected, "T=%ld ------ 2 - SXEL2(arg1)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL21() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_WARNING,         "SXEL21() maps to LOG_WARNING syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL21() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL2() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_WARNING,         "SXEL2() maps to LOG_WARNING syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL2() is logged correctly");
 
-    SXEL32("SXEL32(%s,%d)", "arg1", 22);
-    snprintf(expected, sizeof expected, "T=%ld ------ 3 - SXEL32(arg1,22)\n", (long)tid);
+    SXEL3("SXEL3(%s,%d)", "arg1", 22);
+    snprintf(expected, sizeof expected, "T=%ld ------ 3 - SXEL3(arg1,22)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL32() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_NOTICE,          "SXEL32() maps to LOG_NOTICE syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL32() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL3() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_NOTICE,          "SXEL3() maps to LOG_NOTICE syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL3() is logged correctly");
 
-    SXEL43("SXEL43(%s,%d,%u)", "arg1", 22, 44);
-    snprintf(expected, sizeof expected, "T=%ld ------ 4 - SXEL43(arg1,22,44)\n", (long)tid);
+    SXEL4("SXEL4(%s,%d,%u)", "arg1", 22, 44);
+    snprintf(expected, sizeof expected, "T=%ld ------ 4 - SXEL4(arg1,22,44)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL43() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_INFO,            "SXEL43() maps to LOG_INFO syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL43() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL4() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_INFO,            "SXEL4() maps to LOG_INFO syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL4() is logged correctly");
 
-    SXEL54("SXEL54(%s,%d,%u,%x)", "arg1", 22, 44, 64);
-    snprintf(expected, sizeof expected, "T=%ld ------ 5 - SXEL54(arg1,22,44,40)\n", (long)tid);
+    SXEL5("SXEL5(%s,%d,%u,%x)", "arg1", 22, 44, 64);
+    snprintf(expected, sizeof expected, "T=%ld ------ 5 - SXEL5(arg1,22,44,40)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL54() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL54() maps to LOG_DEBUG syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL54() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL5() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL5() maps to LOG_DEBUG syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL5() is logged correctly");
 
-    SXEL65("SXEL65(%s,%d,%u,%x,%.2f)", "arg1", 22, 44, 64, 3.1415926);
-    snprintf(expected, sizeof expected, "T=%ld ------ 6 - SXEL65(arg1,22,44,40,3.14)\n", (long)tid);
+    SXEL6("SXEL6(%s,%d,%u,%x,%.2f)", "arg1", 22, 44, 64, 3.1415926);
+    snprintf(expected, sizeof expected, "T=%ld ------ 6 - SXEL6(arg1,22,44,40,3.14)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL65() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL65() maps to LOG_DEBUG syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL65() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL6() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL6() maps to LOG_DEBUG syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL6() is logged correctly");
 
     this->id = 99;
-    SXEL10I("SXEL10I");
-    snprintf(expected, sizeof expected, "T=%ld     99 1 - SXEL10I\n", (long)tid);
+    SXEL1I("SXEL1I");
+    snprintf(expected, sizeof expected, "T=%ld     99 1 - SXEL1I\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL10I() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_ERR,             "SXEL10I() maps to LOG_ERR syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL10I() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL1I() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_ERR,             "SXEL1I() maps to LOG_ERR syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL1I() is logged correctly");
 
     this->id = 98;
-    SXEL65I("SXEL65I(%s,%d,%u,%x,%.2f)", "arg1", 22, 44, 64, 3.1415926);
-    snprintf(expected, sizeof expected, "T=%ld     98 6 - SXEL65I(arg1,22,44,40,3.14)\n", (long)tid);
+    SXEL6I("SXEL6I(%s,%d,%u,%x,%.2f)", "arg1", 22, 44, 64, 3.1415926);
+    snprintf(expected, sizeof expected, "T=%ld     98 6 - SXEL6I(arg1,22,44,40,3.14)\n", (long)tid);
     ev = tap_ev_queue_shift(q_syslog);
-    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL65I() calls syslog()");
-    is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL65I() maps to LOG_DEBUG syslog level");
-    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL65I() is logged correctly");
+    is_eq(tap_ev_identifier(ev), "syslog",              "SXEL6I() calls syslog()");
+    is(tap_ev_arg(ev, "priority"), LOG_DEBUG,           "SXEL6I() maps to LOG_DEBUG syslog level");
+    is_eq(tap_ev_arg(ev, "logline"), expected,          "SXEL6I() is logged correctly");
 
     sxe_log_hook_buffer_prefix(NULL); /* For coverage */
     (void)argc;

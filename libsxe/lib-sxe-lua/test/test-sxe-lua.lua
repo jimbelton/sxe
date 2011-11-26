@@ -8,8 +8,8 @@ do
   SXEL5("L5 - covered")
   SXEL6("L6 - covered")
   SXEL7("L7 - covered")
-  SXEL8("L8 - covered")
-  SXEL9("L9 - covered")
+  SXEL6("L8 - covered")
+  SXEL7("L9 - covered")
 
   local x = sxe.log_level
   sxe.log_level = 2
@@ -95,7 +95,7 @@ do
   sxe_register(2, function ()
     local c = sxe_new_tcp("0.0.0.0", 0,
       function (sxe)
-        SXEL9("port: " .. sxe.peer_addr .. ":" .. sxe.peer_port)
+        SXEL7("port: " .. sxe.peer_addr .. ":" .. sxe.peer_port)
         is(pcall(sxe_write, sxe, {}), false, "sxe_write cannot write a table")
         sxe:write("abcde\r\n")
       end,

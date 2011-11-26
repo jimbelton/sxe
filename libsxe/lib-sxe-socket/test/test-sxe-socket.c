@@ -43,6 +43,9 @@ main(int argc, char ** argv)
 
     sxe_socket_init();
 
+    /* Previous system calls may set errno to non-zero */
+    errno = 0;
+
     ok   ((sock = socket(AF_INET,  SOCK_STREAM, 0)) != SXE_SOCKET_INVALID       , "Allocated a socket"             );
 
 #ifdef __FreeBSD__

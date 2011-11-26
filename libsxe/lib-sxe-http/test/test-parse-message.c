@@ -28,10 +28,12 @@
 #define CONTENT_LENGTH                 "Content-Length"
 #define MESSAGE_HAPPY                  "GET  /\r\n" CONTENT_LENGTH ": 12\r\n \r\n\r\n"
 #define MESSAGE_BAD_REQUEST_LINE       "GET\r#\n"
+#define MESSAGE_BAD_RESPONSE_LINE      "HTTP/1.1 200 OK\n" CONTENT_LENGTH ": 12\r\n"
 #define MESSAGE_BAD_HEADER_COLON       "\r\n:Mal-Content-Length: 0"
 #define MESSAGE_BAD_HEADER_SPACE       "\r\nDis-Content Length: -1"
 #define MESSAGE_BAD_HEADER_UNPRINTABLE "\r\nBond-\007: James"
 #define MESSAGE_BAD_HEADER_CR_NO_LF    "\r\nContent-Length: 12\r#\n\r\n"
+#define MESSAGE_BAD_HEADER_LF_NO_CR    "\r\nContent-Length: 12\n\r\n"
 #define TEST_MAX_BUF                   1500
 
 #define LONG_HEADER_VALUE \
@@ -61,7 +63,7 @@ int
 main(void)
 {
     SXE_HTTP_MESSAGE message;
-    plan_tests(59);
+    plan_tests(62);
 
     tap_test_case_name("defragmentation");
     sxe_http_message_construct(&message, MESSAGE_HAPPY, 0);
@@ -110,6 +112,10 @@ main(void)
     sxe_http_message_construct(&message, MESSAGE_BAD_REQUEST_LINE, strlen(MESSAGE_BAD_REQUEST_LINE));
     is(sxe_http_message_parse_next_line_element(&message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), SXE_RETURN_ERROR_BAD_MESSAGE,
                                                                                    "Request line has CR w/o LF:   BAD_MESSAGE");
+
+    sxe_http_message_construct(&message, MESSAGE_BAD_RESPONSE_LINE, strlen(MESSAGE_BAD_RESPONSE_LINE));
+    is(sxe_http_message_parse_next_line_element(&message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), SXE_RETURN_ERROR_BAD_MESSAGE,
+                                                                                   "Response line has LF w/o CR:  BAD_MESSAGE");
     sxe_http_message_construct(&message, MESSAGE_BAD_HEADER_COLON, strlen(MESSAGE_BAD_HEADER_COLON));
     is(sxe_http_message_parse_next_line_element(&message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), SXE_RETURN_END_OF_FILE,
                                                                                    "Parsed message request line");
@@ -126,6 +132,11 @@ main(void)
     is(sxe_http_message_parse_next_line_element(&message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), SXE_RETURN_END_OF_FILE,
                                                                                    "Parsed message request line");
     is(sxe_http_message_parse_next_header(&message), SXE_RETURN_ERROR_BAD_MESSAGE, "Header value CR without LF:   BAD_MESSAGE");
+
+    sxe_http_message_construct(&message, MESSAGE_BAD_HEADER_LF_NO_CR,    strlen(MESSAGE_BAD_HEADER_LF_NO_CR));
+    is(sxe_http_message_parse_next_line_element(&message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE), SXE_RETURN_END_OF_FILE,
+                                                                                   "Parsed message request line");
+    is(sxe_http_message_parse_next_header(&message), SXE_RETURN_ERROR_BAD_MESSAGE, "Header value LF without CR:   BAD_MESSAGE");
 
     tap_test_case_name("long headers");
     sxe_http_message_construct(&message, message_long_headers, TEST_MAX_BUF);

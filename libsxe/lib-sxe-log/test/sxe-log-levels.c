@@ -36,25 +36,25 @@
 void test_level_six(SXE_LOG_LEVEL level);
 
 static void
-test_level_eight(SXE_LOG_LEVEL level)
+test_level_seven(SXE_LOG_LEVEL level)
 {
-    SXEE81("(level=%u)", level);    /* Function name should be automatically inserted */
+    SXEE7("(level=%u)", level);    /* Function name should be automatically inserted */
 
-    if (level == SXE_LOG_LEVEL_LIBRARY_DUMP) {
-        SXEL20("No indent");
+    if (level == SXE_LOG_LEVEL_DUMP) {
+        SXEL2("No indent");
         sxe_log_set_level(SXE_LOG_LEVEL_DEBUG);
-        SXEL20("Indented by 2");
+        SXEL2("Indented by 2");
     }
 
     sxe_log_set_level(level);
-    SXEL21("Set log level to %u", level);
-    SXER80("return // eight");
+    SXEL2("Set log level to %u", level);
+    SXER7("return // seven");
 }
 
 void
 test_level_six(SXE_LOG_LEVEL level)
 {
-    SXEE61("(level=%u)", level);    /* Function name should be automatically inserted */
-    test_level_eight(level);
-    SXER60("return // six");
+    SXEE6("(level=%u)", level);    /* Function name should be automatically inserted */
+    test_level_seven(level);
+    SXER6("return // six");
 }

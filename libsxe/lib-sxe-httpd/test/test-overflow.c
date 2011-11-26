@@ -32,7 +32,7 @@ static void
 handle_connect(SXE * this)
 {
     ++connections;
-    SXEL91I("handle_connect(): connections=%d", connections);
+    SXEL7I("handle_connect(): connections=%d", connections);
     SXE_WRITE_LITERAL(this, "GET / HTTP/1.1\r\n\r\n");
 }
 
@@ -41,7 +41,7 @@ handle_read(SXE * this, int length)
 {
     SXE_UNUSED_PARAMETER(length);
     SXE_UNUSED_PARAMETER(this);
-    SXEL91I("handle_read(): connections=%d, closing self", connections);
+    SXEL7I("handle_read(): connections=%d, closing self", connections);
     sxe_close(this);
     --connections;
 }
@@ -51,7 +51,7 @@ handle_close(SXE * this)
 {
     SXE_UNUSED_PARAMETER(this);
     --connections;
-    SXEL91I("handle_close(): connections=%d", connections);
+    SXEL7I("handle_close(): connections=%d", connections);
 }
 
 static void
@@ -60,7 +60,7 @@ handle_timer(EV_P_ ev_timer *w, int revents)
     SXE_UNUSED_PARAMETER(loop);
     SXE_UNUSED_PARAMETER(revents);
 
-    SXEL91("connections: %d", connections);
+    SXEL7("connections: %d", connections);
     if (connections == 0) {
         sxe_close((SXE*)w->data);
         sxe_timer_stop(w);

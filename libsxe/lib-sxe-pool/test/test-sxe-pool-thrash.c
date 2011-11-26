@@ -65,17 +65,17 @@ test_mover_thread(void * state_as_ptr)
     TEST_STATE from_state = (TEST_STATE)state_as_ptr;
     TEST_STATE to_state   = from_state == TEST_STATE_FREE ? TEST_STATE_USED : TEST_STATE_FREE;
 
-    SXEE81("test_mover_thread(from_state=%s)", test_state_to_string(from_state));
+    SXEE6("test_mover_thread(from_state=%s)", test_state_to_string(from_state));
 
     for (;;) {
         switch(sxe_pool_set_oldest_element_state(test_array, from_state, to_state)) {
-        case SXE_POOL_LOCK_NOT_TAKEN: SXEA10(SXE_POOL_LOCK_NOT_TAKEN, "Lock timed out"); break;
+        case SXE_POOL_LOCK_NOT_TAKEN: SXEA1(SXE_POOL_LOCK_NOT_TAKEN, "Lock timed out"); break;
         case SXE_POOL_NO_INDEX:       test_stats[from_state].empties++; SXE_YIELD();     break;
         default:                      test_stats[from_state].shoves++;                   break;
         }
     }
 
-    SXER80("return 0");
+    SXER6("return 0");
     return 0;
 }
 
@@ -86,14 +86,14 @@ test_walker_thread(void * state_as_ptr)
     SXE_POOL_WALKER walker;
     unsigned        node;
 
-    SXEE81("test_mover_thread(state=%s)", test_state_to_string(state));
+    SXEE6("test_mover_thread(state=%s)", test_state_to_string(state));
 
     for (;;) {
         sxe_pool_walker_construct(&walker, test_array, state);
 
         for (;;) {
             switch(node = sxe_pool_walker_step(&walker)) {
-            case SXE_POOL_LOCK_NOT_TAKEN: SXEA10(SXE_POOL_LOCK_NOT_TAKEN, "Lock timed out"); break;
+            case SXE_POOL_LOCK_NOT_TAKEN: SXEA1(SXE_POOL_LOCK_NOT_TAKEN, "Lock timed out"); break;
             default:                                                                         break;
             }
 
@@ -111,7 +111,7 @@ test_walker_thread(void * state_as_ptr)
         }
     }
 
-    SXER80("return 0");
+    SXER6("return 0");
     return 0;
 }
 
@@ -136,13 +136,13 @@ main(int argc, char * argv[])
     test_array  = sxe_pool_new("tidalpool", TEST_ELEMENT_NUMBER, sizeof(TEST_ELEMENT_TYPE), TEST_ELEMENT_NUMBER_OF_STATES,
                                SXE_POOL_OPTION_LOCKED);
     sxe_pool_set_state_to_string(test_array, test_state_to_string);
-    SXEA10(sxe_thread_create(&thread, test_mover_thread,  (void *)TEST_STATE_FREE, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
+    SXEA1(sxe_thread_create(&thread, test_mover_thread,  (void *)TEST_STATE_FREE, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
            "Unable to create thread");
-    SXEA10(sxe_thread_create(&thread, test_walker_thread, (void *)TEST_STATE_FREE, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
+    SXEA1(sxe_thread_create(&thread, test_walker_thread, (void *)TEST_STATE_FREE, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
            "Unable to create thread");
-    SXEA10(sxe_thread_create(&thread, test_mover_thread,  (void *)TEST_STATE_USED, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
+    SXEA1(sxe_thread_create(&thread, test_mover_thread,  (void *)TEST_STATE_USED, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
            "Unable to create thread");
-    SXEA10(sxe_thread_create(&thread, test_walker_thread, (void *)TEST_STATE_USED, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
+    SXEA1(sxe_thread_create(&thread, test_walker_thread, (void *)TEST_STATE_USED, SXE_THREAD_OPTION_DEFAULTS) == SXE_RETURN_OK,
            "Unable to create thread");
 
     while (seconds_to_run--) {

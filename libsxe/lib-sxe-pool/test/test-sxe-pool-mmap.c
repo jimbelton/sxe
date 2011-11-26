@@ -24,6 +24,7 @@
 #include <process.h>    /* For spawn() */
 #include <unistd.h>     /* for PATH_MAX     on WIN32 */
 #include <limits.h>     /* for PATH_MAX not on WIN32 */
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
@@ -63,27 +64,30 @@ main(int argc, char ** argv)
     int             child[TEST_CLIENT_INSTANCES];
     SXE_POOL_WALKER walker;
 
+    putenv(SXE_CAST_NOCONST(char *, "SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=5"));    /* Set to 5 to suppress sxe-pool debug logging since this is kind of a stress test */
+    putenv(SXE_CAST_NOCONST(char *, "SXE_LOG_LEVEL_LIBSXE_LIB_SXE_LIST=5"));    /* Set to 5 to suppress sxe-list debug logging since this is kind of a stress test */
+
     if (argc > 1) {
         count                       = atoi(argv[1]);
         unique_memmap_path_and_file =      argv[2] ;
 
-        SXEL12("Instance %2u unique memmap path and file: %s", count, unique_memmap_path_and_file);
+        SXEL1("Instance %2u unique memmap path and file: %s", count, unique_memmap_path_and_file);
         sxe_mmap_open(&memmap, unique_memmap_path_and_file);
         shared  = SXE_CAST(unsigned *, SXE_MMAP_ADDR(&memmap));
         pool    = sxe_pool_from_base(shared);
-        SXEL63("Instance %2u mapped to shared pool // base=%p, pool=%p", count, shared, pool);
+        SXEL6("Instance %2u mapped to shared pool // base=%p, pool=%p", count, shared, pool);
 
         do {
             usleep(10000 * count);
             id = sxe_pool_set_oldest_element_state(pool, TEST_STATE_FREE, TEST_STATE_CLIENT_TAKE);
-            SXEA10(id != SXE_POOL_LOCK_NOT_TAKEN, "Got SXE_POOL_LOCK_NOT_TAKEN");;
+            SXEA1(id != SXE_POOL_LOCK_NOT_TAKEN, "Got SXE_POOL_LOCK_NOT_TAKEN");;
         } while (id == SXE_POOL_NO_INDEX);
 
-        SXEL62("Instance %2u got pool element %u", count, id);
+        SXEL6("Instance %2u got pool element %u", count, id);
         pool[id] = count;
         sxe_pool_set_indexed_element_state(pool, id, TEST_STATE_CLIENT_TAKE, TEST_STATE_CLIENT_DONE);
         sxe_mmap_close(&memmap);
-        SXEL61("Instance %2u exiting", count);
+        SXEL6("Instance %2u exiting", count);
         return 0;
     }
 
@@ -91,13 +95,13 @@ main(int argc, char ** argv)
 
     sxe_test_get_temp_file_name("test-sxe-mmap-pool", unique_memmap_path_and_file_master_buffer, sizeof(unique_memmap_path_and_file_master_buffer), &unique_memmap_path_and_file_master_buffer_used);
     unique_memmap_path_and_file = &unique_memmap_path_and_file_master_buffer[0];
-    SXEL12("Instance %2d unique memmap path and file: %s", count, unique_memmap_path_and_file);
+    SXEL1("Instance %2d unique memmap path and file: %s", count, unique_memmap_path_and_file);
 
     ok((size = sxe_pool_size(TEST_CLIENT_INSTANCES/2, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= TEST_CLIENT_INSTANCES * sizeof(*pool),
        "Expect pool size %u to be at least the size of the array %u", (unsigned)size, (unsigned)(TEST_CLIENT_INSTANCES * sizeof(*pool)));
 
-    SXEA12((fd = open(unique_memmap_path_and_file, O_CREAT | O_TRUNC | O_WRONLY, 0666)) >= 0, "Failed to create file 'unique_memmap_path_and_file': %s", unique_memmap_path_and_file, strerror(errno));
-    SXEA12(ftruncate(fd, size)                                                          >= 0, "Failed to extend the file to %lu bytes: %s"             , size                       , strerror(errno));
+    SXEA1((fd = open(unique_memmap_path_and_file, O_CREAT | O_TRUNC | O_WRONLY, 0666)) >= 0, "Failed to create file '%s': %s", unique_memmap_path_and_file, strerror(errno));
+    SXEA1(ftruncate(fd, size)                                                          >= 0, "Failed to extend the file to %p bytes: %s", SXE_CAST(void *, size), strerror(errno));
     close(fd);
     sxe_mmap_open(&memmap, unique_memmap_path_and_file);
     shared = SXE_CAST(unsigned *, SXE_MMAP_ADDR(&memmap));
@@ -110,22 +114,22 @@ main(int argc, char ** argv)
 
         snprintf(buffer, sizeof(buffer), "%u", count + 1);
         child[count] = spawnl(P_NOWAIT, argv[0], argv[0], buffer, unique_memmap_path_and_file, NULL);
-        SXEA13(child[count] != -1, "Failed to spawn '%s %s': %s", argv[0], buffer, strerror(errno));
+        SXEA1(child[count] != -1, "Failed to spawn '%s %s': %s", argv[0], buffer, strerror(errno));
     }
 
     start_time = sxe_get_time_in_seconds();
 
     for (count = 0; (count < TEST_CLIENT_INSTANCES); ) {
-        SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
+        SXEA1((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         usleep(10000);
         id = sxe_pool_set_oldest_element_state(pool, TEST_STATE_CLIENT_DONE, TEST_STATE_FREE);
 
         /* Assert here in  the test. The actual service would take specific action here */
-        SXEA12(id != SXE_POOL_LOCK_NOT_TAKEN, "Parent: Failed to acqure lock .. yield limit reached. id %u vs %u", id,
+        SXEA1(id != SXE_POOL_LOCK_NOT_TAKEN, "Parent: Failed to acqure lock .. yield limit reached. id %u vs %u", id,
                SXE_POOL_LOCK_NOT_TAKEN);
 
         if (id != SXE_POOL_NO_INDEX) {
-            SXEL62("Looks like instance %u got element %u", pool[id], id);
+            SXEL6("Looks like instance %u got element %u", pool[id], id);
             count++;
         }
     }
@@ -134,8 +138,8 @@ main(int argc, char ** argv)
     start_time = sxe_get_time_in_seconds();
 
     for (count = 0; (count < TEST_CLIENT_INSTANCES); count++) {
-        SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
-        SXEA12(cwait(NULL, child[count], WAIT_CHILD) == child[count], "Unexpected return from cwait for process 0x%08x: %s",
+        SXEA1((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
+        SXEA1(cwait(NULL, child[count], WAIT_CHILD) == child[count], "Unexpected return from cwait for process 0x%08x: %s",
                child[count], strerror(errno));
     }
 
@@ -149,8 +153,8 @@ main(int argc, char ** argv)
 
     sxe_pool_override_locked(pool); /* for coverage */
     sxe_mmap_close(&memmap);
-    SXEL12("Instance %02d unlinking: %s", count, unique_memmap_path_and_file);
+    SXEL1("Instance %02d unlinking: %s", count, unique_memmap_path_and_file);
     unlink(unique_memmap_path_and_file);
-    SXEL11("Instance %02d exiting // master", count);
+    SXEL1("Instance %02d exiting // master", count);
     return exit_status();
 }

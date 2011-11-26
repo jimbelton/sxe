@@ -37,10 +37,10 @@ sxe_hash_new(const char * name, unsigned element_count)
 {
     void * array;
 
-    SXEE82("sxe_hash_new(name=%s,element_count=%u)", name, element_count);
+    SXEE6("sxe_hash_new(name=%s,element_count=%u)", name, element_count);
 
     array = sxe_hash_new_plus(name, element_count, sizeof(SXE_HASH_KEY_VALUE_PAIR), 0, sizeof(SXE_SHA1), SXE_HASH_OPTION_UNLOCKED);
-    SXER81("return array=%p", array);
+    SXER6("return array=%p", array);
     return array;
 }
 
@@ -52,20 +52,20 @@ sxe_hash_set(void * array, const char * sha1_as_char, unsigned sha1_key_len, uns
 
     SXE_UNUSED_PARAMETER(sha1_key_len);
 
-    SXEE85("sxe_hash_set(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u,value=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len, value);
-    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
+    SXEE6("sxe_hash_set(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u,value=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len, value);
+    SXEA6(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
 
     if ((id = sxe_hash_take(array)) == SXE_HASH_FULL) {
         goto SXE_EARLY_OUT;
     }
 
-    SXEL91("setting key and value at index=%u", id);
+    SXEL7("setting key and value at index=%u", id);
     sha1_from_hex(&((SXE_HASH_KEY_VALUE_PAIR *)hash->pool)[id].sha1, sha1_as_char);
     ((SXE_HASH_KEY_VALUE_PAIR *)hash->pool)[id].value = value;
     sxe_hash_add(array, id);
 
 SXE_EARLY_OUT:
-    SXER82(id == SXE_HASH_FULL ? "%sSXE_HASH_FULL" : "%s%u", "return id=", id);
+    SXER6(id == SXE_HASH_FULL ? "%sSXE_HASH_FULL" : "%s%u", "return id=", id);
     return id;
 }
 
@@ -81,8 +81,8 @@ sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     SOPHOS_SHA1 sha1;
 
     SXE_UNUSED_PARAMETER(sha1_key_len);
-    SXEE84("sxe_hash_get(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
-    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
+    SXEE6("sxe_hash_get(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
+    SXEA6(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
 
     if (sha1_from_hex(&sha1, sha1_as_char) != SXE_RETURN_OK) {
         goto SXE_EARLY_OUT;
@@ -95,7 +95,7 @@ sxe_hash_get(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     }
 
 SXE_EARLY_OUT:
-    SXER81("return value=%u", value);
+    SXER6("return value=%u", value);
     return value;
 }
 
@@ -108,8 +108,8 @@ sxe_hash_remove(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     SOPHOS_SHA1 sha1;
 
     SXE_UNUSED_PARAMETER(sha1_key_len);
-    SXEE84("sxe_hash_remove(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
-    SXEA60(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
+    SXEE6("sxe_hash_remove(hash=%p,sha1_as_char=%.*s,sha1_key_len=%u)", hash, sha1_key_len, sha1_as_char, sha1_key_len);
+    SXEA6(sha1_key_len == SXE_HASH_SHA1_AS_HEX_LENGTH, "sha1 length is incorrect");
 
     if (sha1_from_hex(&sha1, sha1_as_char) != SXE_RETURN_OK) {
         goto SXE_EARLY_OUT;
@@ -123,6 +123,6 @@ sxe_hash_remove(void * array, const char * sha1_as_char, unsigned sha1_key_len)
     }
 
 SXE_EARLY_OUT:
-    SXER81("return value=%u", value);
+    SXER6("return value=%u", value);
     return value;
 }

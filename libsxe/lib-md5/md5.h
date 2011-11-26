@@ -31,33 +31,89 @@
 
 #include "sxe-log.h"
 
-#define MD5_IN_HEX_LENGTH (sizeof(SOPHOS_MD5) * 2)
+#define MD5_SIZE          16
+#define MD5_IN_HEX_LENGTH (2 * MD5_SIZE)
 
 typedef struct SOPHOS_MD5_STRUCT {
-    uint32_t word[4];
+    unsigned word[MD5_SIZE / sizeof(unsigned)];
 } SOPHOS_MD5;
 
-#ifdef HAVE_OPENSSL
-#include <openssl/md5.h>
-#elif !defined(_MD5_H)
-#define _MD5_H
+typedef unsigned int MD5_u32plus;    /* Any 32-bit or wider unsigned integer data type will do */
 
-/* Any 32-bit or wider unsigned integer data type will do */
-typedef unsigned int MD5_u32plus;
-
-typedef struct {
-    MD5_u32plus lo, hi;
-    MD5_u32plus a, b, c, d;
+/* This is the MD5 context defined by Openwall. It must be at least as big as openssl's to be compatible
+ */
+typedef struct MD5_CTX_OPENWALL {
+    MD5_u32plus   lo, hi;
+    MD5_u32plus   a, b, c, d;
     unsigned char buffer[64];
-    MD5_u32plus block[16];
-} MD5_CTX;
+    MD5_u32plus   block[16];
+} MD5_CTX_OPENWALL;
 
-#define MD5Reset(ctx)            MD5_Init(ctx)
-#define MD5Input(ctx, data, len) MD5_Update(ctx, data, len)
-#define MD5Result(ctx, digest)   (MD5_Final((unsigned char *)digest, ctx), 1)
+#ifndef SXE_DISABLE_OPENSSL    /* Use openssl */
 
-#include "lib-md5-proto.h"
+#include <openssl/md5.h>
 
+#if MD5_DIGEST_LENGTH != MD5_SIZE
+#   error "MD5_DIGEST_LENGTH in <openssl/md5.h> is not 16"
 #endif
+
+typedef union MD5_CTX_UNION {
+    MD5_CTX          md5_openssl;
+    MD5_CTX_OPENWALL md5_openwall;
+} MD5_CTX_UNION;
+
+static inline void
+md5_ctx_construct(MD5_CTX_UNION * ctx)
+{
+    SXEA6(sizeof(MD5_CTX_OPENWALL) >= sizeof(MD5_CTX), "Increase size of MD5_CTX_OPENWALL from %u to %u",
+           (unsigned)sizeof(MD5_CTX_OPENWALL), (unsigned)sizeof(MD5_CTX));
+    MD5_Init((MD5_CTX *)ctx);
+}
+
+static inline void
+md5_ctx_update(MD5_CTX_UNION * ctx, const void * data, unsigned long size)
+{
+    MD5_Update((MD5_CTX *)ctx, data, size);
+}
+
+static inline void
+md5_ctx_get_sum( MD5_CTX_UNION * ctx, SOPHOS_MD5 * result)
+{
+    MD5_Final((unsigned char *)result, (MD5_CTX *)ctx);
+}
+
+#define MD5_CTX                     MD5_CTX_UNION
+#define MD5_Init(ctx)               md5_ctx_construct(ctx)
+#define MD5_Update(ctx, data, size) md5_ctx_update((ctx), (data), (size))
+#define MD5_Final(result, ctx)      md5_ctx_get_sum((ctx), (SOPHOS_MD5 *)(result))
+
+#else    /* Use Openwall's implementation */
+
+#ifdef HEADER_MD5_H
+#   error "<openssl/md5.h> included when SXE_DISABLE_OPENSSL is defined"
+#endif
+
+#define OPENSSL_NO_MD5 1    /* This should cause <openssl/md5.h> to blow up, if included */
+
+#define MD5_DIGEST_LENGTH MD5_SIZE       /* For openssl compatibility */
+
+typedef MD5_CTX_OPENWALL MD5_CTX;
+
+void MD5_Init(  MD5_CTX *ctx);
+void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size);
+void MD5_Final( unsigned char *result, MD5_CTX *ctx);
+
+static inline void
+md5_ctx_get_sum(MD5_CTX * ctx, SOPHOS_MD5 * result)
+{
+    MD5_Final((unsigned char *)result, ctx);
+}
+
+#define MD5_Final(result, ctx) md5_ctx_get_sum((ctx), (SOPHOS_MD5 *)(result))
+
+#endif /* Openwall specific stuff */
+
+SXE_RETURN md5_from_hex(SOPHOS_MD5 * md5, const char * md5_in_hex);
+SXE_RETURN md5_to_hex(  SOPHOS_MD5 * md5, char * md5_in_hex, unsigned md5_in_hex_length);
 
 #endif

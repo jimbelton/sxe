@@ -51,7 +51,7 @@ static unsigned     test_state = 0;
 static const char   entering[] = "Entering the log test";
 static const char   escape[]   = "Line 1: high bit character \x80\r\nLine 2: This is a hex character (BS): \b\r\nLine 3: This is a backslash: \\\r\n";
 static const char   escaped[]  = "Line 1: high bit character \\x80\\r\\nLine 2: This is a hex character (BS): \\x08\\r\\nLine 3: This is a backslash: \\\\\\r\\n";
-static const char   logging[]  = "Logging a normal line";
+#define             LOGGING      ": Logging a normal line with function name prefix"
 static const char   verylong[] = "0123456789112345678921234567893123456789412345678951234567896123456789712345678981234567899123456789"
                                  "0123456789112345678921234567893123456789412345678951234567896123456789712345678981234567899123456789"
                                  "0123456789112345678921234567893123456789412345678951234567896123456789712345678981234567899123456789"
@@ -98,8 +98,8 @@ log_line(SXE_LOG_LEVEL level, const char * line_ro)
         break;
 
     case 2:
-        is_strncmp(&line[strlen(line) - strlen(logging)], logging, strlen(logging), "Test line 2 ends with '%s': '%s'", logging, line);
-        is_strncmp(&line[strlen(line) - strlen(logging) - strlen(idlevin)], idlevin, strlen(idlevin), "Test line 2 has id 99, level 6 and indent 2");
+        is_strncmp(&line[strlen(line) - strlen("main" LOGGING)], "main" LOGGING, strlen(LOGGING), "Test line 2 ends with '%s': '%s'", "main" LOGGING, line);
+        is_strncmp(&line[strlen(line) - strlen("main" LOGGING) - strlen(idlevin)], idlevin, strlen(idlevin), "Test line 2 has id 99, level 6 and indent 2");
         break;
 
     case 3:
@@ -147,7 +147,7 @@ log_line(SXE_LOG_LEVEL level, const char * line_ro)
 
     case 12:
         is(level, SXE_LOG_LEVEL_FATAL, "Assertions are logged at level FATAL");
-        ok(strstr(line, "ERROR: assertion 'this != &self' failed at libsxe/lib-sxe-log/test/test-sxe-log.c") != NULL,
+        ok(strstr(line, "ERROR: assertion 'this != &self' failed at ") != NULL,
            "Assertion line includes expected stringized test: '%s'", line);
         break;
 
@@ -163,6 +163,12 @@ log_line(SXE_LOG_LEVEL level, const char * line_ro)
 #endif
         break;
 
+#ifdef WINDOWS_NT
+    case 14:
+        /* ignore line: NOTE: set SXE_WINNT_ASSERT_MSGBOX=1 to assert into the Microsoft visual debugger*/
+        break;
+#endif
+
     default:
         diag("Unexpected test sequence number %u.\n", test_state);
         exit(1);
@@ -175,7 +181,11 @@ static void
 test_abort_handler(int sig)
 {
     (void)sig;
+#ifdef WINDOWS_NT
+    is(test_state, 15, "All log lines/signals received");
+#else
     is(test_state, 14, "All log lines/signals received");
+#endif
     exit(exit_status());
 }
 
@@ -220,19 +230,19 @@ main(void) {
     sxe_log_hook_line_out(NULL); /* for coverage */
     sxe_log_hook_line_out(log_line);
     PUTENV("SXE_LOG_LEVEL=6");   /* Trigger processing of the level in the first call to the log */
-    SXEE60(entering);
+    SXEE6(entering);
     PUTENV("SXE_LOG_LEVEL=1");   /* This should be ignored. If it is not, the tests will fail    */
     this->id = 99;
-    SXEL60I(logging);
-    SXEA60(1, "Asserting true");
-    SXED60(dumpdata, 4);
-    SXER60(exiting);
-    SXEL60(verylong);
-    SXEE61("really long entry message: %s", verylong);
-    SXEL60(escape);
-    SXEL60(hextrunc);
-    SXED60(dumpdata, 0);    /* Edge case */
-    SXEA80(1, "We should not get this, because level 8 is too low!");
+    SXEL6I(LOGGING);
+    SXEA6(1, "Asserting true");
+    SXED6(dumpdata, 4);
+    SXER6(exiting);
+    SXEL6(verylong);
+    SXEE6("really long entry message: %s", verylong);
+    SXEL6(escape);
+    SXEL6(hextrunc);
+    SXED6(dumpdata, 0);    /* Edge case */
+    SXEA6(1, "We should not get this, because level 8 is too low!");
 
     is(sxe_log_decrease_level(SXE_LOG_LEVEL_ERROR),       SXE_LOG_LEVEL_TRACE,       "Level decreased to ERROR (2) from TRACE (6)");
     is(sxe_log_set_level(     SXE_LOG_LEVEL_INFORMATION), SXE_LOG_LEVEL_ERROR,       "Level set to INFO, was ERROR");
@@ -242,9 +252,10 @@ main(void) {
 #if defined(_WIN32) && defined(LOCAL_SXE_DEBUG)
     skip(5, "Can't test aborts in a Windows debug build, due to pop up Window stopping the build");
 #else
-    SXEA60(this != &self, "This is not self");  /* Abort - must be the last thing we do*/
+    SXEA6(this != &self, "This is not self");  /* Abort - must be the last thing we do*/
     fail("Did not catch an abort signal");
 #endif
-    }    /* Oog! Close the brace opened in the SXEE61 macro above */
+
+    }    /* Oog! Close the brace opened in the SXEE6 macro above */
     return exit_status();
 }

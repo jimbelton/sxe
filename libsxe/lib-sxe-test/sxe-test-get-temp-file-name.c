@@ -56,28 +56,28 @@ sxe_test_get_temp_file_name(
     pid_t UniqueId = getpid()                        ;
 #endif
 
-    SXEE63("sxe_test_get_temp_file(file_stem=%p, unique_path_and_file_buffer=%p, unique_path_and_file_buffer_size=%u)", file_stem, unique_path_and_file_buffer, unique_path_and_file_buffer_size);
+    SXEE6("sxe_test_get_temp_file(file_stem=%p, unique_path_and_file_buffer=%p, unique_path_and_file_buffer_size=%u)", file_stem, unique_path_and_file_buffer, unique_path_and_file_buffer_size);
 
-    SXEA11(PATH_MAX == unique_path_and_file_buffer_size, "ERROR: unique_path_and_file_buffer_sizes should be PATH_MAX but is %u", unique_path_and_file_buffer_size);
+    SXEA1(PATH_MAX == unique_path_and_file_buffer_size, "ERROR: unique_path_and_file_buffer_sizes should be PATH_MAX but is %u", unique_path_and_file_buffer_size);
 
 #ifdef _WIN32
     done = GetTempPath(size, unique_path_and_file_buffer); /* e.g. C:\TEMP\ */
-    SXEA10(done != 0, "ERROR: GetTempPath() returned zero unexpectedly");
+    SXEA1(done != 0, "ERROR: GetTempPath() returned zero unexpectedly");
 #else
     done = snprintf(&unique_path_and_file_buffer[used], size, "/tmp/");
-    SXEA12(done <= size, "ERROR: snprintf() did not have enough space; given %d bytes and would have used %d bytes", size, done);
-    SXEA11(done >  0   , "ERROR: snprintf() failed with result: %d", done);
+    SXEA1(done <= size, "ERROR: snprintf() did not have enough space; given %d bytes and would have used %d bytes", size, done);
+    SXEA1(done >  0   , "ERROR: snprintf() failed with result: %d", done);
 #endif
     size -= done;
     used += done;
 
     done  = snprintf(&unique_path_and_file_buffer[used], size, "%s-pid-%d.bin", file_stem, UniqueId);
-    SXEA12(done <= size, "ERROR: snprintf() did not have enough space; given %d bytes and would have used %d bytes", size, done);
-    SXEA11(done >  0   , "ERROR: snprintf() failed with result: %d", done);
+    SXEA1(done <= size, "ERROR: snprintf() did not have enough space; given %d bytes and would have used %d bytes", size, done);
+    SXEA1(done >  0   , "ERROR: snprintf() failed with result: %d", done);
     size -= done;
     used += done;
 
     *unique_path_and_file_buffer_used = used;
 
-    SXER61("return // unique_path_and_file_buffer=%s", unique_path_and_file_buffer);
+    SXER6("return // unique_path_and_file_buffer=%s", unique_path_and_file_buffer);
 }

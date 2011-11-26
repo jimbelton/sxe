@@ -19,6 +19,10 @@
 # THE SOFTWARE.
 #
 
+# TODO: Make Windows build able to link against openssl like the unix build can
+SXE_DISABLE_OPENSSL := 1
+CFLAGS    += -DSXE_DISABLE_OPENSSL
+
 PERL       = perl
 
 #
@@ -94,6 +98,8 @@ endif
 LIB_CMD    	= $(MAKE_PERL_LIB)
 LIB_OUT    	= /OUT:
 LIB_FLAGS  	= /nologo
+LIB_LIST   	= lib $(LIB_FLAGS) /list
+LIB_LIST_FILTER 	= $(PERL) -pe $(OSQUOTE)s{.*/}{}$(OSQUOTE)
 OS_class   	= any-winnt
 OS_name	   	= winnt
 OS_bits     = $(shell echo %PROCESSOR_ARCHITEW6432% | $(PERL) -lane "$$o.=$$_;sub END{printf qq[%%d], $$o =~ m~64~s ? 64 : 32;}")

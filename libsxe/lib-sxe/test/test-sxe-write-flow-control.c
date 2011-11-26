@@ -44,39 +44,39 @@ char            buf[SXE_MTU_SIZE]; // dumby data buffer
 static void
 test_event_connected_server(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     tap_ev_queue_push(tap_q_server, __func__, 1, "this", this);
     server_side_connected_sxe = this;
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read_client(SXE * this, int length)
 {
     SXE_UNUSED_PARAMETER(this);
-    SXEE61I("test_event_read_client(length=%d)", length);
+    SXEE6I("test_event_read_client(length=%d)", length);
     tap_ev_queue_push(tap_q_client, __func__, 1, "length", length);
 
     // Note: We are intentionally not clearing this buffer...
     //SXE_BUF_CLEAR(this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read_server(SXE * this, int length)
 {
-    SXEE61I("test_event_read(length=%d)", length);
+    SXEE6I("test_event_read(length=%d)", length);
     tap_ev_queue_push(tap_q_server, __func__, 1, "length", length);
     SXE_BUF_CLEAR(this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close_server(SXE * this)
 {
-    SXEE60I("test_event_close_server()");
+    SXEE6I("test_event_close_server()");
     tap_ev_queue_push(tap_q_server, __func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
@@ -85,17 +85,17 @@ test_cb_server_sxe_writable(SXE * this, SXE_RETURN sxe_return)
     unsigned    x;
     SXE_RETURN  result;
 
-    SXEE61I("test_cb_server_sxe_writable(sxe_return=%s)", sxe_return_to_string(sxe_return));
+    SXEE6I("test_cb_server_sxe_writable(sxe_return=%s)", sxe_return_to_string(sxe_return));
     tap_ev_queue_push(tap_q_server, __func__, 2, "this", this, "sxe_return", sxe_return);
 
     if (do_writes_inside_writable_callback) {
-        SXEL60("Writing inside writable callback");
+        SXEL6("Writing inside writable callback");
         do_writes_inside_writable_callback = 0;
 
         for(x = 0; x < 1000; x++) {
             result = sxe_write(server_side_connected_sxe, buf, sizeof(buf));
             if (result != SXE_RETURN_OK) {
-                is(result, SXE_RETURN_WARN_WOULD_BLOCK, "Write '%u' failed because the connection backed up", x);
+                is(result, SXE_RETURN_WARN_WOULD_BLOCK, "Write '%u' failed because the connection backed up; test_cb_server_sxe_writable()", x);
                 break;
             }
         }
@@ -105,7 +105,7 @@ test_cb_server_sxe_writable(SXE * this, SXE_RETURN sxe_return)
         sxe_notify_writable(server_side_connected_sxe, test_cb_server_sxe_writable);
     }
 
-    SXER60I("return");
+    SXER6I("return");
 }
 
 int
@@ -116,6 +116,10 @@ main(void)
     tap_ev      ev;
     unsigned    x;
     SXE_RETURN  result;
+
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_LIST=5");
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=5");
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE=5");  // Increase this if you're debugging this particular test
 
     plan_tests(29);
     sxe_register(3, 0);
@@ -156,19 +160,17 @@ main(void)
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending server events after we 'notify_writeable(server)'");
 
     // Shift off all the client read events
-    while (1) {
+    do {
         const char * last;
         sxe_buf_clear(client);
         last = test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev);
-        if (strcmp(last, "test_event_read_client") != 0) {
-            break;
-        }
-    }
+        SXEA1(strcmp(last, "test_event_read_client") == 0, "Unexpected event %s", last);
+    } while (tap_ev_queue_length(tap_q_client) != 0);
 
     // Server becomes writable again
-    test_process_all_libev_events();
+    //test_process_all_libev_events();
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_server, 1, &ev), "test_cb_server_sxe_writable",
-          "Got a read event cause by the client closing");
+          "Got a read event caused by the client closing");
 
 
     // Server becomes backed up again...
@@ -191,7 +193,7 @@ main(void)
 
     sxe_close(client);
 
-    test_process_all_libev_events();
+    //test_process_all_libev_events();
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_server, 1, &ev), "test_cb_server_sxe_writable",
           "Got a read event cause by the client closing");
 
@@ -210,19 +212,15 @@ main(void)
                              "Got new TCP SXE for client");
     is(sxe_connect(client, "127.0.0.1", SXE_LOCAL_PORT(server)), SXE_RETURN_OK, "SXE connecting from client");
 
-    test_process_all_libev_events();
+    //test_process_all_libev_events();
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_server, 1, &ev), "test_event_connected_server", "Server connected");
 
     // Might be some read events left over in the queue...
-    if (tap_ev_queue_length(tap_q_client) != 0) {
-        while (1) {
-            const char * last;
-            sxe_buf_clear(client);
-            last = test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev);
-            if (strcmp(last, "test_event_read_client") != 0) {
-                break;
-            }
-        }
+    while (tap_ev_queue_length(tap_q_client) != 0) {
+        const char * last;
+        sxe_buf_clear(client);
+        last = test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev);
+        SXEA1(strcmp(last, "test_event_read_client") == 0, "Unexpected event %s", last);
     }
 
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending client events at this point");
@@ -247,27 +245,23 @@ main(void)
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending server events after we 'notify_writeable(server)'");
 
     // Shift off all the client read events
-    while (1) {
+    do {
         const char * last;
         sxe_buf_clear(client);
         last = test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev);
-        if (strcmp(last, "test_event_read_client") != 0) {
-            break;
-        }
-    }
+        SXEA1(strcmp(last, "test_event_read_client") == 0, "Unexpected event %s", last);
+    } while (tap_ev_queue_length(tap_q_client) != 0);
 
-    test_process_all_libev_events();
+    //test_process_all_libev_events();
     is_eq(test_tap_ev_queue_identifier_wait(tap_q_server, 1, &ev), "test_cb_server_sxe_writable",
           "The first writable call back was called");
 
     // Shift off all the client read events
-    while (1) {
+    while (tap_ev_queue_length(tap_q_client) != 0) {
         const char * last;
         sxe_buf_clear(client);
         last = test_tap_ev_queue_identifier_wait(tap_q_client, 1, &ev);
-        if (strcmp(last, "test_event_read_client") != 0) {
-            break;
-        }
+        SXEA1(strcmp(last, "test_event_read_client") == 0, "Unexpected event %s", last);
     }
 
     test_process_all_libev_events();

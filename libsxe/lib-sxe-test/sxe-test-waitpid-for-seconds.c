@@ -35,7 +35,7 @@ waitpid_for_seconds(pid_t pid, int * status, double seconds)
     pid_t  result         = 0;
 
     while (seconds_waited < seconds) {
-        SXEA12((result = waitpid(pid, status, WNOHANG)) != (pid_t)-1, "Failed to wait for pid %d: %s", pid, strerror(errno));
+        SXEA1((result = waitpid(pid, status, WNOHANG)) != (pid_t)-1, "Failed to wait for pid %d: %s", pid, strerror(errno));
 
         if (result != 0) {
             break;

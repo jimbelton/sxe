@@ -34,11 +34,17 @@ else
 DST.obj    += $(COM.dir)/lib-ev/$(DST.dir)/libev/ev$(EXT.obj) $(COM.dir)/lib-ev/$(DST.dir)/libev/event$(EXT.obj)
 endif
 
-# TODO: make this line work. Unfortunately $(wildcard) is evaluated at make startup time.
-# DST.obj  += $(wildcard $(COM.dir)/lib-lua/$(DST.dir)/lua/*$(EXT.obj))
-LUA.src     = lapi.c lauxlib.c lbaselib.c lcode.c ldblib.c ldebug.c ldo.c ldump.c lfunc.c lgc.c linit.c liolib.c llex.c lmathlib.c lmem.c \
-              loadlib.c lobject.c lopcodes.c loslib.c lparser.c lstate.c lstring.c lstrlib.c ltable.c ltablib.c ltm.c lundump.c lvm.c lzio.c
-DST.obj    += $(LUA.src:%.c=$(COM.dir)/lib-lua/$(DST.dir)/lua/%$(EXT.obj))
+# NOTE: $(shell) expands each time you call it, which means that the following works, where $(wildcard) does not.
+LUA.obj     = $(filter %$(EXT.obj),$(shell $(LIB_LIST) $(COM.dir)/lib-lua/$(DST.dir)/lua$(EXT.lib) 2>&1 | $(LIB_LIST_FILTER)))
+DST.obj    += $(LUA.obj:%=$(COM.dir)/lib-lua/$(DST.dir)/lua/%)
+
+ifndef SXE_DISABLE_OPENSSL
+ifndef SXE_EXTERNAL_OPENSSL
+SSL.obj     = $(filter %$(EXT.obj),$(shell $(LIB_LIST) $(COM.dir)/lib-openssl/$(DST.dir)/openssl$(EXT.lib) 2>&1 | $(LIB_LIST_FILTER)))
+DST.obj    += $(SSL.obj:%=$(COM.dir)/lib-openssl/$(DST.dir)/openssl.d/%)
+SSL.inc     = $(wildcard lib-openssl/$(DST.dir)/openssl/*.h)
+endif
+endif
 
 libheaders  = $(wildcard $(1)/*.h) $(wildcard $(1)/$(DST.dir)/*.h) $(wildcard $(1)/$(OS_class)/*.h)
 sysheaders  = $(wildcard $(1)/$(OS_class)/sys/*.h)
@@ -63,7 +69,12 @@ ifneq ($(SRC.inc.sys),)
 	-$(MAKE_RUN)$(MKDIR) $(call OSPATH,$(DST.dir)/include/sys) $(TO_NUL) $(FAKE_PASS)
 	$(MAKE_RUN) $(COPYFILES2DIR) $(SRC.inc.sys) $(DST.dir)/include/sys
 endif
+ifneq ($(SSL.inc),)
+	-$(MAKE_RUN)$(MKDIR) $(call OSPATH,$(DST.dir)/include/openssl) $(TO_NUL) $(FAKE_PASS)
+	$(MAKE_RUN) $(COPYFILES2DIR) $(SSL.inc) $(DST.dir)/include/openssl
+endif
 
+ifeq ($(filter remote,$(MAKECMDGOALS)),)
 clean::        $(DEP.dirs)
-
 realclean::    $(DEP.dirs)
+endif

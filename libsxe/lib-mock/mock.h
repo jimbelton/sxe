@@ -82,6 +82,7 @@
  *  - MOCK_STDCALL signifies that Windows implements this function in an OS API, not the C runtime
  */
 extern MOCK_SOCKET  (MOCK_STDCALL * mock_accept)      (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *);
+extern MOCK_SOCKET  (MOCK_STDCALL * mock_accept4)     (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *, int flags);
 extern int          (MOCK_STDCALL * mock_bind)        (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
 extern void *       (             * mock_calloc)      (size_t, size_t);
 extern int          (             * mock_close)       (int);
@@ -119,6 +120,7 @@ extern void         (             * mock_syslog)      (int priority, const char 
 #ifndef MOCK_IMPL
 
 #define accept(fd, addr, len)                    (*mock_accept)      ((fd), (addr), (len))
+#define accept4(fd, addr, len, flgs)             (*mock_accept4)      ((fd), (addr), (len), (flgs))
 #define bind(fd, addr, len)                      (*mock_bind)        ((fd), (addr), (len))
 #define calloc(num, size)                        (*mock_calloc)      ((num), (size))
 #define close(fd)                                (*mock_close)       (fd)

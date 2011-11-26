@@ -49,7 +49,7 @@ sxe_set_file_limit(const unsigned limit)
        (setrlimit(RLIMIT_NOFILE, &rt) == -1)
 #endif
     {
-        SXEL91("Failed to set file limit to '%u'", limit);
+        SXEL7("Failed to set file limit to '%u'", limit);
         goto SXE_ERROR_OUT; /* COVERAGE EXCLUSION - TODO: WIN32 COVERAGE */
     }
 

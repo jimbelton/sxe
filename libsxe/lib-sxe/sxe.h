@@ -25,8 +25,9 @@
 #include <stdbool.h>
 
 #include "ev.h"
-#include "sxe-socket.h"
+#include "sxe-buffer.h"
 #include "sxe-list.h"
+#include "sxe-socket.h"
 #include "sxe-util.h"
 
 #define SXE_BUF_SIZE    1500
@@ -38,6 +39,7 @@
 #define SXE_FLAG_IS_ONESHOT       0x00000002
 #define SXE_FLAG_IS_CALLER_READS  0x00000004
 #define SXE_FLAG_IS_PAUSED        0x00000008
+#define SXE_FLAG_IS_SSL           0x00000010
 
 typedef enum SXE_BUF_RESUME {
     SXE_BUF_RESUME_IMMEDIATE,
@@ -49,16 +51,7 @@ typedef void (*SXE_IN_EVENT_READ )(    struct SXE *, int length);
 typedef void (*SXE_IN_EVENT_CLOSE)(    struct SXE *            );
 typedef void (*SXE_IN_EVENT_CONNECTED)(struct SXE *            );
 typedef void (*SXE_OUT_EVENT_WRITTEN )(struct SXE *, SXE_RETURN);
-
-/* SXE_BUFFER object. Used by sxe_send() to track asynchronous completions.
- */
-typedef struct SXE_BUFFER {
-    SXE_LIST_NODE node;
-    char        * ptr;
-    unsigned      len;
-    unsigned      sent;
-    char          space[1];   /* allows inline storage */
-} SXE_BUFFER;
+typedef void (*SXE_DEFERRED_EVENT)(    struct SXE *            );
 
 /* SXE object. Used for "Accept Sockets", "Connection Sockets", and UDP ports.
  */
@@ -71,9 +64,10 @@ typedef struct SXE {
     unsigned               id_next;              /* to keep free list                                                     */
     unsigned               id;
     unsigned               flags;
+    unsigned               ssl_id;               /* SXE_POOL_NO_INDEX unless using SSL                                    */
     SXE_SOCKET             socket;               /* is handle on Windows, is fd on Linux                                  */
     int                    socket_as_fd;         /* is fd     on Windows, is fd on Linux                                  */
-    int                    last_write;           /* number of bytes writen by the last sxe_write() call                   */
+    int                    last_write;           /* number of bytes written by the last sxe_write() call                  */
     unsigned               in_total;
     unsigned               in_consumed;          /* number of bytes already "consumed" by the callback                    */
     char                   in_buf[SXE_BUF_SIZE];
@@ -84,9 +78,8 @@ typedef struct SXE {
     int                    sendfile_in_fd;
     unsigned               sendfile_bytes;
     off_t                * sendfile_offset;
-    SXE_LIST               send_list;            /* Used by sxe_send_buffers().                                           */
-    SXE_LIST_WALKER        send_list_walk;       /* Used by sxe_send_buffers() to advance the buffer.                     */
-    SXE_BUFFER             send_buffer;          /* Placeholder buffer for sxe_send().                                    */
+    SXE_LIST               send_list;            /* Used by sxe_send_buffer().                                            */
+    SXE_BUFFER             send_buffer;          /* Internal buffer used by sxe_send().                                   */
     union {
        void            *   as_ptr;
        intptr_t            as_int;
@@ -108,31 +101,16 @@ typedef struct SXE {
 #define SXE_EVENT_CLOSE(this)            (      (this)->in_event_close)
 #define SXE_ID(this)                     (      (this)->id)
 #define SXE_WRITE_LITERAL(this, literal) sxe_write(this, literal, SXE_LITERAL_LENGTH(literal))
+#define SXE_SEND_LITERAL(this, l, func)  sxe_send(this, l, SXE_LITERAL_LENGTH(l), func)
 
 #define SXE_BUF_CLEAR(this)              sxe_buf_clear(this)         /* For backward compatibility only - this macro is deprecated */
 #define SXE_LOCAL_ADDR(this)             sxe_get_local_addr(this)    /* For backward compatibility only - this macro is deprecated */
 
 #include "lib-sxe-proto.h"
 
-static inline SXE_RETURN sxe_listen(        SXE * this) {return sxe_listen_plus(this, 0);                   }
-static inline SXE_RETURN sxe_listen_oneshot(SXE * this) {return sxe_listen_plus(this, SXE_FLAG_IS_ONESHOT); }
-static inline void       sxe_pause(         SXE * this) {this->flags |= SXE_FLAG_IS_PAUSED;                 }
-
-static inline void
-sxe_buffer_construct(SXE_BUFFER * buffer, char * memory, unsigned length, unsigned size)
-{
-    SXE_UNUSED_PARAMETER(size);    /* TODO: Allow buffer bigger than length */
-    buffer->ptr  = memory;
-    buffer->len  = length;
-    buffer->sent = 0;
-}
-
-static inline void
-sxe_buffer_construct_const(SXE_BUFFER * buffer, const char * memory, unsigned length)
-{
-    sxe_buffer_construct(buffer, SXE_CAST_NOCONST(char *, memory), length, length);
-    /* TODO: buffer->flags |= SXE_BUFFER_FLAG_IS_CONST; */
-}
-
+static inline SXE_RETURN sxe_connect(SXE * this, const char * ip, unsigned short port) {return sxe_connect_plus(this, ip, port, 0, 0);}
+static inline SXE_RETURN sxe_listen(        SXE * this) {return sxe_listen_plus(this, 0, 0, 0);                   }
+static inline SXE_RETURN sxe_listen_oneshot(SXE * this) {return sxe_listen_plus(this, SXE_FLAG_IS_ONESHOT, 0, 0); }
+static inline void       sxe_pause(         SXE * this) {this->flags |= SXE_FLAG_IS_PAUSED;                       }
 
 #endif /* __SXE_H__ */

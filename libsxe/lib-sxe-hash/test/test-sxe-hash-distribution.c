@@ -60,7 +60,7 @@ main(void)
         sha1sum( in_buf, 4, out_buf);
         id = sxe_hash_set(hash, out_buf, SXE_HASH_SHA1_AS_HEX_LENGTH, 1U);
         bucket = sxe_pool_index_to_state(hash, id);
-        SXEA11(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
+        SXEA1(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
         counter[bucket]++;
 
         if (counter[bucket] > MAX_ALLOWED_PER_BUCKET_INDEX) {
@@ -81,7 +81,7 @@ main(void)
         sxe_hash_add(hash, id);
 
         bucket = sxe_pool_index_to_state(hash, id);
-        SXEA11(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
+        SXEA1(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
         counter[bucket]++;
 
         if (counter[bucket] > MAX_ALLOWED_PER_BUCKET_INDEX + 1) {

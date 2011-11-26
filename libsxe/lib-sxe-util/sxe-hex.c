@@ -47,17 +47,43 @@ static unsigned char hex_character_to_nibble[] = {
 
 static char hex_nibble_to_character[] = "0123456789abcdef";
 
+SXE_RETURN
+sxe_valid_hex_to_unsigned(const char * hex, unsigned hex_length_maximum, unsigned * value)
+{
+    SXE_RETURN result = SXE_RETURN_ERROR_INTERNAL;
+    unsigned   val = 0;
+    unsigned   i;
+
+    SXEE6("(hex='%.*s', hex_length_maximum=%u)", hex_length_maximum, hex, hex_length_maximum);
+
+    for (i = 0; (i < hex_length_maximum) && (hex[i] != '\0'); i++) {
+        if (hex_character_to_nibble[(unsigned)(hex[i])] == NA) {
+            SXEL6("Encountered unexpected hex character '%c'", hex[i]);
+            goto SXE_EARLY_OUT;
+        }
+
+        val = (val << 4) | hex_character_to_nibble[(unsigned)(hex[i])];
+    }
+
+    *value = val;
+    result = SXE_RETURN_OK;
+
+SXE_EARLY_OUT:
+    SXER6("return %s", sxe_return_to_string(result));
+    return result;
+}
+
 unsigned
 sxe_hex_to_unsigned(const char * hex, unsigned hex_length_maximum)
 {
     unsigned result = 0;
     unsigned i;
 
-    SXEE83("(hex='%.*s', hex_length_maximum=%u)", hex_length_maximum, hex, hex_length_maximum);
+    SXEE6("(hex='%.*s', hex_length_maximum=%u)", hex_length_maximum, hex, hex_length_maximum);
 
     for (i = 0; (i < hex_length_maximum) && (hex[i] != '\0'); i++) {
         if (hex_character_to_nibble[(unsigned)(hex[i])] == NA) {
-            SXEL61("Encountered unexpected hex character '%c'", hex[i]);
+            SXEL6("Encountered unexpected hex character '%c'", hex[i]);
             result = SXE_UNSIGNED_MAXIMUM;
             goto SXE_EARLY_OUT;
         }
@@ -66,7 +92,7 @@ sxe_hex_to_unsigned(const char * hex, unsigned hex_length_maximum)
     }
 
 SXE_EARLY_OUT:
-    SXER81("return result=0x%x", result);
+    SXER6("return result=0x%x", result);
     return result;
 }
 
@@ -79,14 +105,14 @@ sxe_hex_to_bytes(unsigned char * bytes, const char * hex, unsigned hex_length)
     unsigned   nibble_high;
     unsigned   nibble_low;
 
-    SXEA11((hex_length % 1) == 0, "sxe_hex_to_bytes: hex string length %u is odd", hex_length);
-    SXEE84("(bytes=%p,hex='%.*s',hex_length=%u)", bytes, hex_length, hex, hex_length);
+    SXEA1((hex_length % 1) == 0, "sxe_hex_to_bytes: hex string length %u is odd", hex_length);
+    SXEE6("(bytes=%p,hex='%.*s',hex_length=%u)", bytes, hex_length, hex, hex_length);
 
     for (i = 0; i < hex_length; i++) {
         if (((nibble_high = hex_character_to_nibble[(unsigned)(character = hex[  i])]) == NA)
          || ((nibble_low  = hex_character_to_nibble[(unsigned)(character = hex[++i])]) == NA))
         {
-            SXEL32(isprint(character) ? "%s%c'" : "%s\\x%02x'", "sxe_hex_to_bytes: Unexpected hex character '", hex[i]);
+            SXEL3(isprint(character) ? "%s%c'" : "%s\\x%02x'", "sxe_hex_to_bytes: Unexpected hex character '", hex[i]);
             goto SXE_EARLY_OUT;
         }
 
@@ -96,7 +122,7 @@ sxe_hex_to_bytes(unsigned char * bytes, const char * hex, unsigned hex_length)
     result = SXE_RETURN_OK;
 
 SXE_EARLY_OUT:
-    SXER81("return result=%s", sxe_return_to_string(result));
+    SXER6("return result=%s", sxe_return_to_string(result));
     return result;
 }
 

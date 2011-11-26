@@ -23,12 +23,12 @@ static void
 test_dirwatch_event(EV_P_ const char *chfile, int chflags, void * user_data)
 {
     SXE_UNUSED_PARAMETER(loop);
-    SXEE63("test_dirwatch_event(chfile=%s, chflags=%08x, user_data=%p)", chfile, chflags, user_data);
+    SXEE6("test_dirwatch_event(chfile=%s, chflags=%08x, user_data=%p)", chfile, chflags, user_data);
     tap_ev_push(__func__, 3,
                 "chfile", tap_dup(chfile, strlen(chfile)),
                 "chflags", chflags,
                 "user_data", user_data);
-    SXER60("return");
+    SXER6("return");
 }
 #endif
 
@@ -60,9 +60,9 @@ main(void)
      * to change willy-nilly during the build. The current directory has a
      * file that always changes. The /tmp directory always seems to have
      * spurious changes in it. */
-    SXEA11(mkdtemp(tempdir1), "Failed to create tempdir: %s", strerror(errno));
-    SXEA11(mkdtemp(tempdir2), "Failed to create tempdir: %s", strerror(errno));
-    SXEA11(mkdtemp(tempdir3), "Failed to create tempdir: %s", strerror(errno));
+    SXEA1(mkdtemp(tempdir1), "Failed to create tempdir: %s", strerror(errno));
+    SXEA1(mkdtemp(tempdir2), "Failed to create tempdir: %s", strerror(errno));
+    SXEA1(mkdtemp(tempdir3), "Failed to create tempdir: %s", strerror(errno));
 
     sxe_dirwatch_init();
     sxe_dirwatch_init(); /* for coverage */
@@ -116,7 +116,7 @@ main(void)
         int fd;
 
         snprintf(fname, sizeof fname, "%s/file.XXXXXX", tempdir2);
-        SXEA11((rel = strchr(fname, '/')), "Didn't find '/' in %s", fname);
+        SXEA1((rel = strchr(fname, '/')), "Didn't find '/' in %s", fname);
         rel++;
 
         fd = mkstemp(fname);
@@ -135,7 +135,7 @@ main(void)
         int fd;
 
         snprintf(fname, sizeof fname, "%s/file.XXXXXX", tempdir3);
-        SXEA11((rel = strchr(fname, '/')), "Didn't find '/' in %s", fname);
+        SXEA1((rel = strchr(fname, '/')), "Didn't find '/' in %s", fname);
         rel++;
 
         fd = mkstemp(fname);

@@ -50,22 +50,22 @@ findbuf(lua_State *L, int icase)
     const char *start;
     unsigned length;
 
-    SXEL62("findbuf[len=%d]: searching for %s", *buf->len, str);
+    SXEL6("findbuf[len=%d]: searching for %s", *buf->len, str);
     if (lua_gettop(L) == 3) {
         int startpos = luaL_checkint(L, 3);
-        SXEL61("findbuf: startpos=%d", startpos);
+        SXEL6("findbuf: startpos=%d", startpos);
         if (startpos > 0)
             offset = startpos - 1;
         else if (startpos < 0)
             offset = *buf->len + startpos;
-        SXEL61("findbuf: offset=%d", offset);
+        SXEL6("findbuf: offset=%d", offset);
         if (offset < 0 || (unsigned)offset >= *buf->len) {
             lua_pushnil(L);
             return 1;
         }
     }
 
-    SXEL62("findbuf: searching for string %s at offset %d\n", str, offset);
+    SXEL6("findbuf: searching for string %s at offset %d\n", str, offset);
     start  =  buf->ptr + offset;
     length = *buf->len - offset;
 
@@ -75,11 +75,11 @@ findbuf(lua_State *L, int icase)
         found = sxe_strnstr(start, str, length);
 
     if (found) {
-        SXEL62("findbuf: found match at offset %d (pos %d)", found - start, 1 + found - start);
+        SXEL6("findbuf: found match at offset %u (pos %u)", SXE_CAST(unsigned, found - start), SXE_CAST(unsigned, 1 + found - start));
         lua_pushinteger(L, 1 + found - start); /* Lua counts from 1 */
     }
     else {
-        SXEL60("findbuf: did not match");
+        SXEL6("findbuf: did not match");
         lua_pushnil(L);
     }
     return 1;

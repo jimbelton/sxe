@@ -41,6 +41,20 @@ sxe_strnchr(const char * buf, char c, unsigned n)
 }
 
 char *
+sxe_rstrnchr(const char * buf, char c, unsigned n)
+{
+    const char * end;
+
+    for (end = &buf[n - 1]; buf <= end; end--) {
+        if (*end == c) {
+            return SXE_CAST_NOCONST(char *, end);
+        }
+    }
+
+    return NULL;
+}
+
+char *
 sxe_strncspn(const char * buf, const char * reject, unsigned n)
 {
     unsigned i;

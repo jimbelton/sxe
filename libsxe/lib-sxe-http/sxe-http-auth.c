@@ -93,8 +93,7 @@ sxe_http_auth_calculate_ha1(const char * username, unsigned username_length,
     MD5_Update(&ctx, realm, realm_length);
     MD5_Update(&ctx, ":", 1);
     MD5_Update(&ctx, password, password_length);
-    MD5Result(&ctx, &md5);
-
+    MD5_Final(&md5, &ctx);
     md5_to_hex(&md5, HA1, MD5_IN_HEX_LENGTH + 1);
 }
 
@@ -121,8 +120,7 @@ sxe_http_auth_calculate_ha2(const char * method, unsigned method_length, const c
     MD5_Update(&ctx, method, method_length);
     MD5_Update(&ctx, ":", 1);
     MD5_Update(&ctx, url, url_length);
-    MD5Result(&ctx, &md5);
-
+    MD5_Final(&md5, &ctx);
     md5_to_hex(&md5, HA2, MD5_IN_HEX_LENGTH + 1);
 }
 
@@ -154,29 +152,28 @@ sxe_http_auth_calculate_response(const char * HA1, const char * HA2,       const
     MD5_CTX    ctx;
     SOPHOS_MD5 md5;
 
-    SXEE60("(...)");
+    SXEE6("(...)");
 
     MD5_Init(&ctx);
-    SXEL93("%s(): ha1='%.*s'", __func__, MD5_IN_HEX_LENGTH, HA1);
+    SXEL7("%s(): ha1='%.*s'", __func__, MD5_IN_HEX_LENGTH, HA1);
     MD5_Update(&ctx, HA1, MD5_IN_HEX_LENGTH);
     MD5_Update(&ctx, ":", 1);
-    SXEL93("%s(): nonce='%.*s'", __func__, nonce_length, nonce);
+    SXEL7("%s(): nonce='%.*s'", __func__, nonce_length, nonce);
     MD5_Update(&ctx, nonce, nonce_length);
     MD5_Update(&ctx, ":", 1);
-    SXEL93("%s(): nc='%.*s'", __func__, nc_length, nc);
+    SXEL7("%s(): nc='%.*s'", __func__, nc_length, nc);
     MD5_Update(&ctx, nc, nc_length);
     MD5_Update(&ctx, ":", 1);
-    SXEL93("%s(): cnonce='%.*s'", __func__, cnonce_length, cnonce);
+    SXEL7("%s(): cnonce='%.*s'", __func__, cnonce_length, cnonce);
     MD5_Update(&ctx, cnonce, cnonce_length);
     MD5_Update(&ctx, ":", 1);
     MD5_Update(&ctx, "auth", strlen("auth")); /* qop=auth */
     MD5_Update(&ctx, ":", 1);
-    SXEL93("%s(): ha2='%.*s'", __func__, MD5_IN_HEX_LENGTH, HA2);
+    SXEL7("%s(): ha2='%.*s'", __func__, MD5_IN_HEX_LENGTH, HA2);
     MD5_Update(&ctx, HA2, MD5_IN_HEX_LENGTH);
-    MD5Result(&ctx, &md5);
-
+    MD5_Final(&md5, &ctx);
     md5_to_hex(&md5, response, MD5_IN_HEX_LENGTH + 1);
-    SXER62("return // response='%.*s'", MD5_IN_HEX_LENGTH, response);
+    SXER6("return // response='%.*s'", MD5_IN_HEX_LENGTH, response);
 }
 
 /**
@@ -217,7 +214,7 @@ sxe_http_auth_get_field(const char * buffer, unsigned buffer_length, const char 
     const char * vstart   = NULL;
     const char * vend     = NULL;
 
-    SXEE84("(name='%s', buffer=%p, buffer_length=%u, field_length=%p)", name, buffer, buffer_length, field_length);
+    SXEE6("(name='%s', buffer=%p, buffer_length=%u, field_length=%p)", name, buffer, buffer_length, field_length);
 
     while ((vstart = sxe_strnstr(buffer, name, buffer_length)) != NULL) {
         vstart += name_len;
@@ -245,7 +242,7 @@ sxe_http_auth_get_field(const char * buffer, unsigned buffer_length, const char 
     }
 
     *field_length = vend - vstart;
-    SXER83("return %p // %.*s", vstart, *field_length, vstart);
+    SXER6("return %p // %.*s", vstart, *field_length, vstart);
     return vstart;
 }
 

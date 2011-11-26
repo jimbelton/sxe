@@ -52,7 +52,7 @@ sxe_expose_peform_set(int i, const char * val, unsigned val_len, char * buf, uns
 {
     char scratch[1024];
 
-    SXEE80("sxe_expose_perform_set()");
+    SXEE6("sxe_expose_perform_set()");
 
     if (strchr(sxe_expose_gdata[i].perms, 'W') == NULL ) {
         snprintf(buf, buf_len, "Variable '%s' is not writable\n", sxe_expose_gdata[i].name);
@@ -90,18 +90,18 @@ sxe_expose_peform_set(int i, const char * val, unsigned val_len, char * buf, uns
         break;
 
     default:
-        SXEA11(0, "Unknown exposed type: '%d'", sxe_expose_gdata[i].type); /* Coverage Exclusion - case default assert */
+        SXEA1(0, "Unknown exposed type: '%d'", sxe_expose_gdata[i].type); /* Coverage Exclusion - case default assert */
     }
 
 SXE_EARLY_OUT:
-    SXER80("return");
+    SXER6("return");
 }
 
 
 static void
 sxe_expose_peform_get(int i, char * buf, unsigned buf_len)
 {
-    SXEE80("sxe_expose_perform_get()");
+    SXEE6("sxe_expose_perform_get()");
 
     if (strchr(sxe_expose_gdata[i].perms, 'R') == NULL ) {
         snprintf(buf, buf_len, "Variable '%s' is not readable\n", sxe_expose_gdata[i].name);
@@ -122,11 +122,11 @@ sxe_expose_peform_get(int i, char * buf, unsigned buf_len)
         break;
 
     default:
-        SXEA11(0, "Unknown exposed type: '%d'", sxe_expose_gdata[i].type); /* Coverage Exclusion - Default assert */
+        SXEA1(0, "Unknown exposed type: '%d'", sxe_expose_gdata[i].type); /* Coverage Exclusion - Default assert */
     }
 
 SXE_EARLY_OUT:
-    SXER80("return");
+    SXER6("return");
 }
 
 static const char *
@@ -141,7 +141,7 @@ typTOstr(SXE_EXPOSE_DATA_TYPE t)
     } else if (t == SXE_EXPOSE_CHAR_ARY) {
         result = "SXE_EXPOSE_CHAR_ARY";
     } else {
-        SXEA11(0, "Unknown type: %d", t); /* Coverage Exclusion */
+        SXEA1(0, "Unknown type: %d", t); /* Coverage Exclusion */
     }
     return result;
 }
@@ -152,14 +152,14 @@ sxe_expose_dump(char * buf, unsigned buf_len)
     unsigned i;
     unsigned buf_used = 0;
 
-    SXEE80("sxe_expose_dump()");
+    SXEE6("sxe_expose_dump()");
 
     for(i = 0; i < sxe_expose_gdata_cnt; i++) {
         buf_used += snprintf(buf + buf_used, buf_len - buf_used, "%s, %s, %u, %s, \"%s\"\n", sxe_expose_gdata[i].name,
                              typTOstr(sxe_expose_gdata[i].type), sxe_expose_gdata[i].size, sxe_expose_gdata[i].perms, sxe_expose_gdata[i].com);
     }
 
-    SXER80("return");
+    SXER6("return");
 }
 
 
@@ -174,18 +174,18 @@ sxe_expose_parse(const char * cmd, char * buf, unsigned buf_len)
     unsigned     val_len = 0;
     char         val_delim;
 
-    SXEE81("sxe_expose_parse(%s)", cmd);
+    SXEE6("sxe_expose_parse(%s)", cmd);
 
     // trim leading white space
     while (isspace(cmd[i]) && cmd[i] != '\0') { i++; }
     if (cmd[i] == '\0') { goto SXE_ERROR_OUT; }
     key = cmd + i;
-    SXEL90("Finished trimming white space");
+    SXEL7("Finished trimming white space");
 
     i = 0;
     // commands/keys always start with a letter...
     if (!isalpha(key[i])) { goto SXE_ERROR_OUT; }
-    SXEL90("Found the start of the key");
+    SXEL7("Found the start of the key");
 
     i = 0;
     while (key[i] != COMMAND_DELIM && key[i] != '\0' && isCvarChar(key[i])) { i++; }
@@ -197,10 +197,10 @@ sxe_expose_parse(const char * cmd, char * buf, unsigned buf_len)
             goto SXE_EARLY_OUT;
         }
         action = GET;
-        SXEL92("Performing a 'GET' on '%.*s'", key_len, key);
+        SXEL7("Performing a 'GET' on '%.*s'", key_len, key);
     }
     else if (key[i] != COMMAND_DELIM) {
-        SXEL91("Did not find the deliminator or space or null, but found none alphanumeric char?: '%c'", key[i]);
+        SXEL7("Did not find the deliminator or space or null, but found none alphanumeric char?: '%c'", key[i]);
         goto SXE_ERROR_OUT;
     }
     else {
@@ -220,7 +220,7 @@ sxe_expose_parse(const char * cmd, char * buf, unsigned buf_len)
             val_len = i;
         }
         if (val_len == 0) { goto SXE_ERROR_OUT; }
-        SXEL94("Performing a 'SET' on '%.*s' with '%.*s'", key_len, key, val_len, val);
+        SXEL7("Performing a 'SET' on '%.*s' with '%.*s'", key_len, key, val_len, val);
     }
 
     for(i = 0; i < sxe_expose_gdata_cnt; i++) {
@@ -247,7 +247,7 @@ SXE_ERROR_OUT:
     }
 
 SXE_EARLY_OUT:
-    SXER81("return: '%s'", buf);
+    SXER6("return: '%s'", buf);
     return;
 }
 

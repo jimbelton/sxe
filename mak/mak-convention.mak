@@ -122,6 +122,7 @@ endef
 	convention_no_debug_instrumentation_with_goto_out_block \
 	convention_no_instrumentation_or_goto_in_lock \
 	convention_uppercase_hash_define_and_typedef \
+	convention_va_start_followed_by_va_end \
 	convention_exit_preceded_by_entry \
 	convention_entry_followed_by_exit \
 	convention_no_sprintf_in_c_files \
@@ -139,6 +140,7 @@ convention_usage :
 	@echo usage: make convention_no_debug_instrumentation_with_goto_out_block
 	@echo usage: make convention_no_instrumentation_or_goto_in_lock
 	@echo usage: make convention_uppercase_hash_define_and_typedef
+	@echo usage: make convention_va_start_followed_by_va_end
 	@echo usage: make convention_exit_preceded_by_entry
 	@echo usage: make convention_entry_followed_by_exit
 	@echo usage: make convention_no_sprintf_in_c_files
@@ -155,10 +157,12 @@ convention_usage :
 #	convention_to_do			- doesn't exit1
 
 # NOTE: convention_no_fixme is the last check so that code containing 'fixme' may be checked for convention failures before it is ready to commit.
+ifeq ($(filter remote,$(MAKECMDGOALS)),)
 convention : \
 	convention_no_debug_instrumentation_with_goto_out_block \
 	convention_no_instrumentation_or_goto_in_lock \
 	convention_uppercase_hash_define_and_typedef \
+	convention_va_start_followed_by_va_end \
 	convention_exit_preceded_by_entry \
 	convention_entry_followed_by_exit \
 	convention_no_sprintf_in_c_files \
@@ -170,6 +174,7 @@ convention : \
 	convention_no_fixme \
 	convention_convention_exclusion
 	@echo make: all convention checks passed!
+endif
 
 convention_no_debug_instrumentation_with_goto_out_block:
 	@$(MAKE_PERL_ECHO) "make: checking convention that .c files should avoid block with debug log and goto OUT"
@@ -182,15 +187,17 @@ convention_no_sprintf_in_c_files:
 
 convention_entry_followed_by_exit:
 	@$(MAKE_PERL_ECHO) "make: checking convention that SXEE?? macro followed by SXER?? macro"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:SXEE[0-9][0-9](.+?)SXER[0-9][0-9])" present "(?m-ix:SXE[ER][0-9][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:SXEE[0-9](.+?)SXER[0-9])" present "(?m-ix:SXE[ER][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
 
 convention_exit_preceded_by_entry:
 	@$(MAKE_PERL_ECHO) "make: checking convention that SXER?? macro preceded by SXEE?? macro"
-	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:(.+?)\s+SXER[0-9][0-9])" missing "(?mx-i:SXE[E][0-9][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:(.+?)\s+SXER[0-9])" missing "(?mx-i:SXE[E][0-9])" exit1 $(NON-THIRD-PARTY-FILES)
 
+ifndef MAKE_ALLOW_INDENTED_LABELS
 convention_no_indented_label:
 	@$(MAKE_PERL_ECHO) "make: checking convention for no indented labels"
 	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:^[^:]+:\d+:[ ][ \t]+[A-Z0-9_]+:)" exit1 $(NON-THIRD-PARTY-FILES)
+endif
 
 convention_uppercase_label:
 	@$(MAKE_PERL_ECHO) "make: checking convention for incorrect case for label"
@@ -199,6 +206,10 @@ convention_uppercase_label:
 convention_uppercase_hash_define_and_typedef:
 	@$(MAKE_PERL_ECHO) "make: checking convention for incorrect case for hash define or typedef"
 	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c|h)$$" "(?s-xim:^(.*)$$)" present "(?m-ix:(#[ ]*define|typedef[ ]+(struct|enum))[ ]+[a-z][a-z0-9_]+)" exit1 $(NON-THIRD-PARTY-FILES)
+
+convention_va_start_followed_by_va_end:
+	@$(MAKE_PERL_ECHO) "make: checking convention that va_start is followed by va_end"
+	@$(MAKE_PERL_GREP3_WITHOUT_ARGUMENT) "\.(c)$$" "(?s-xim:va_start(.*?)(?=va_start|$$))" missing "(?m-ix:va_end)" exit1 $(NON-THIRD-PARTY-FILES)
 
 convention_no_fixme:
 	@$(MAKE_PERL_ECHO) "make: checking convention for fixme"
