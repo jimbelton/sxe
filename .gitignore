@@ -2,3 +2,4 @@ build-*-*-release
 build-*-*-debug
 build-*-*-release-coverage
 *.d
+*.swp
