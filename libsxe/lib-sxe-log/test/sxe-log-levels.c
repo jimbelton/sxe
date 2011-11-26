@@ -33,6 +33,13 @@
 #include "sxe-log.h"
 #include "tap.h"
 
+#ifdef __GNUC__
+#define NOINLINE __attribute__ ((noinline))
+#else
+#define NOINLINE /* empty */
+#endif
+static void test_level_seven(SXE_LOG_LEVEL) NOINLINE;
+
 void test_level_six(SXE_LOG_LEVEL level);
 
 static void
