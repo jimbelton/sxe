@@ -40,7 +40,8 @@ local_get_time(void)
 #define AT_TIMEOUT_THEN_TIMEOUT 0
 #define AT_TIMEOUT_THEN_ASSERT  1
 
-#define static /* stupid: trick genxface.pl into *not* copying these into lib-sxe-proto.h */
+#define \
+    static /* stupid: trick genxface.pl into *not* copying these into lib-sxe-proto.h */
 
 static tap_ev
 test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int at_timeout)
