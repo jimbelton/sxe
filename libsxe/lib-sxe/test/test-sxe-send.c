@@ -41,8 +41,11 @@
 #define TEST_DATA_3_LENGTH (sizeof(TEST_DATA_3) - 1)
 #define TEST_BUF_SIZE      1024       /* This is the minimum buffer size that can be set with setsockopt(SO_RCVBUF/SO_SNDBUF) */
 
+#ifndef __APPLE__
 static SXE_BUFFER    test_buffers[TEST_HUGE_COUNT];
 static unsigned char test_data[   TEST_HUGE_COUNT][TEST_HUGE_BUFFER];     /* Large amount of data */
+#endif
+
 static unsigned char test_buf[    TEST_HUGE_COUNT * TEST_HUGE_BUFFER];
 static unsigned      test_buf_length = 0;
 static SXE         * test_server_connection;
@@ -95,6 +98,8 @@ test_event_send_complete(SXE * this, SXE_RETURN result)
 
 #define TEST_SEND_WITHIN_CB "send within callback"
 
+#ifndef __APPLE__
+
 static void
 test_event_send_complete_so_resend(SXE * this, SXE_RETURN result)
 {
@@ -122,6 +127,7 @@ test_event_sxe_is_writable(SXE * this, SXE_RETURN result)
     tap_ev_queue_push(tap_q_client, __func__, 2, "this", this, "result", result);
     SXER6I("return");
 }
+#endif
 
 int
 main(void)
@@ -137,6 +143,11 @@ main(void)
     putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_LIST=5");
     putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=5");
     sxe_log_set_level(SXE_LOG_LEVEL_TRACE);
+
+    (void)buffer;
+    (void)window_size;
+    (void)counter;
+    (void)send_result;
 
 #if defined(WIN32) || defined(__APPLE__)
     tap_plan(25, TAP_FLAG_ON_FAILURE_EXIT, NULL);

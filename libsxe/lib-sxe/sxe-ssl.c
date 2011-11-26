@@ -122,6 +122,7 @@ mem_state_as_string(void)
 }
 #endif
 
+#ifndef __APPLE__
 static void *
 mem_alloc(size_t size)
 {
@@ -220,6 +221,7 @@ mem_free(void * ptr)
 
     free(mem);
 }
+#endif
 
 void
 sxe_ssl_instrument_memory_functions(void)
