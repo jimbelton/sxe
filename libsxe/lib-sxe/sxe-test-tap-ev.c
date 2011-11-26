@@ -24,16 +24,9 @@
 #include <string.h>
 #include <sys/time.h>
 
-#include "ev.h"
-#include "sxe-log.h"
+#include "sxe.h"
 #include "sxe-test.h"
 #include "sxe-time.h"
-#include "sxe-util.h"
-#include "tap.h"
-
-#ifdef gettimeofday
-#error "gettimeofday should not be mocked here"
-#endif
 
 static SXE_TIME
 local_get_time(void)
@@ -44,23 +37,12 @@ local_get_time(void)
     return SXE_TIME_FROM_TIMEVAL(&tv);
 }
 
-unsigned
-test_tap_ev_length_nowait(void)
-{
-    test_process_all_libev_events();
-    return tap_ev_length();
-}
-
-/* This callback is a workaround to avoid introducing a circular dependency on
- * lib-sxe, which actually implements the "normal" version of it: get_deferred_count().
- * sxe_init() sets this function pointer.
- */
-unsigned (*test_tap_ev_queue_shift_wait_get_deferred_count)(void);
-
 #define AT_TIMEOUT_THEN_TIMEOUT 0
 #define AT_TIMEOUT_THEN_ASSERT  1
 
-tap_ev
+#define static /* stupid: trick genxface.pl into *not* copying these into lib-sxe-proto.h */
+
+static tap_ev
 test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int at_timeout)
 {
     tap_ev event;
@@ -78,7 +60,7 @@ test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int 
             return event;
         }
 
-        if (!test_tap_ev_queue_shift_wait_get_deferred_count || (*test_tap_ev_queue_shift_wait_get_deferred_count)() == 0) {
+        if (sxe_get_deferred_count() == 0) {
             test_ev_loop_wait(SXE_TIME_TO_DOUBLE_SECONDS(wait_time));
             event = tap_ev_queue_shift(queue);
             if (event != NULL) {
@@ -100,37 +82,37 @@ test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int 
     }
 }
 
-tap_ev
+static tap_ev
 test_tap_ev_queue_shift_wait_or_timeout(tap_ev_queue queue, ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_TIMEOUT);
 }
 
-tap_ev
+static tap_ev
 test_tap_ev_queue_shift_wait_or_assert(tap_ev_queue queue, ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_ASSERT);
 }
 
-tap_ev
+static tap_ev
 test_tap_ev_queue_shift_wait(tap_ev_queue queue, ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_ASSERT);
 }
 
-tap_ev
+static tap_ev
 test_tap_ev_shift_wait(ev_tstamp seconds) /* _or_assert */
 {
     return test_tap_ev_queue_shift_wait(tap_ev_queue_get_default(), seconds);
 }
 
-tap_ev
+static tap_ev
 test_tap_ev_shift_wait_or_timeout(ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_timeout(tap_ev_queue_get_default(), seconds);
 }
 
-const char *
+static const char *
 test_tap_ev_identifier_wait(ev_tstamp seconds, tap_ev * ev_ptr)
 {
     tap_ev event;
@@ -138,7 +120,7 @@ test_tap_ev_identifier_wait(ev_tstamp seconds, tap_ev * ev_ptr)
     return tap_ev_identifier(*(ev_ptr == NULL ? &event : ev_ptr) = test_tap_ev_shift_wait(seconds));
 }
 
-const char *
+static const char *
 test_tap_ev_queue_identifier_wait(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr)
 {
     tap_ev event;
@@ -163,7 +145,7 @@ test_tap_ev_queue_identifier_wait(tap_ev_queue queue, ev_tstamp seconds, tap_ev 
  * @param expected_length Expect amount of data to be read
  * @param who             Textual description of SXE for diagnostics
  */
-void
+static void
 test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, void * this, const char * read_event_name,
                         char * buffer, unsigned expected_length, const char * who)
 {
@@ -171,6 +153,9 @@ test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, 
     unsigned i;
 
     for (i = 0; i < expected_length; i++) {
+        const void *buf;
+        unsigned size;
+
         if ((*ev_ptr = test_tap_ev_queue_shift_wait_or_timeout(queue, seconds)) == NULL) {
             fail("%s expected read event '%s', timed out after %f seconds (already read %u fragments, %u bytes of %u expected)",
                  who, read_event_name, seconds, i, used, expected_length);
@@ -188,14 +173,16 @@ test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, 
             goto SXE_ERROR_OUT;
         }
 
-        if (used + SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used")) > expected_length) {
-            fail("Expected to read %u, read %u", expected_length, used + SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used")));
-            memcpy(&buffer[used], tap_ev_arg(*ev_ptr, "buf"), expected_length - used);
+        buf  = tap_ev_arg(*ev_ptr, "buf");
+        size = SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used"));
+        if (used + size > expected_length) {
+            fail("Expected to read %u, read %u", expected_length, used + size);
+            memcpy(&buffer[used], buf, expected_length - used);
             return;
         }
 
-        memcpy(&buffer[used], tap_ev_arg(*ev_ptr, "buf"), SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used")));
-        used += SXE_CAST(unsigned, tap_ev_arg(*ev_ptr, "used"));
+        memcpy(&buffer[used], buf, size);
+        used += size;
 
         if (used == expected_length) {
             pass("Read %u bytes on %s", used, who);
@@ -203,7 +190,7 @@ test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, 
         }
     }
 
-    SXEA1(used == expected_length, "test_ev_wait_read: Must have read %u bytes, but only read %u", expected_length, used);
+    SXEA1(used == expected_length, "test_ev_queue_wait_read: Must have read %u bytes, but only read %u", expected_length, used);
 
 SXE_ERROR_OUT:
     if (used == 0) {
@@ -225,9 +212,83 @@ SXE_ERROR_OUT:
  * @param expected_length Expect amount of data to be read
  * @param who             Textual description of SXE for diagnostics
  */
-void
+static void
 test_ev_wait_read(ev_tstamp seconds, tap_ev * ev_ptr, void * this, const char * read_event_name, char * buffer,
                   unsigned expected_length, const char * who)
 {
     test_ev_queue_wait_read(tap_ev_queue_get_default(), seconds, ev_ptr, this, read_event_name, buffer, expected_length, who);
+}
+
+/* We're expecting a number of events, but we're not sure what order they'll be
+ * delivered in.  Pass in a string with space separated event names, and
+ * they'll all be consumed, with a 2 second timeout.
+ */
+static int
+test_ev_consume_events(const char * expected, int expected_events)
+{
+    tap_ev event = NULL;
+    int result = 0;
+    const char ** event_list = NULL;
+    unsigned i;
+    unsigned item;
+    unsigned event_count = 1;
+    unsigned found_event = 0;
+    char * expected_event_names = strdup(expected);
+
+    SXEE6("%s(expected=%s, expected_events=%d)", __func__, expected, expected_events);
+
+    /* Get a count of the number of events */
+    for (i = 0 ; expected_event_names[i] != '\0' ; ++i) {
+        if (expected_event_names[i] == ' ') {
+            ++event_count;
+        }
+    }
+
+    SXEL7("%d events", event_count);
+
+    /* Construct an array of pointers for our events */
+    event_list = malloc(event_count * sizeof(char *));
+    i = 0;
+    for (item = 0 ; item < event_count ; ++item) {
+        event_list[item] = &expected_event_names[i];
+        SXEL7("event %d = '%s'", item, event_list[item]);
+        for (; expected_event_names[i] != '\0' && expected_event_names[i] != ' ' ; ++i) { }
+        expected_event_names[i] = '\0';
+        ++i;
+    }
+
+    /* Tick them off as we get them */
+    while (found_event < event_count) {
+        event = test_tap_ev_queue_shift_wait_or_what(tap_ev_queue_get_default(), expected_events ? 2 : 0.5, expected_events);
+        SXEL7("Looking for event '%s'", (const char *)(tap_ev_identifier(event)));
+        if (event == NULL) {
+            diag("Expecting an event, but didn't get one.");
+            goto SXE_ERROR_OUT;
+        }
+        for (i = 0 ; i < event_count ; ++i) {
+            if ((event_list[i] != NULL) && (strcmp(tap_ev_identifier(event), event_list[i]) == 0)) {
+                SXEL7("found event '%s'", event_list[i]);
+                event_list[i] = NULL;
+                ++found_event;
+                break;
+            }
+        }
+        if (i == event_count) {
+            diag("Event '%s' was not expected at this time, but found %d of %d events that we were expecting", (const char *)tap_ev_identifier(event), found_event, event_count);
+            goto SXE_ERROR_OUT;
+        }
+        tap_ev_free(event);
+        event = NULL;
+    }
+
+    result = 1;
+
+SXE_ERROR_OUT:
+    if (event != NULL) {
+        tap_ev_free(event);
+    }
+    free(SXE_CAST_NOCONST(void *, event_list));
+    free(expected_event_names);
+    SXER6("return %d", result);
+    return result;
 }

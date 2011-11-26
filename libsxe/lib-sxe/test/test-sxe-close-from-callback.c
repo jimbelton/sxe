@@ -41,7 +41,7 @@
 #define TEST_DATA_3_LENGTH (sizeof(TEST_DATA_3) - 1)
 #define TEST_BUF_SIZE      1024       /* This is the minimum buffer size that can be set with setsockopt(SO_RCVBUF/SO_SNDBUF) */
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__APPLE__)
 
 int
 main(void)

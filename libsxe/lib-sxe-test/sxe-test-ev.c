@@ -66,76 +66,9 @@ test_process_all_libev_events(void)
     SXER6("return");
 }
 
-/* We're expecting a number of events, but we're not sure what order they'll be
- * delivered in.  Pass in a string with space separated event names, and
- * they'll all be consumed, with a 2 second timeout.
- */
-int
-test_ev_consume_events(const char * expected, int expected_events)
+unsigned
+test_tap_ev_length_nowait(void)
 {
-    tap_ev event = NULL;
-    int result = 0;
-    const char ** event_list = NULL;
-    unsigned i;
-    unsigned item;
-    unsigned event_count = 1;
-    unsigned found_event = 0;
-    char * expected_event_names = strdup(expected);
-
-    SXEE6("%s(expected=%s, expected_events=%d)", __func__, expected, expected_events);
-
-    /* Get a count of the number of events */
-    for (i = 0 ; expected_event_names[i] != '\0' ; ++i) {
-        if (expected_event_names[i] == ' ') {
-            ++event_count;
-        }
-    }
-
-    SXEL7("%d events", event_count);
-
-    /* Construct an array of pointers for our events */
-    event_list = malloc(event_count * sizeof(char *));
-    i = 0;
-    for (item = 0 ; item < event_count ; ++item) {
-        event_list[item] = &expected_event_names[i];
-        SXEL7("event %d = '%s'", item, event_list[item]);
-        for (; expected_event_names[i] != '\0' && expected_event_names[i] != ' ' ; ++i) { }
-        expected_event_names[i] = '\0';
-        ++i;
-    }
-
-    /* Tick them off as we get them */
-    while (found_event < event_count) {
-        event = test_tap_ev_queue_shift_wait_or_what(tap_ev_queue_get_default(), expected_events ? 2 : 0.5, expected_events);
-        SXEL7("Looking for event '%s'", (const char *)(tap_ev_identifier(event)));
-        if (event == NULL) {
-            diag("Expecting an event, but didn't get one.");
-            goto SXE_ERROR_OUT;
-        }
-        for (i = 0 ; i < event_count ; ++i) {
-            if ((event_list[i] != NULL) && (strcmp(tap_ev_identifier(event), event_list[i]) == 0)) {
-                SXEL7("found event '%s'", event_list[i]);
-                event_list[i] = NULL;
-                ++found_event;
-                break;
-            }
-        }
-        if (i == event_count) {
-            diag("Event '%s' was not expected at this time, but found %d of %d events that we were expecting", (const char *)tap_ev_identifier(event), found_event, event_count);
-            goto SXE_ERROR_OUT;
-        }
-        tap_ev_free(event);
-        event = NULL;
-    }
-
-    result = 1;
-
-SXE_ERROR_OUT:
-    if (event != NULL) {
-        tap_ev_free(event);
-    }
-    free(SXE_CAST_NOCONST(void *, event_list));
-    free(expected_event_names);
-    SXER6("return %d", result);
-    return result;
+    test_process_all_libev_events();
+    return tap_ev_length();
 }

@@ -138,10 +138,10 @@ main(void)
     putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=5");
     sxe_log_set_level(SXE_LOG_LEVEL_TRACE);
 
-#ifndef WIN32
-    tap_plan(51, TAP_FLAG_ON_FAILURE_EXIT, NULL);
-#else
+#if defined(WIN32) || defined(__APPLE__)
     tap_plan(25, TAP_FLAG_ON_FAILURE_EXIT, NULL);
+#else
+    tap_plan(51, TAP_FLAG_ON_FAILURE_EXIT, NULL);
 #endif
 
     sxe_register(3, 0);
@@ -170,7 +170,10 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending client events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending server events at this point");
 
-    tap_set_test_case_name("Send more then can fit in the socket buffer");
+#ifdef __APPLE__
+    skip(6, "Just about impossible to send more than fits in the socket buffer on Mac OS X");
+#else
+    tap_set_test_case_name("Send more than can fit in the socket buffer");
 
     /* Prepopulate the data with known values
      */
@@ -222,6 +225,8 @@ main(void)
         }
     }
 
+#endif
+
     tap_set_test_case_name("sxe_send(er) can still recieve data");
 
     test_buf_length = 0;
@@ -231,7 +236,7 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending client events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending server events at this point");
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__APPLE__)
     tap_set_test_case_name("sxe_notify_writable");
 
     // Note: this is really just testing that EV works...

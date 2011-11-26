@@ -146,7 +146,7 @@ test_case_chat(const char * from, SXE * s_from, tap_ev_queue q_from, const char 
 
     event = test_tap_ev_queue_shift_wait(q_from, TEST_WAIT);
     is_eq(tap_ev_identifier(event), "test_event_buffer_consumed",                        "got %s buffer consumed event", from);
-    is(SXE_CAST(SXE_RETURN, tap_ev_arg(event, "buffer")), &buffers[n * TEST_COPIES - 1], "got expected buffer");
+    is(SXE_CAST(SXE_BUFFER *, tap_ev_arg(event, "buffer")), &buffers[n * TEST_COPIES - 1], "got expected buffer");
     test_ev_queue_wait_read(q_to, TEST_WAIT, &event, s_to, "test_event_read", readbuf, TEST_COPIES * size, to);
     is_strncmp(data, readbuf, size,                                                      "%s read contents from %s", to, from);
     free(buffers);
@@ -291,7 +291,7 @@ main(int argc, char *argv[])
         fstat(fd, &sb);
         data = malloc(sb.st_size);
         SXEA1((ret = read(fd, data, sb.st_size)) == sb.st_size, "Unexpected result from read: got %u bytes instead of %ld", ret,
-              sb.st_size);
+              (long int)sb.st_size);
 
         SXEL5("test-sxe-ssl: idle right now");
         test_case_chat_from_client(client, server, data, sb.st_size);

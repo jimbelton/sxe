@@ -226,7 +226,9 @@ sxe_ssl_instrument_memory_functions(void)
 {
     SXEE7("()");
     SXEA1(sxe_ssl_array == NULL, "%s() called after sxe_ssl_init() -- too late!", __func__);
+#ifndef __APPLE__
     CRYPTO_set_mem_functions(mem_alloc, mem_realloc, mem_free);
+#endif
     SXER7("return");
 }
 

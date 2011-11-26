@@ -70,9 +70,15 @@
 #ifndef _WIN32
 #define PIPE_PATH_MAX sizeof(((struct sockaddr_un *)NULL)->sun_path)    /* Maximum size of a UNIX pipe path  */
 
+#if defined(__APPLE__)
+#define CONTROL_SPACE 4096 /* plenty of room */
+#else
+#define CONTROL_SPACE CMSG_SPACE(sizeof(int))
+#endif
+
 typedef union SXE_CONTROL_MESSAGE_FD {
     struct cmsghdr alignment;
-    char           control[CMSG_SPACE(sizeof(int))];
+    char           control[CONTROL_SPACE];
 } SXE_CONTROL_MESSAGE_FD;
 #endif
 /* TODO: change sxld so that the udp packet is read only once by sxld (and not sxe and sxld) */
@@ -111,7 +117,7 @@ static int              sxe_listen_backlog    = SOMAXCONN;
 
 static inline bool sxe_is_free(SXE * this) {return sxe_pool_index_to_state(sxe_array, this->id) == SXE_STATE_FREE;}
 
-static unsigned
+unsigned
 sxe_get_deferred_count(void)
 {
     return sxe_pool_get_number_in_state(sxe_array, SXE_STATE_DEFERRED);
@@ -258,8 +264,6 @@ sxe_init(void)
     SXEA1(!sxe_has_been_inited, "sxe_init: SXE is already initialized");
     SXEA1(sxe_array_total > 0,  "sxe_init: Error: sxe_register() must be called before sxe_init()");
     sxe_socket_init();
-
-    test_tap_ev_queue_shift_wait_get_deferred_count = &sxe_get_deferred_count;
 
     /* TODO: Check that sxe_array_total is smaller than system ulimit -n */
 

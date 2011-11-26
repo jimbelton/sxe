@@ -50,7 +50,7 @@ main(void)
     int                      i, j;
 
     SXEA1(send_buffer = malloc(TEST_SEND_BYTES), "Failed to allocate %u KB", TEST_SEND_BYTES);
-    SXEA1(recv_buffer = malloc(TEST_SEND_BYTES), "Failed to allocate %u KB", TEST_SEND_BYTES);
+    SXEA1(recv_buffer = malloc(TEST_SEND_BYTES + 1024), "Failed to allocate %u KB", TEST_SEND_BYTES + 1024);
     SXEA1(test_buffer = malloc(TEST_SEND_BYTES + 1024), "Failed to allocate %u KB", TEST_SEND_BYTES + 1024);
 
     j = snprintf(test_buffer, TEST_SEND_BYTES + 1024, "HTTP/1.1 200 OK\r\n\r\n");
@@ -59,6 +59,8 @@ main(void)
         test_buffer[j] = 'A';
     }
 
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_POOL=5");
+    putenv((char *)(intptr_t)"SXE_LOG_LEVEL_LIBSXE_LIB_SXE_LIST=5");
     tap_plan(6, TAP_FLAG_ON_FAILURE_EXIT, NULL);
     test_sxe_register_and_init(12);
 

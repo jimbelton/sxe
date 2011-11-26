@@ -52,7 +52,13 @@ main(int argc, char ** argv)
     (void)success;
     skip(1, "On FreeBSD, errno is set to seemingly random values on successful calls");
 #else
+#if defined(__APPLE__)
+    todo_start("Apple seems to change strerror(0) every release");
+#endif
     is_eq(sxe_socket_get_last_error_as_str()        ,  success                  , "Last error is '%s' (%d)", success, sxe_socket_get_last_error());
+#if defined(__APPLE__)
+    todo_end();
+#endif
 #endif
 
     ok   (sxe_socket_set_nonblock(sock, 1)          != SXE_SOCKET_ERROR_OCCURRED, "Set socket to non blocking mode");
