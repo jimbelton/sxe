@@ -48,11 +48,12 @@ main(void)
         blob.list_obj[i].id = i;
     }
 
-    plan_tests(43);
+    plan_tests(46);
 
     SXE_LIST_CONSTRUCT(&blob.list, 1, struct list_obj, node);
     is(SXE_LIST_GET_LENGTH(&blob.list), 0,                               "List has 0 elements");
     is(sxe_list_peek_head( &blob.list), NULL,                            "Can't peek at head of empty list");
+    is(sxe_list_peek_tail( &blob.list), NULL,                            "Can't peek at tail of empty list");
 
     sxe_list_push(&blob.list, &blob.list_obj[0]);
     obj_ptr = sxe_list_pop(&blob.list);
@@ -66,11 +67,12 @@ main(void)
     sxe_list_push(&blob.list,    &blob.list_obj[2]);
     sxe_list_unshift(&blob.list, &blob.list_obj[3]);                     /* List now contains: 3, 1, 0, 2 */
 
-    SXEA10((blob_copy = malloc(sizeof(blob))) != NULL, "Couldn't allocate memory for the list and all the objects");
+    SXEA1((blob_copy = malloc(sizeof(blob))) != NULL, "Couldn't allocate memory for the list and all the objects");
     memcpy(blob_copy, &blob, sizeof(blob));
 
     for (blob_ptr = &blob; blob_ptr != NULL; blob_ptr = (blob_ptr == &blob ? blob_copy : NULL)) {
         is(sxe_list_peek_head(&blob_ptr->list),  &blob_ptr->list_obj[3], "Peek at object 3 on head of list");
+        is(sxe_list_peek_tail(&blob_ptr->list),  &blob_ptr->list_obj[2], "Peek at object 2 on tail of list");
         is(SXE_LIST_GET_LENGTH(&blob_ptr->list), 4,                      "List has 4 elements");
         sxe_list_walker_construct(&walker, &blob_ptr->list);
 

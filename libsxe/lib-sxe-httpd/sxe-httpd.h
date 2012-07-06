@@ -26,102 +26,100 @@
 #include "sxe.h"
 #include "sxe-http.h"
 #include "sxe-list.h"
+#include "sxe-pool.h"
+#include "sxe-util.h"
 
 #define HTTPD_CONTENT_LENGTH          "Content-Length"
 #define HTTPD_CONNECTION_CLOSE_HEADER "Connection"
 #define HTTPD_CONNECTION_CLOSE_VALUE  "close"
 
-/* NOTE: Order of states is important! */
+/* Pool states of an HTTP request object */
 typedef enum {
-    SXE_HTTPD_CONN_FREE = 0,           /* not connected */
-    SXE_HTTPD_CONN_BAD,                /* invalid http, sink mode until close */
-    SXE_HTTPD_CONN_IDLE,               /* client connected */
-    SXE_HTTPD_CONN_REQ_LINE,           /* VERB <SP> URL [<SP> VERSION] */
-    SXE_HTTPD_CONN_REQ_HEADERS,        /* reading headers */
-    SXE_HTTPD_CONN_REQ_BODY,           /* at BODY we run the handler for each chunk. */
-    SXE_HTTPD_CONN_REQ_RESPONSE,       /* generating the response (read disabled) */
-    SXE_HTTPD_CONN_NUMBER_OF_STATES
-} SXE_HTTPD_CONN_STATE;
+    SXE_HTTPD_REQUEST_STATE_FREE = 0,              /* not connected                                                           */
+    SXE_HTTPD_REQUEST_STATE_BAD,                   /* invalid HTTP, sink mode until closed or reclaimed                       */
+    SXE_HTTPD_REQUEST_STATE_IDLE,                  /* client connected, but connection is idle                                */
+    SXE_HTTPD_REQUEST_STATE_ACTIVE,                /* an HTTP request is in progress (see substates, below)                   */
+    SXE_HTTPD_REQUEST_STATE_DEFERRED,              /* request has a deferred event on it                                      */
+    SXE_HTTPD_REQUEST_STATE_NUMBER_OF_STATES
+} SXE_HTTPD_REQUEST_STATE;
 
+/* Substates of an active HTTP request object */
 typedef enum {
-    SXE_HTTP_METHOD_INVALID=0,
-    SXE_HTTP_METHOD_GET,
-    SXE_HTTP_METHOD_HEAD,
-    SXE_HTTP_METHOD_PUT,
-    SXE_HTTP_METHOD_POST,
-    SXE_HTTP_METHOD_DELETE
-} SXE_HTTP_METHOD;
+    SXE_HTTPD_REQUEST_SUBSTATE_RECEIVING_LINE,     /* receiving VERB <SP> URL [<SP> VERSION]                                  */
+    SXE_HTTPD_REQUEST_SUBSTATE_RECEIVING_HEADERS,  /* reading headers                                                         */
+    SXE_HTTPD_REQUEST_SUBSTATE_RECEIVING_BODY,     /* at BODY we run the handler for each chunk                               */
+    SXE_HTTPD_REQUEST_SUBSTATE_SENDING_LINE,       /* Sending the response line (read disabled)                               */
+    SXE_HTTPD_REQUEST_SUBSTATE_SENDING_HEADERS,    /* Sending the response headers (read disabled)                            */
+    SXE_HTTPD_REQUEST_SUBSTATE_SENDING_BODY,       /* Sent EOH, sending the body (read disabled)                              */
+    SXE_HTTPD_REQUEST_SUBSTATE_RESPONSE_DRAINING,  /* Queued the end of the response, waiting for it to drain (read disabled) */
+    SXE_HTTPD_REQUEST_SUBSTATE_RESPONSE_DRAINED,   /* Response drained, deferred resume will reenable read                    */
+    SXE_HTTPD_REQUEST_SUBSTATE_NUMBER_OF_SUBSTATES
+} SXE_HTTPD_REQUEST_SUBSTATE;
 
-typedef enum {
-    SXE_HTTP_VERSION_UNKNOWN=0,
-    SXE_HTTP_VERSION_1_0,
-    SXE_HTTP_VERSION_1_1
-} SXE_HTTP_VERSION;
-
-#define WANT_BODY(request) (request->method == SXE_HTTP_METHOD_PUT || request->method == SXE_HTTP_METHOD_POST)
+#define WANT_BODY(request) ((request)->method == SXE_HTTP_METHOD_PUT || (request)->method == SXE_HTTP_METHOD_POST)
 
 struct SXE_HTTPD;
 struct SXE_HTTPD_REQUEST;
 
 typedef void (*sxe_httpd_connect_handler)(struct SXE_HTTPD_REQUEST *);
-typedef void (*sxe_httpd_request_handler)(struct SXE_HTTPD_REQUEST *, const char *method, unsigned mlen, const char *url, unsigned ulen, const char *version, unsigned vlen);
-typedef void (*sxe_httpd_header_handler)(struct SXE_HTTPD_REQUEST *, const char *key, unsigned klen, const char *val, unsigned vlen);
-typedef void (*sxe_httpd_eoh_handler)(struct SXE_HTTPD_REQUEST *);
-typedef void (*sxe_httpd_body_handler)(struct SXE_HTTPD_REQUEST *, const char *chunk, unsigned chunklen);
+typedef void (*sxe_httpd_request_handler)(struct SXE_HTTPD_REQUEST *, const char *method, unsigned mlen, const char *url,
+                                          unsigned ulen, const char *version, unsigned vlen);
+typedef void (*sxe_httpd_header_handler)( struct SXE_HTTPD_REQUEST *, const char *key, unsigned klen, const char *val, unsigned vlen);
+typedef void (*sxe_httpd_eoh_handler)(    struct SXE_HTTPD_REQUEST *);
+typedef void (*sxe_httpd_body_handler)(   struct SXE_HTTPD_REQUEST *, const char *chunk, unsigned chunklen);
 typedef void (*sxe_httpd_respond_handler)(struct SXE_HTTPD_REQUEST *);
-typedef void (*sxe_httpd_close_handler)(struct SXE_HTTPD_REQUEST *);
+typedef void (*sxe_httpd_close_handler)(  struct SXE_HTTPD_REQUEST *);
 
-/* Invoked from sxe_http_header_parse(buffer, length, callback, user_data) for
- * each HTTP header found in buffer.
- *
- * NOTE: to stop the callback from being invoked again, return false. The
- * entire header block will still be checked, and MUST contain everything from
- * the first header to the last byte before the terminating \r\n\r\n.
- *
- * NOTE: the callback is invoked as valid headers are found. Later, the header
- * may be found to be invalid -- it is the caller's responsibility to undo any
- * damage if sxe_http_header_parse() returns false.
- */
-typedef bool (*sxe_http_header_handler)(const char *key, unsigned key_length,
-                                        const char *val, unsigned val_length,
-                                        void *user_data);
+/* This handler is invoked when any of the sxe_httpd_response_*() functions
+ * have sent the entire response or portion of the response; or when an I/O
+ * error occurs. */
+typedef void (*sxe_httpd_on_sent_handler)(struct SXE_HTTPD_REQUEST *, SXE_RETURN, void *);
 
-/* This handler is invoked when sxe_httpd_response_sendfile() has finished
- * sending the requested amount of data.
- */
-typedef void (*sxe_httpd_sendfile_handler)(struct SXE_HTTPD_REQUEST *, SXE_RETURN, void *);
+#define SXE_HTTPD_REQUEST_USER_DATA(request)              ((request)->user_data)
+#define SXE_HTTPD_REQUEST_USER_DATA_AS_UNSIGNED(request)  SXE_CAST(uintptr_t, (request)->user_data)
+#define SXE_HTTPD_REQUEST_SERVER_USER_DATA(request)       ((request)->server->user_data)
+#define SXE_HTTPD_REQUEST_GET_CONTENT_LENGTH(request)     (WANT_BODY(request) ? (request)->in_content_length : 0)
 
-#define SXE_HTTPD_REQUEST_USER_DATA(request)                         (request)->user_data
-#define SXE_HTTPD_REQUEST_USER_DATA_AS_UNSIGNED(request) ((unsigned)((request)->user_data))
-#define SXE_HTTPD_REQUEST_SERVER_USER_DATA(request)                  (request)->server->user_data
-
-/* Pointer substraction is signed but index is unsigned */
-#define SXE_HTTPD_REQUEST_INDEX(base_ptr, object_ptr) (((unsigned)(object_ptr) - (unsigned)(base_ptr))/sizeof(SXE_HTTPD_REQUEST))
-
+/* HTTP request */
 typedef struct SXE_HTTPD_REQUEST {
+    char                      ident[4];
     struct SXE_HTTPD         * server;
-    SXE                      * sxe;                  /* NOT FOR APPLICATION USE! */
-    void                     * user_data;            /* not used by sxe_httpd -- to be used by applications */
+    SXE                      * sxe;                  /* NOT FOR APPLICATION USE!                              */
+    void                     * user_data;            /* not used by sxe_httpd -- to be used by applications   */
+    SXE_HTTPD_REQUEST_SUBSTATE substate;             /* Substate of an active request/response (see above)    */
 
     /* Parsed info from the request line and headers */
     SXE_HTTP_METHOD            method;
     SXE_HTTP_VERSION           version;
     SXE_HTTP_MESSAGE           message;
-    unsigned                   in_content_length;    /* value from Content-Length header */
-    unsigned                   in_content_seen;      /* number of body bytes read */
+    unsigned                   in_content_length;    /* value from Content-Length header                      */
+    unsigned                   in_content_seen;      /* number of body bytes read                             */
+    bool                       paused;               /* are input events paused?                              */
 
-    /* Output: have we finished headers? */
-    bool                       out_eoh;
+    /* Output handling */
+    SXE_BUFFER *               out_buffer;           /* pointer to the current output buffer (sent when full) */
+    unsigned                   out_buffer_count;     /* number of buffers allocated by HTTPD to this request  */
+    SXE_RETURN                 out_result;
 
-    /* Handle sendfile */
-    sxe_httpd_sendfile_handler sendfile_handler;
-    void *                     sendfile_userdata;
+    /* Handle sxe_send() and sxe_sendfile() */
+    sxe_httpd_on_sent_handler  on_sent_handler;
+    void *                     on_sent_userdata;
+    int                        sendfile_fd;
+    unsigned                   sendfile_length;
+    off_t                      sendfile_offset;
 } SXE_HTTPD_REQUEST;
 
-static inline SXE * sxe_httpd_request_get_sxe(SXE_HTTPD_REQUEST * request) { return request->sxe; };    /* For diagnostics */
+static inline SXE * sxe_httpd_request_get_sxe(SXE_HTTPD_REQUEST * request) { return request->sxe; };       /* For diagnostics */
 
+/* HTTP server */
 typedef struct SXE_HTTPD {
+    char                      ident[4];
     SXE_HTTPD_REQUEST       * requests;
+    SXE_POOL_DEFER            defer;
+    unsigned                  max_connections;
+    SXE_BUFFER              * buffers;
+    unsigned                  buffer_size;
+    unsigned                  buffer_count;
     void                    * user_data;
     sxe_httpd_connect_handler on_connect;
     sxe_httpd_request_handler on_request;
@@ -131,6 +129,13 @@ typedef struct SXE_HTTPD {
     sxe_httpd_respond_handler on_respond;
     sxe_httpd_close_handler   on_close;
 } SXE_HTTPD;
+
+/* EXTERNAL HTTPD BUFFER */
+typedef struct SXE_HTTPD_BUFFER {
+    SXE_BUFFER                buffer;
+    void                    * user_data;
+    void                   (* user_on_empty_cb)(void * user_data, struct SXE_BUFFER * buffer);
+} SXE_HTTPD_BUFFER;
 
 #define SXE_HTTPD_SET_HANDLER(httpd, handler, function) sxe_httpd_set_ ## handler ## _handler((httpd), function)
 

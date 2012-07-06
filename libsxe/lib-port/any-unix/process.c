@@ -24,17 +24,63 @@
 #include <assert.h>
 #include <errno.h>
 #include <process.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 
+#ifdef __APPLE__
+#include <spawn.h>
+#endif
+
+extern char **environ;
+
 intptr_t
 spawnl(int mode, const char * command, const char * arg0, ...)
 {
-    int pid;
+    int pid, err;
+    int i, nargs;
+    const char **argv;
 
     assert(mode == P_NOWAIT);    /* Only the P_NOWAIT mode is supported */
+
+    /* Count the number of arguments */
+    {
+        va_list va;
+
+        nargs = 2; /* arg0, NULL */
+        va_start(va, arg0);
+        while (va_arg(va, const char *) != 0)
+            nargs++;
+        va_end(va);
+    }
+
+    /* Construct an argv array */
+    {
+        va_list va;
+        const char *arg;
+
+        argv = alloca(nargs * sizeof(const char *));
+        assert(argv);
+
+        argv[0] = arg0;
+        va_start(va, arg0);
+        for (i = 1; (arg = va_arg(va, const char *)) != 0; i++) {
+            argv[i] = arg;
+        }
+        va_end(va);
+        argv[i] = NULL;
+    }
+
+#ifdef __APPLE__
+    err = posix_spawn(&pid, arg0, NULL, NULL, (char * const *)(intptr_t)argv, environ);
+    if (err == 0) {
+        return (intptr_t)pid;
+    }
+
+    fprintf(stderr, "Failed to execute %s: %s", command, strerror(err));
+#else
 
     /* On error or if parent, return -1 or pid
      */
@@ -42,9 +88,12 @@ spawnl(int mode, const char * command, const char * arg0, ...)
         return (intptr_t)pid;
     }
 
-    execv(command, (char * const *)(long)&arg0);
-    fprintf(stderr, "Failed to execute %s: %s", command, strerror(errno));
+    execv(command, (char * const *)(intptr_t)argv);
+    err = errno;
+    fprintf(stderr, "Failed to execute %s: %s", command, strerror(err));
     exit(1);
+#endif
+
     return (intptr_t)-1;    /* Can't happen */
 }
 

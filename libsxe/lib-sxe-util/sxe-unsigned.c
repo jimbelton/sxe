@@ -56,8 +56,8 @@ sxe_unsigned_log2(unsigned number)
         shift = 8;
     }
     else {
-        SXEL93("number %u, number >> 3 = %u, sxe_log2_table[number >> 3] = %08x", number, number >> 3, sxe_log2_table[number >> 3]);
-        SXEL93("number & 0x7 = %u, (number & 0xF) * 4 = %u, sxe_log2_table[number >> 3] >> ((number & 0x7) * 4) = %08x", number & 0x7, (number & 0xF) * 4, sxe_log2_table[number >> 3] >> ((number & 0xF) * 4));
+        SXEL7("number %u, number >> 3 = %u, sxe_log2_table[number >> 3] = %08x", number, number >> 3, sxe_log2_table[number >> 3]);
+        SXEL7("number & 0x7 = %u, (number & 0xF) * 4 = %u, sxe_log2_table[number >> 3] >> ((number & 0x7) * 4) = %08x", number & 0x7, (number & 0xF) * 4, sxe_log2_table[number >> 3] >> ((number & 0xF) * 4));
         return (sxe_log2_table[number >> 3] >> ((number & 0x7) * 4)) & 0xF;
     }
 

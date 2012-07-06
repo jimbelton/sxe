@@ -31,17 +31,17 @@ static WSADATA sxe_socket_wsa_data;        /* Windows Socket API state */
 void
 sxe_socket_init(void)
 {
-    SXEE80("sxe_socket_init()");
+    SXEE6("sxe_socket_init()");
 
 #ifdef WINDOWS_NT
     {
         int error;
-        SXEA12((error = WSAStartup(MAKEWORD(2, 2), &sxe_socket_wsa_data)) == 0,
+        SXEA1((error = WSAStartup(MAKEWORD(2, 2), &sxe_socket_wsa_data)) == 0,
                "WSAStartup failed: (%d) %s", error, sxe_socket_error_as_str(error));
     }
 #endif
 
-    SXER80("return");
+    SXER6("return");
 }
 
 int

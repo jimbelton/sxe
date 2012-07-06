@@ -32,12 +32,16 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifndef WINDOWS_NT
-#include <netdb.h>
-#include <sys/sendfile.h>
-#include <syslog.h>
+#ifdef WINDOWS_NT
+#   include <direct.h>
 #else
-#include <direct.h>
+#   include <netdb.h>
+#   include <syslog.h>
+#   if defined(__APPLE__) || defined(__FreeBSD__)
+#       include <sys/uio.h>
+#   else
+#       include <sys/sendfile.h>
+#   endif
 #endif
 
 /* CONVENTION EXCLUSION: system functions mocked using #define */
@@ -66,12 +70,19 @@
 #define MOCK_SSIZE_T        ssize_t
 #define MOCK_SOCKLEN_T      socklen_t
 
+# ifdef __APPLE__
+#  define __timezone_ptr_t  void *
+# elif defined(__FreeBSD__)
+#  define __timezone_ptr_t  struct timezone *
+# endif
+
 #endif
 
 /* External definitions of the mock function table
  *  - MOCK_STDCALL signifies that Windows implements this function in an OS API, not the C runtime
  */
 extern MOCK_SOCKET  (MOCK_STDCALL * mock_accept)      (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *);
+extern MOCK_SOCKET  (MOCK_STDCALL * mock_accept4)     (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *, int flags);
 extern int          (MOCK_STDCALL * mock_bind)        (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T);
 extern void *       (             * mock_calloc)      (size_t, size_t);
 extern int          (             * mock_close)       (int);
@@ -85,7 +96,6 @@ extern off_t        (             * mock_lseek)       (int fd, off_t offset, int
 extern void *       (             * mock_malloc)      (size_t);
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_recvfrom)    (MOCK_SOCKET, MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int, struct sockaddr *, MOCK_SOCKLEN_T *);
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_send)        (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int);
-extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendfile)    (int, int, off_t *, size_t);
 extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendto)      (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int,
                                                        const struct sockaddr *, MOCK_SOCKLEN_T);
 extern MOCK_SOCKET  (MOCK_STDCALL * mock_socket)      (int, int, int);
@@ -94,7 +104,14 @@ extern MOCK_SSIZE_T (             * mock_write)       (int, const void *, MOCK_S
 #ifdef WINDOWS_NT
 extern DWORD        (MOCK_STDCALL * mock_timeGetTime) (void);
 extern int          (             * mock_mkdir)       (const char * pathname);
-#else  /* UNIX */
+#else /* UNIX */
+# if defined(__APPLE__)
+extern int          (MOCK_STDCALL * mock_sendfile)    (int, int, off_t, off_t *, struct sf_hdtr *, int);
+# elif defined(__FreeBSD__)
+extern int          (MOCK_STDCALL * mock_sendfile)    (int, int, off_t, size_t, struct sf_hdtr *, off_t *, int);
+# else /* not __APPLE__ and not __FreeBSD__ */
+extern MOCK_SSIZE_T (MOCK_STDCALL * mock_sendfile)    (int, int, off_t *, size_t);
+# endif
 extern int          (             * mock_mkdir)       (const char * pathname, mode_t mode);
 extern void         (             * mock_openlog)     (const char * ident, int option, int facility);
 extern void         (             * mock_syslog)      (int priority, const char *format, ...);
@@ -103,6 +120,7 @@ extern void         (             * mock_syslog)      (int priority, const char 
 #ifndef MOCK_IMPL
 
 #define accept(fd, addr, len)                    (*mock_accept)      ((fd), (addr), (len))
+#define accept4(fd, addr, len, flgs)             (*mock_accept4)      ((fd), (addr), (len), (flgs))
 #define bind(fd, addr, len)                      (*mock_bind)        ((fd), (addr), (len))
 #define calloc(num, size)                        (*mock_calloc)      ((num), (size))
 #define close(fd)                                (*mock_close)       (fd)
@@ -119,7 +137,13 @@ extern void         (             * mock_syslog)      (int priority, const char 
 #define timeGetTime()                            (*mock_timeGetTime) ()
 #define mkdir(pathname)                          (*mock_mkdir)       (pathname)
 #else
-#define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
+# if defined(__APPLE__)
+# define sendfile(in_fd, out_fd, off, len, hdr, _r) (*mock_sendfile)  ((in_fd), (out_fd), (off), (len), (hdr), (_r))
+# elif defined(__FreeBSD__)
+# define sendfile(in_fd, out_fd, off, nbytes, hdr, sbytes, flags) (*mock_sendfile)  ((in_fd), (out_fd), (off), (nbytes), (hdr), (sbytes), (flags))
+# else
+# define sendfile(out_fd, in_fd, offset, count)   (*mock_sendfile)    ((out_fd), (in_fd), (offset), (count))
+# endif
 #define mkdir(pathname, mode)                    (*mock_mkdir)       ((pathname), (mode))
 #define openlog(ident, option, facility)         (*mock_openlog)     ((ident), (option), (facility))
 #define syslog(priority, ...)                    (*mock_syslog)      ((priority), __VA_ARGS__)

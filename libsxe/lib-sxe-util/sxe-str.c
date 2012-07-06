@@ -33,7 +33,21 @@ sxe_strnchr(const char * buf, char c, unsigned n)
         }
 
         if (*buf == c) {
-            return (char *)(unsigned long)buf;
+            return SXE_CAST_NOCONST(char *, buf);
+        }
+    }
+
+    return NULL;
+}
+
+char *
+sxe_rstrnchr(const char * buf, char c, unsigned n)
+{
+    const char * end;
+
+    for (end = &buf[n - 1]; buf <= end; end--) {
+        if (*end == c) {
+            return SXE_CAST_NOCONST(char *, end);
         }
     }
 
@@ -49,7 +63,7 @@ sxe_strncspn(const char * buf, const char * reject, unsigned n)
     for (i = 0; (i < n) && (buf[i] != '\0'); i++) {
         for (j = 0; reject[j] != '\0'; j++) {
             if (buf[i] == reject[j]) {
-                return (char *)(unsigned long)&buf[i];
+                return SXE_CAST_NOCONST(char *, &buf[i]);
             }
         }
     }
@@ -63,13 +77,17 @@ sxe_strnstr(const char * buf, const char * str, unsigned n)
     unsigned     length = strlen(str);
     const char * end;
 
+    if (n < length) {
+        return NULL;
+    }
+
     for (end = &buf[n - length]; buf <= end; buf++) {
         if (*buf == '\0') {
             break;
         }
 
         if (memcmp(buf, str, length) == 0) {
-            return (char *)(unsigned long)buf;
+            return SXE_CAST_NOCONST(char *, buf);
         }
     }
 
@@ -84,7 +102,7 @@ sxe_rstrnstr(const char * haystack, const char * needle, unsigned haystack_len)
 
     for (ptr = haystack + haystack_len - needle_len; ptr >= haystack; ptr--) {
         if (memcmp(ptr, needle, needle_len) == 0) {
-            return (char *)(unsigned long)ptr;
+            return SXE_CAST_NOCONST(char *, ptr);
         }
     }
 
@@ -97,13 +115,17 @@ sxe_strncasestr(const char * buf, const char * str, unsigned n)
     unsigned     length = strlen(str);
     const char * end;
 
+    if (n < length) {
+        return NULL;
+    }
+
     for (end = &buf[n - length]; buf <= end; buf++) {
         if (*buf == '\0') {
             break;
         }
 
         if (strncasecmp(buf, str, length) == 0) {
-            return (char *)(unsigned long)buf;
+            return SXE_CAST_NOCONST(char *, buf);
         }
     }
 

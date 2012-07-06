@@ -33,29 +33,29 @@
 static void
 test_event_connected(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE61I("test_event_read(length=%d)", length);
+    SXEE6I("test_event_read(length=%d)", length);
     tap_ev_push(__func__, 2, "this", this, "length", length);
     if(SXE_BUF_STRNCASESTR(this, "CLOSE")) {
-        SXEL10("Closing         - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -");
+        SXEL1("Closing         - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -");
         sxe_close(this);
     }
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE60I("test_event_close()");
+    SXEE6I("test_event_close()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 #define CONCURRENCY 7
@@ -93,15 +93,15 @@ main(int argc, char *argv[])
     }
 
     for (i=0; i < CONCURRENCY; i++) {
-        SXEL11("Write round #%2d ---------------------------------------------------------------------", i);
+        SXEL1("Write round #%2d ---------------------------------------------------------------------", i);
         for (j=i; j < CONCURRENCY; j++) {
             char   message_close[] = "CLOSE";
             char   message_hello[] = "HELLO";
             char * message = ( (i == j) ? message_close : message_hello );
-            SXEL11("Write text  #%2d - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -", j);
+            SXEL1("Write text  #%2d - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -", j);
             is(result = sxe_write(connectors[j], message, 5), SXE_RETURN_OK,                    "wrote message to connector");
             is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_read",      "got a read event");
-            connectees[j] = (SXE *)(unsigned long)tap_ev_arg(event, "this");
+            connectees[j] = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
             is(tap_ev_arg(event, "length")            , 5,                                      "read expected bytes");
             is_strncmp(SXE_BUF(connectees[j]), message, 5,                                      "message in buffer");
             SXE_BUF_CLEAR(connectees[j]);

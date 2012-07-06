@@ -23,32 +23,27 @@
 #
 CFLAGS+=-c -g -W -Waggregate-return -Wall -Werror -Wcast-align -Wcast-qual -Wchar-subscripts -Wcomment                   \
 		-Wformat -Wimplicit  -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wparentheses -Wpointer-arith     \
-		-Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch  -Wtrigraphs -Wunused         \
-		-Wwrite-strings
+		-Wredundant-decls -Wreturn-type -Wshadow -Wstrict-prototypes -Wswitch  -Wtrigraphs         \
+		-Wwrite-strings $(CFLAGS_EXTRA)
+
+LINK_FLAGS += $(LINK_FLAGS_EXTRA)
 
 # See http://gcc.gnu.org/onlinedocs/gcc-3.0/gcc_8.html#SEC135
 # "...but if you want to prove that every single line in your program
 #  was executed, you should not compile with optimization at the same
 #  time."
 ifneq ($(filter coverage,$(MAKECMDGOALS)),)
-CFLAGS += -O0
+CFLAGS += -O0 -Wunused
+else ifneq ($(filter debug,$(MAKECMDGOALS)),)
+CFLAGS += -O0 -Wno-unused
 else
-CFLAGS += -O -Wuninitialized
+CFLAGS += -O -Wuninitialized -Wunused
 endif
 
-# FreeBSD platform specific compiler flags.
-# Additional to Tank flags: -O, pedantic, std=gnu99 Waggregate-return Wall Wcomment Wformat Wimplicit Wmissing-declarations
-#                           Wparentheses Wtrigraphs Wuninitialized Wunused
-# Removed  from Tank flags: -Wno-format-y2k -Wno-unused-parameter
-#
-ifeq ($(OS), freebsd)
-CFLAGS+=        -Wsystem-headers
-
-# Linux: extra flag in GCC 4
-#
-else
-# Once we upgrade to Lenny, we can add the -fstack-protector-all flag back in
-#CFLAGS+=        -fstack-protector-all
+ifdef SXE_DISABLE_OPENSSL
+CFLAGS            += -DSXE_DISABLE_OPENSSL
+else ifdef SXE_EXTERNAL_OPENSSL
+LINK_FLAGS        += -lssl -lcrypto
 endif
 
 PERL               = perl
@@ -78,30 +73,55 @@ COV_LFLAGS         = -coverage -lgcov
 COV_INIT           = $(DEL) $(DST.dir)/*.gcda $(DST.dir)/*.ok
 CXX                = g++
 LINK               = gcc
-LINK_OUT           = -o
-LINK_FLAGS        += -ldl
+LINK_OUT           = -o $(EMPTY)
 # -lm needed by ev; ceil()
 LINK_FLAGS        += -g -lm
 LIB_CMD            = $(MAKE_PERL_LIB)
 LIB_OUT            =
 LIB_FLAGS          =
+LIB_EXTRACT        = ar x
+LIB_LIST           = ar t
+LIB_LIST_FILTER    = cat
+LIB_INDEX          = ranlib
 OSQUOTE            = '
 OSPC               = %
-OS_class		   = any-unix
-OS_name            = $(if $(findstring el5,$(shell uname -r)),rhes5,$(shell uname -s | tr '[:upper:]' '[:lower:]'))
-OS_bits			   = $(shell uname -a | $(PERL) -lane '$$o.=$$_;sub END{printf qq[%d], $$o =~ m~_64~s ? 64 : 32;}')
+OS_class           = any-unix
+OS_name            = $(if $(findstring CentOS,$(shell cat /etc/redhat-release 2>/dev/null)),centos56,$(if $(findstring el5,$(shell uname -r)),rhes53,$(shell uname -s | tr '[:upper:]' '[:lower:]')))
+OS_bits            = $(shell uname -a | $(PERL) -lane '$$o.=$$_;sub END{printf qq[%d], $$o =~ m~_64~s ? 64 : 32;}')
+# syntax engine workaround ' (a.k.a. VIM)
 TEST_ENV_VARS      = LIBC_FATAL_STDERR_=1
+CHMOD_R_WRITABLE   = chmod -R +w
+
+ifneq ($(OS_name), freebsd)
+LINK_FLAGS        += -ldl
+endif
+# FreeBSD platform specific compiler flags.
+# Additional to Tank flags: -O, pedantic, std=gnu99 Waggregate-return Wall Wcomment Wformat Wimplicit Wmissing-declarations
+#                           Wparentheses Wtrigraphs Wuninitialized Wunused
+# Removed  from Tank flags: -Wno-format-y2k -Wno-unused-parameter
+#
+ifeq ($(OS_name), freebsd)
+CFLAGS+=        -Wsystem-headers
+
+# Linux: extra flag in GCC 4
+#
+else
+# Once we upgrade to Lenny, we can add the -fstack-protector-all flag back in
+#CFLAGS+=        -fstack-protector-all
+endif
 
 
 # note: -march=i486 for __sync_val_compare_and_swap gcc builtin used by sxe-mmap
-ifeq ($(OS_bits), 32)
+ifeq ($(OS_name), darwin)
+	CFLAGS		  += -march=core2 -pthread
+	OS_bits		  = 64
+else ifeq ($(OS_bits), 32)
 	CFLAGS		  += -march=i486
 else
 # x86-64 for 64 bit systems
 	CFLAGS		  += -march=x86-64
 endif
 
-# syntax engine workaround ' (a.k.a. VIM)
 ECHOQUOTE          = $(OSQUOTE)
 ECHOESCAPE         =
 CAT                = cat
@@ -113,8 +133,16 @@ PROVE              = prove
 #   - --no-target-directory treat DEST as a normal file
 #   - --verbose             explain what is being done
 #   - --preserve=timestamps make copies the same age as the sources
+ifeq ($(OS_name), darwin)
+COPYDIR            = cp -pPRfv
+COPYFILES2DIR      = cp -pPfv
+else ifeq ($(OS_name), freebsd)
+COPYDIR            = cp -pPRfv
+COPYFILES2DIR      = cp -pPfv
+else
 COPYDIR            = cp --update --verbose --preserve=timestamps --recursive --no-target-directory --force
 COPYFILES2DIR      = cp --update --verbose --preserve=timestamps --force
+endif
 CFLAGS_DEBUG       = -g
 CFLAGS_FOR_CPP     = -lstdc++
 

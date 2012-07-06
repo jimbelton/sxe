@@ -39,7 +39,7 @@ sxe_sync_ev_read(EV_P_ ev_io * io, int revents)
 {
     SXE_SYNC_EV   * handle; /* todo: don't pass pointers around using udp! */
 
-    SXEE82("sxe_sync_ev_read(io=%p,revents=%d)", io, revents);
+    SXEE6("sxe_sync_ev_read(io=%p,revents=%d)", io, revents);
 #if EV_MULTIPLICITY
     SXE_UNUSED_ARGUMENT(loop);
 #endif
@@ -50,9 +50,9 @@ sxe_sync_ev_read(EV_P_ ev_io * io, int revents)
         (*sxe_sync_generic_event)(handle, handle->user_data);
     }
 
-    SXEA11(sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EWOULDBLOCK), "Unexpected error receiving from sync socket: %s",
+    SXEA1(sxe_socket_get_last_error() == SXE_SOCKET_ERROR(EWOULDBLOCK), "Unexpected error receiving from sync socket: %s",
            sxe_socket_get_last_error_as_str());
-    SXER80("return");
+    SXER6("return");
 }
 
 static int
@@ -60,12 +60,12 @@ sxe_sync_ev_socket(void)
 {
     SXE_SOCKET sock;
 
-    SXEE80("sxe_sync_ev_socket()");
-    SXEA11((sock = socket(AF_INET, SOCK_DGRAM, 0)) != SXE_SOCKET_INVALID, "Error creating sync socket: %s",
+    SXEE6("sxe_sync_ev_socket()");
+    SXEA1((sock = socket(AF_INET, SOCK_DGRAM, 0)) != SXE_SOCKET_INVALID, "Error creating sync socket: %s",
            sxe_socket_get_last_error_as_str());
-    SXEA12(sxe_socket_set_nonblock(sock, 1) >= 0, "socket %d: couldn't set non-blocking flag: %s", sock,
+    SXEA1(sxe_socket_set_nonblock(sock, 1) >= 0, "socket %d: couldn't set non-blocking flag: %s", sock,
            sxe_socket_get_last_error_as_str());
-    SXER81("return sock=%d", sock);
+    SXER6("return sock=%d", sock);
     return sock;
 }
 
@@ -74,7 +74,7 @@ sxe_sync_ev_init(unsigned concurrency, void (*send_event)(void * sync, void * us
 {
     unsigned short port;
 
-    SXEE82("sxe_sync_ev_init(concurrency=%u,send_event=%p)", concurrency, send_event);
+    SXEE6("sxe_sync_ev_init(concurrency=%u,send_event=%p)", concurrency, send_event);
     sxe_sync_ev_pool                 = sxe_pool_new("http_sync_ev", concurrency, sizeof(SXE_SYNC_EV), 2, SXE_POOL_OPTION_UNLOCKED);
     sxe_sync_ev_sock                 = sxe_sync_ev_socket();
     sxe_sync_generic_event           = send_event;
@@ -88,14 +88,14 @@ sxe_sync_ev_init(unsigned concurrency, void (*send_event)(void * sync, void * us
             break;
         }
 
-        SXEA12(port < USHRT_MAX, "Not able to bind any port between 1024 and %hu: %s", port,   /* Coverage Exclusion - Assert      */
+        SXEA1(port < USHRT_MAX, "Not able to bind any port between 1024 and %hu: %s", port,   /* Coverage Exclusion - Assert      */
                sxe_socket_get_last_error_as_str());
     }                                                                                          /* Coverage Exclusion - Not Reached */
 
-    SXEL81("Listening on port %hu", port);
+    SXEL6("Listening on port %hu", port);
     ev_io_init(&sxe_sync_ev_io, sxe_sync_ev_read, _open_osfhandle(sxe_sync_ev_sock, 0), EV_READ);
     ev_io_start(ev_default_loop(0), &sxe_sync_ev_io);
-    SXER80("return");
+    SXER6("return");
 }
 
 void *
@@ -103,13 +103,13 @@ sxe_sync_ev_new(void * user_data)
 {
     unsigned id;
 
-    SXEE81("sxe_sync_ev_new(user_data=%p)", user_data);
-    SXEA10((id = sxe_pool_set_oldest_element_state(sxe_sync_ev_pool, 0, 1)) != SXE_POOL_NO_INDEX,
+    SXEE6("sxe_sync_ev_new(user_data=%p)", user_data);
+    SXEA1((id = sxe_pool_set_oldest_element_state(sxe_sync_ev_pool, 0, 1)) != SXE_POOL_NO_INDEX,
            "Could not allocate a sync object");
     sxe_sync_ev_pool[id].sock      = sxe_sync_ev_socket();
     sxe_sync_ev_pool[id].user_data = user_data;
 
-    SXER81("return sync=%p", &sxe_sync_ev_pool[id]);
+    SXER6("return sync=%p", &sxe_sync_ev_pool[id]);
     return &sxe_sync_ev_pool[id];
 }
 
@@ -118,19 +118,19 @@ sxe_sync_ev_post(void * sync_point)
 {
     SXE_SYNC_EV * sync_ev = (SXE_SYNC_EV *)sync_point;
 
-    SXEE81("sxe_sync_ev_post(sync_point=%p)", sync_point);
-    SXEA11(sendto(sync_ev->sock, (MOCK_SOCKET_VOID *)&sync_point, sizeof(sync_point), 0, (struct sockaddr *)&sxe_sync_ev_addr,
+    SXEE6("sxe_sync_ev_post(sync_point=%p)", sync_point);
+    SXEA1(sendto(sync_ev->sock, (MOCK_SOCKET_VOID *)&sync_point, sizeof(sync_point), 0, (struct sockaddr *)&sxe_sync_ev_addr,
                   sizeof(sxe_sync_ev_addr)) == sizeof(sync_point),
            "Can't send to sync_point listener port: %s", sxe_socket_get_last_error_as_str());
-    SXER80("return");
+    SXER6("return");
 }
 
 void *
 sxe_sync_ev_delete(void * sync_point)
 {
-    SXEE81("sxe_sync_ev_delete(sync_point=%p)", sync_point);
+    SXEE6("sxe_sync_ev_delete(sync_point=%p)", sync_point);
     sxe_pool_set_indexed_element_state(sxe_sync_ev_pool, (SXE_SYNC_EV *)sync_point - sxe_sync_ev_pool, 1, 0);
-    SXER80("return NULL");
+    SXER6("return NULL");
     return NULL;
 }
 

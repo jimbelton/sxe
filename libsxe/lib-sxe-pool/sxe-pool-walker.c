@@ -35,8 +35,8 @@ sxe_pool_walker_construct(SXE_POOL_WALKER * walker, void * array, unsigned state
 {
     SXE_POOL_IMPL * pool = SXE_POOL_ARRAY_TO_IMPL(array);
 
-    SXEE83("sxe_pool_walker_construct(walker=%p,pool=%s,state=%s)", walker, pool->name, (*pool->state_to_string)(state));
-    SXEA11(!((pool->options & SXE_POOL_OPTION_LOCKED) && (pool->options & SXE_POOL_OPTION_TIMED)),
+    SXEE6("sxe_pool_walker_construct(walker=%p,pool=%s,state=%s)", walker, pool->name, (*pool->state_to_string)(state));
+    SXEA1(!((pool->options & SXE_POOL_OPTION_LOCKED) && (pool->options & SXE_POOL_OPTION_TIMED)),
            "sxe_pool_walker_construct: Can't walk thread safe timed pool %s safely", pool->name);
     sxe_list_walker_construct(&walker->list_walker, &SXE_POOL_QUEUE(pool)[state]);
     walker->pool  = pool;
@@ -49,7 +49,7 @@ sxe_pool_walker_construct(SXE_POOL_WALKER * walker, void * array, unsigned state
         walker->last.count = 0;
     }
 
-    SXER80("return");
+    SXER6("return");
 }
 
 /**
@@ -70,7 +70,7 @@ sxe_pool_walker_step(SXE_POOL_WALKER * walker)
     SXE_POOL_IMPL * pool = walker->pool;
     unsigned        result;
 
-    SXEE81("sxe_pool_walker_step(walker=%p)", walker);
+    SXEE6("sxe_pool_walker_step(walker=%p)", walker);
 
     if ((result = sxe_pool_lock(pool)) == SXE_POOL_LOCK_NOT_TAKEN) {
         goto SXE_ERROR_OUT;
@@ -82,7 +82,7 @@ sxe_pool_walker_step(SXE_POOL_WALKER * walker)
      && (SXE_LIST_NODE_GET_ID(&node->list_node) != walker->state))
      /* TODO: Check for touching */
     {
-        SXEL83("sxe_pool_walker_step: node %u moved from state %s to state %s by another thread", node - SXE_POOL_NODES(pool),
+        SXEL6("sxe_pool_walker_step: node %u moved from state %s to state %s by another thread", SXE_CAST(unsigned, (node - SXE_POOL_NODES(pool))),
                (*pool->state_to_string)(walker->state), (*pool->state_to_string)(SXE_LIST_NODE_GET_ID(&node->list_node)));
 
         /* If there is a previous object and it has not been moved, get the new next one.
@@ -130,6 +130,6 @@ sxe_pool_walker_step(SXE_POOL_WALKER * walker)
     sxe_pool_unlock(pool);
 
 SXE_ERROR_OUT:
-    SXER81("return %s", sxe_pool_return_to_string(result));
+    SXER6("return %s", sxe_pool_return_to_string(result));
     return result;
 }

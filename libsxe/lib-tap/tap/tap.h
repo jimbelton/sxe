@@ -32,6 +32,10 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#if !defined(_WIN32) || defined(MAKE_MINGW)
+#   include <stdint.h>    /* For uintptr_t, which Windows puts in <stddef.h>; Windows doesn't have <stdint.h> */
+#endif
+
 /**
  * plan_tests - announce the number of tests you plan to run
  * @tests: the number of tests
@@ -55,7 +59,7 @@ void plan_tests(unsigned int tests);
 # error "Needs gcc or C99 compiler for variadic macros."
 #else
 
-#define is(g, e, ...)                  _gen_result(1, (const void *)(long)(g), (const void *)(long)(e), (void *)0, (void *)0, \
+#define is(g, e, ...)                  _gen_result(1, (const void *)(uintptr_t)(g), (const void *)(uintptr_t)(e), (void *)0, (void *)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define is_eq(g, e, ...)               _gen_result(2, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
@@ -64,7 +68,7 @@ void plan_tests(unsigned int tests);
 #define is_cmp(g, e, cmp, to_str, ...) _gen_result(3, (const void *)(g), (const void *)(e), (cmp), (to_str), \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define is_strncmp(g, e, len, ...)     _gen_result(4, (const void *)(g), (const void *)(e), (void *)(long)(len), (void *)0, \
+#define is_strncmp(g, e, len, ...)     _gen_result(4, (const void *)(g), (const void *)(e), (void *)(uintptr_t)(len), (void *)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define is_strstr(g, e, ...)           _gen_result(5, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
@@ -286,7 +290,8 @@ extern const char TAP_EV_NO_EVENT[];
 
 void         tap_init(                FILE * out);
 void         tap_plan(                unsigned tests, unsigned flags, FILE * output);
-void         tap_test_case_name(      const char * name);
+const char * tap_get_test_case_name(  void);
+void         tap_set_test_case_name(  const char * name);
 void *       tap_dup(                 const void * mem, size_t size);
 
 unsigned     tap_ev_arg_count(        tap_ev ev);
@@ -297,6 +302,7 @@ const void * tap_ev_identifier(       tap_ev ev);
 void         tap_ev_push(             const char * identifier, unsigned argc, ...);
 unsigned     tap_ev_length(           void);
 tap_ev       tap_ev_shift(            void);
+tap_ev       tap_ev_shift_next(       const char * identifier);
 void         tap_ev_flush(            void);
 
 unsigned     tap_ev_queue_count(      tap_ev_queue queue, const char * identifier);
@@ -306,6 +312,9 @@ unsigned     tap_ev_queue_length(     tap_ev_queue queue);
 tap_ev_queue tap_ev_queue_new(        void);
 void         tap_ev_queue_push(       tap_ev_queue queue, const char * identifier, unsigned argc, ...);
 tap_ev       tap_ev_queue_shift(      tap_ev_queue queue);
+tap_ev       tap_ev_queue_shift_next( tap_ev_queue queue, const char * identifier);
+
+#define tap_test_case_name(name) tap_set_test_case_name(name)
 
 #endif /* C99 or gcc */
 #endif /* __TAP_H__  */

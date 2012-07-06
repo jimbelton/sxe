@@ -44,21 +44,21 @@ void
 sxe_mmap_open(SXE_MMAP * memmap, const char * file) {
     struct stat st;
 
-    SXEE82("sxe_mmap_open(memmap=%p, file=%s)", memmap, file);
-    SXEA11(stat(file, &st) >= 0, "Cannot stat size of file %s", file);
+    SXEE6("sxe_mmap_open(memmap=%p, file=%s)", memmap, file);
+    SXEA1(stat(file, &st) >= 0, "Cannot stat size of file %s", file);
     memmap->size = st.st_size;
-    SXEA12((memmap->fd = open(file, O_RDWR, 0666)) >= 0, "Failed to open file %s: %s", file, strerror(errno));
-    SXEA12((memmap->addr = mmap(NULL, memmap->size, PROT_READ | PROT_WRITE, MAP_SHARED, memmap->fd, 0)) != MAP_FAILED,
+    SXEA1((memmap->fd = open(file, O_RDWR, 0666)) >= 0, "Failed to open file %s: %s", file, strerror(errno));
+    SXEA1((memmap->addr = mmap(NULL, memmap->size, PROT_READ | PROT_WRITE, MAP_SHARED, memmap->fd, 0)) != MAP_FAILED,
        "Failed to mmap file %s: %s", file, strerror(errno));
-    SXER80( "return // sxe_mmap_open()" );
+    SXER6( "return // sxe_mmap_open()" );
 }
 
 void
 sxe_mmap_close(SXE_MMAP* memmap) {
-    SXEE81("sxe_mmap_close(memmap=%p)", memmap);
-    SXEA11(munmap(memmap->addr, memmap->size) >= 0, "Fail to munmap file: %s", strerror(errno));
+    SXEE6("sxe_mmap_close(memmap=%p)", memmap);
+    SXEA1(munmap(memmap->addr, memmap->size) >= 0, "Fail to munmap file: %s", strerror(errno));
     close(memmap->fd);
-    SXER80("return // sxe_mmap_close()");
+    SXER6("return // sxe_mmap_close()");
 }
 
 #else /* _WIN32 is defined */
@@ -78,39 +78,39 @@ sxe_mmap_open(SXE_MMAP * memmap, const char * file)
     HANDLE      view;
     struct stat st;
 
-    SXEE82("sxe_mmap_open(memmap=%p, file=%s)", memmap, file);
-    SXEA11(0 == stat (file, &st), "failed to stat file: %s", file);
+    SXEE6("sxe_mmap_open(memmap=%p, file=%s)", memmap, file);
+    SXEA1(0 == stat (file, &st), "failed to stat file: %s", file);
     memmap->size = st.st_size;
 
     fh = CreateFile ( file, access_mode, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_RANDOM_ACCESS, NULL );
-    SXEA11( fh != INVALID_HANDLE_VALUE, "fail to open file %s", file );
+    SXEA1( fh != INVALID_HANDLE_VALUE, "fail to open file %s", file );
 
     view = CreateFileMapping ( fh, NULL , map_mode, 0 /* len >> 32 */, 0 /* len & 0xFFFFFFFF */, /* low-order DWORD of size */ 0 );
-    SXEA11( view != NULL, "fail to create file mapping for file %s", file );
+    SXEA1( view != NULL, "fail to create file mapping for file %s", file );
 
     memmap->addr = 0;
     memmap->addr = MapViewOfFile ( view, view_mode, 0, 0, memmap->size );
-    SXEA11( 0 != memmap->addr, "fail to map view of file for file %s", file );
+    SXEA1( 0 != memmap->addr, "fail to map view of file for file %s", file );
 
     memmap->win32_fh   = fh  ;
     memmap->win32_view = view;
-    SXEL81("file mapped to address: %p", memmap->addr );
-    SXER80("return // sxe_mmap_open()" );
+    SXEL6("file mapped to address: %p", memmap->addr );
+    SXER6("return // sxe_mmap_open()" );
 }
 
 void
 sxe_mmap_close(SXE_MMAP * memmap)
 {
-    SXEE81("sxe_mmap_close(memmap=%p)", memmap);
+    SXEE6("sxe_mmap_close(memmap=%p)", memmap);
 
-    SXEA10(memmap       != NULL, "invalid parameter");
-    SXEA10(memmap->addr != NULL, "invalid struct member");
+    SXEA1(memmap       != NULL, "invalid parameter");
+    SXEA1(memmap->addr != NULL, "invalid struct member");
 
-    SXEA10(UnmapViewOfFile(memmap->addr      ), "fail to unmap view of file");
-    SXEA10(CloseHandle    (memmap->win32_view), "fail to close view handle" );
-    SXEA10(CloseHandle    (memmap->win32_fh  ), "fail to close file handle" );
+    SXEA1(UnmapViewOfFile(memmap->addr      ), "fail to unmap view of file");
+    SXEA1(CloseHandle    (memmap->win32_view), "fail to close view handle" );
+    SXEA1(CloseHandle    (memmap->win32_fh  ), "fail to close file handle" );
 
-    SXER80("return // sxe_mmap_close()" );
+    SXER6("return // sxe_mmap_close()" );
 }
 
 #endif /* _WIN32 */

@@ -21,33 +21,39 @@
 # THE SOFTWARE.
 #
 
-
 use strict;
-use warnings;
 use English;
 
-my $test_pattern = "build-linux-32-debug/*.t";
+my $build_type = exists $ENV{POUND_BUILD_TYPE} ? $ENV{POUND_BUILD_TYPE} : 'debug';
+warn "Build type is '$build_type' (n.b. change using e.g. set POUND_BUILD_TYPE=release)\n";
 
-if ($OSNAME eq "MSWin32") {
-    $test_pattern = "build-winnt-64-debug\\*.t";
+my @tests = @ARGV;
+if (scalar(@ARGV) == 0) {
+    my $test_pattern = $OSNAME eq "MSWin32" ? "build-winnt-64-$build_type\\*.t" : "build-linux-32-$build_type/*.t";
+    @tests = glob($test_pattern);
+    scalar(@tests) > 0 or die("You don't have any test programs matching '$test_pattern'\n");
 }
 
-rename("pound.log", "pound.log.bak");
-
-if (system("make debug test >> pound.log 2>&1") != 0) {
-    die("It's a one-hit wonder!\n");
-}
-
-my @tests = glob($test_pattern);
-
-if (scalar(@tests) == 0) {
-    die("You don't have any test programs matching '$test_pattern'\n");
-}
-
+my $count = 0;
 while (1) {
     for my $file (@tests) {
-        if (system("$file >> pound.log 2>&1") != 0) {
+        my ($dst_dir,$dst_file) = $file =~ m~^(.+)[\\/]([^\\/]+)$~;
+        my $command_test = "cd $dst_dir && ./$dst_file > pound-test.log 2>&1";
+        if ($count == 0) {
+            rename("$dst_dir/pound.log", "$dst_dir/pound.log.bak");
+            $ENV{POUND_JFDI} or do {
+                my $command_build = "make $build_type test > $dst_dir/pound-build.log 2>&1";
+                warn "Running '$command_build' (n.b. set POUND_JFDI to skip this step!)\n";
+                system($command_build) == 0 or die("It's a one-hit wonder!\n");
+                warn "Finished; now pounding to pound.log...\n";
+            };
+            warn "Running '$command_test'\n";
+        }
+        if (system($command_test) != 0) {
             die("Boom!\n");
         }
+
+        print STDERR (".");
+        $count ++;
     }
 }

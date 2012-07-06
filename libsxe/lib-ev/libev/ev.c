@@ -825,7 +825,7 @@ ev_feed_event (EV_P_ void *w, int revents)
   W w_ = (W)w;
   int pri = ABSPRI (w_);
 
-  SXEE63("ev_feed_event(w=%p,revents=%d) // ((ev_io *)w_)->fd=%d", w_, revents, ((ev_io *)w_)->fd);
+  SXEE6("ev_feed_event(w=%p,revents=%d) // ((ev_io *)w_)->fd=%d", w_, revents, ((ev_io *)w_)->fd);
 
   if (expect_false (w_->pending))
     pendings [pri][w_->pending - 1].events |= revents;
@@ -837,7 +837,7 @@ ev_feed_event (EV_P_ void *w, int revents)
       pendings [pri][w_->pending - 1].events = revents;
     }
 
-  SXER60("return;");
+  SXER6("return;");
 }
 
 inline_speed void
@@ -872,19 +872,19 @@ fd_event_nc (EV_P_ int fd, int revents)
   ANFD *anfd = anfds + fd;
   ev_io *w;
 
-  SXEE62("fd_event_nc(fd=%d,revents=%d)", fd, revents);
+  SXEE6("fd_event_nc(fd=%d,revents=%d)", fd, revents);
 
   for (w = (ev_io *)anfd->head; w; w = (ev_io *)((WL)w)->next)
     {
       int ev;
-      SXEL62("  head=%p, w=%p", &anfd->head, w);
+      SXEL6("  head=%p, w=%p", &anfd->head, w);
       ev = w->events & revents;
 
       if (ev)
         ev_feed_event (EV_A_ (W)w, ev);
     }
 
-  SXER60("return;");
+  SXER6("return;");
 }
 
 /* do not submit kernel events for fds that have reify set */
@@ -912,9 +912,9 @@ fd_reify (EV_P)
 {
   int i;
 
-  SXEE80("fd_reify()");
+  SXEE6("fd_reify()");
 
-  SXEL81("for (i = 0; i < fdchangecnt==%d; ++i)", fdchangecnt);
+  SXEL6("for (i = 0; i < fdchangecnt==%d; ++i)", fdchangecnt);
   for (i = 0; i < fdchangecnt; ++i)
     {
       int fd = fdchanges [i];
@@ -930,7 +930,7 @@ fd_reify (EV_P)
       if (events)
         {
           unsigned long arg;
-            SXEL81("EV_FD_TO_WIN32_HANDLE(fd=%u)", fd);
+            SXEL6("EV_FD_TO_WIN32_HANDLE(fd=%u)", fd);
           anfd->handle = EV_FD_TO_WIN32_HANDLE (fd);
           assert (("libev: only socket fds supported in this configuration", ioctlsocket (anfd->handle, FIONREAD, &arg) == 0));
         }
@@ -945,14 +945,14 @@ fd_reify (EV_P)
 
         if (o_events != events || o_reify & EV__IOFDSET)
         {
-		  SXEL83("backend_modify(fd=%u, o_events=%u, events=%u)", fd, o_events, events);
+		  SXEL6("backend_modify(fd=%u, o_events=%u, events=%u)", fd, o_events, events);
           backend_modify (EV_A_ fd, o_events, events);
       }
     }
     }
 
   fdchangecnt = 0;
-  SXER80("return");
+  SXER6("return");
 }
 
 /* something about the given fd changed */
@@ -961,13 +961,13 @@ fd_change (EV_P_ int fd, int flags)
 {
   unsigned char reify = anfds [fd].reify;
 
-  SXEE62("fd_change(fd=%d, flags=0x%x)", fd, flags);
+  SXEE6("fd_change(fd=%d, flags=0x%x)", fd, flags);
   anfds [fd].reify |= flags;
 
   if (expect_true (!reify))
     {
       ++fdchangecnt;
-      SXEL62("reify fd=%d // fdchangecnt=%d", fd, fdchangecnt);
+      SXEL6("reify fd=%d // fdchangecnt=%d", fd, fdchangecnt);
       array_needsize (int, fdchanges, fdchangemax, fdchangecnt, EMPTY2);
       fdchanges [fdchangecnt - 1] = fd;
     }
@@ -976,7 +976,7 @@ fd_change (EV_P_ int fd, int flags)
   fd_reify(EV_A); /* Sophos fix; ensure that FD_SET & FD_CLR operations happen in the intended order */
 #endif
 
-  SXER60("return");
+  SXER6("return");
 }
 
 /* the given fd is invalid/unusable, so make sure it doesn't hurt us anymore */
@@ -2263,7 +2263,7 @@ time_update (EV_P_ ev_tstamp max_block)
 void
 ev_loop (EV_P_ int flags)
 {
-  SXEE81("ev_loop(%d)", flags);
+  SXEE6("ev_loop(%d)", flags);
 
 #if EV_MINIMAL < 2
   ++loop_depth;
@@ -2273,14 +2273,14 @@ ev_loop (EV_P_ int flags)
 
   loop_done = EVUNLOOP_CANCEL;
 
-  SXEL80("EV_INVOKE_PENDING");
+  SXEL6("EV_INVOKE_PENDING");
   EV_INVOKE_PENDING; /* in case we recurse, ensure ordering stays nice and clean */
 
   do
     {
-      SXEL80("loop do()");
+      SXEL6("loop do()");
 #if EV_VERIFY >= 2
-      SXEL80("ev_loop_verify()");
+      SXEL6("ev_loop_verify()");
       ev_loop_verify (EV_A);
 #endif
 
@@ -2288,7 +2288,7 @@ ev_loop (EV_P_ int flags)
       if (expect_false (curpid)) /* penalise the forking check even more */
         if (expect_false (getpid () != curpid))
           {
-            SXEL80("getpid()");
+            SXEL6("getpid()");
             curpid = getpid ();
             postfork = 1;
           }
@@ -2299,9 +2299,9 @@ ev_loop (EV_P_ int flags)
       if (expect_false (postfork))
         if (forkcnt)
           {
-            SXEL80("queue_events()");
+            SXEL6("queue_events()");
             queue_events (EV_A_ (W *)forks, forkcnt, EV_FORK);
-            SXEL80("EV_INVOKE_PENDING");
+            SXEL6("EV_INVOKE_PENDING");
             EV_INVOKE_PENDING;
           }
 #endif
@@ -2309,27 +2309,27 @@ ev_loop (EV_P_ int flags)
       /* queue prepare watchers (and execute them) */
       if (expect_false (preparecnt))
         {
-          SXEL80("queue_events()");
+          SXEL6("queue_events()");
           queue_events (EV_A_ (W *)prepares, preparecnt, EV_PREPARE);
-          SXEL80("EV_INVOKE_PENDING");
+          SXEL6("EV_INVOKE_PENDING");
           EV_INVOKE_PENDING;
         }
 
       if (expect_false (loop_done))
       {
-        SXEL80("break");
+        SXEL6("break");
         break;
       }
 
       /* we might have forked, so reify kernel state if necessary */
       if (expect_false (postfork))
       {
-        SXEL80("loop_fork()");
+        SXEL6("loop_fork()");
         loop_fork (EV_A);
       }
 
       /* update fd-related kernel structures */
-      SXEL80("fd_reify()");
+      SXEL6("fd_reify()");
       fd_reify (EV_A);
 
       /* calculate blocking time */
@@ -2337,21 +2337,21 @@ ev_loop (EV_P_ int flags)
         ev_tstamp waittime  = 0.;
         ev_tstamp sleeptime = 0.;
 
-        SXEL80("expect_true()");
+        SXEL6("expect_true()");
         if (expect_true (!(flags & EVLOOP_NONBLOCK || idleall || !activecnt)))
           {
             /* remember old timestamp for io_blocktime calculation */
             ev_tstamp prev_mn_now = mn_now;
 
             /* update time to cancel out callback processing overhead */
-            SXEL80("time_update()");
+            SXEL6("time_update()");
             time_update (EV_A_ 1e100);
 
             waittime = MAX_BLOCKTIME;
 
             if (timercnt)
               {
-                SXEL80("ANHE_at()");
+                SXEL6("ANHE_at()");
                 {
                 ev_tstamp to = ANHE_at (timers [HEAP0]) - mn_now + backend_fudge;
                 if (waittime > to) waittime = to;
@@ -2361,7 +2361,7 @@ ev_loop (EV_P_ int flags)
 #if EV_PERIODIC_ENABLE
             if (periodiccnt)
               {
-                SXEL80("ANHE_at()");
+                SXEL6("ANHE_at()");
                 {
                 ev_tstamp to = ANHE_at (periodics [HEAP0]) - ev_rt_now + backend_fudge;
                 if (waittime > to) waittime = to;
@@ -2383,7 +2383,7 @@ ev_loop (EV_P_ int flags)
 
                 if (expect_true (sleeptime > 0.))
                   {
-                SXEL80("ev_sleep()");
+                SXEL6("ev_sleep()");
                     ev_sleep (sleeptime);
                     waittime -= sleeptime;
                   }
@@ -2398,32 +2398,32 @@ ev_loop (EV_P_ int flags)
         assert ((loop_done = EVUNLOOP_CANCEL, 1)); /* assert for side effect */
 
         /* update ev_rt_now, do magic */
-        SXEL82("time_update(waittime==%f + sleeptime==%f)", waittime, sleeptime);
+        SXEL6("time_update(waittime==%f + sleeptime==%f)", waittime, sleeptime);
         time_update (EV_A_ waittime + sleeptime);
       }
 
       /* queue pending timers and reschedule them */
-      SXEL80("timers_reify()");
+      SXEL6("timers_reify()");
       timers_reify (EV_A); /* relative timers called last */
 #if EV_PERIODIC_ENABLE
-      SXEL80("periodics_reify()");
+      SXEL6("periodics_reify()");
       periodics_reify (EV_A); /* absolute timers called first */
 #endif
 
 #if EV_IDLE_ENABLE
       /* queue idle watchers unless other events are pending */
-      SXEL80("idle_reify()");
+      SXEL6("idle_reify()");
       idle_reify (EV_A);
 #endif
 
       /* queue check watchers, to be executed first */
       if (expect_false (checkcnt))
       {
-        SXEL80("queue_events()");
+        SXEL6("queue_events()");
         queue_events (EV_A_ (W *)checks, checkcnt, EV_CHECK);
       }
 
-      SXEL80("EV_INVOKE_PENDING");
+      SXEL6("EV_INVOKE_PENDING");
       EV_INVOKE_PENDING;
     }
   while (expect_true (
@@ -2432,7 +2432,7 @@ ev_loop (EV_P_ int flags)
     && !(flags & (EVLOOP_ONESHOT | EVLOOP_NONBLOCK))
   ));
 
-  SXEL80("exit while()");
+  SXEL6("exit while()");
 
   if (loop_done == EVUNLOOP_ONE)
     loop_done = EVUNLOOP_CANCEL;
@@ -2441,7 +2441,7 @@ ev_loop (EV_P_ int flags)
   --loop_depth;
 #endif
 
-  SXER80("return");
+  SXER6("return");
 }
 
 void
@@ -2493,30 +2493,30 @@ ev_resume (EV_P)
 inline_size void
 wlist_add (WL *head, WL elem)
 {
-  SXEE63("wlist_add(head=%p, *head=%p, elem=%p)", head, *head, elem);
+  SXEE6("wlist_add(head=%p, *head=%p, elem=%p)", head, *head, elem);
   elem->next = *head;
   *head = elem;
-  SXER60("return");
+  SXER6("return");
 }
 
 inline_size void
 wlist_del (WL *head, WL elem)
 {
-  SXEE63("wlist_del(head=%p *head=%p, elem=%p)", head, *head, elem);
+  SXEE6("wlist_del(head=%p *head=%p, elem=%p)", head, *head, elem);
 
   while (*head)
     {
       if (expect_true (*head == elem))
         {
           *head = elem->next;
-          SXEL60("element found");
+          SXEL6("element found");
           break;
         }
 
       head = &(*head)->next;
     }
 
-    SXER60("return");
+    SXER6("return");
 }
 
 /* internal, faster, version of ev_clear_pending */
@@ -2578,11 +2578,11 @@ ev_io_start (EV_P_ ev_io *w)
 {
   int fd = w->fd;
 
-  SXEE62("ev_io_start(w=%p) // w->fd=%d", w, fd);
+  SXEE6("ev_io_start(w=%p) // w->fd=%d", w, fd);
 
   if (expect_false (ev_is_active (w)))
     {
-      SXEL61("watcher is already active on file descriptor %d", fd);
+      SXEL6("watcher is already active on file descriptor %d", fd);
     return;
     }
 
@@ -2599,19 +2599,19 @@ ev_io_start (EV_P_ ev_io *w)
   w->events &= ~EV__IOFDSET;
 
   EV_FREQUENT_CHECK;
-  SXER60("return");
+  SXER6("return");
 }
 
 void noinline
 ev_io_stop (EV_P_ ev_io *w)
 {
-  SXEE62("ev_io_stop(w=%p) // w->fd=%d", w, w->fd);
+  SXEE6("ev_io_stop(w=%p) // w->fd=%d", w, w->fd);
 
   clear_pending (EV_A_ (W)w);
 
   if (expect_false (!ev_is_active (w)))
     {
-      SXER60("return; // w is not active");
+      SXER6("return; // w is not active");
     return;
     }
 
@@ -2625,7 +2625,7 @@ ev_io_stop (EV_P_ ev_io *w)
   fd_change (EV_A_ w->fd, 1);
 
   EV_FREQUENT_CHECK;
-  SXER60("return; // w deactivated");
+  SXER6("return; // w deactivated");
 }
 
 void noinline

@@ -1,5 +1,5 @@
 do
-  plan_tests(25)
+  plan_tests(37)
 
   SXEL1("L1 - covered")
   SXEL2("L2 - covered")
@@ -8,8 +8,32 @@ do
   SXEL5("L5 - covered")
   SXEL6("L6 - covered")
   SXEL7("L7 - covered")
-  SXEL8("L8 - covered")
-  SXEL9("L9 - covered")
+  SXEL6("L8 - covered")
+  SXEL7("L9 - covered")
+
+  local x = sxe.log_level
+  sxe.log_level = 2
+  local y = sxe.log_level
+  SXEL1("old log level: " .. x)
+  sxe.log_level = x
+
+  is(test.bool, false, "test.bool==false");
+  test.bool = true -- text-sxe-lua.c tests this
+
+  is(test.int, 99, "test.int==99");
+  test.int = 10  -- test-sxe-lua.c tests this
+
+  is(test.uint, 88, "test.uint==88");
+  test.uint = 128 -- test-sxe-lua.c tests this
+
+  is(test.long, 77, "test.long==77");
+  test.long = 42 -- text-sxe-lua.c tests this
+
+  is(test.ulong, 66, "test.ulong==66");
+  test.ulong = -2 -- text-sxe-lua.c tests this
+
+  is(test.str, "Goodbye, cruel world", "test.str==Goodbye, cruel world");
+  test.str = "Hello, world" -- text-sxe-lua.c tests this
 
   -- Failure cases
   ok1(not false) -- true!
@@ -71,7 +95,7 @@ do
   sxe_register(2, function ()
     local c = sxe_new_tcp("0.0.0.0", 0,
       function (sxe)
-        SXEL9("port: " .. sxe.peer_addr .. ":" .. sxe.peer_port)
+        SXEL7("port: " .. sxe.peer_addr .. ":" .. sxe.peer_port)
         is(pcall(sxe_write, sxe, {}), false, "sxe_write cannot write a table")
         sxe:write("abcde\r\n")
       end,

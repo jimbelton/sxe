@@ -28,13 +28,15 @@ int
 main(void)
 {
     SXE * first;
+    SXE * midle;
     SXE * la_st;
     SXE * sw_ap;
 
-    plan_tests(10);
-    sxe_register(2, 0);
+    plan_tests(15);
+    sxe_register(3, 0);
     is(sxe_init(), SXE_RETURN_OK,                                  "SXE initialized successfully");
     ok((first = sxe_new_udp(NULL, "INADDR_ANY", 0, NULL)) != NULL, "Allocated the first SXE");
+    ok((midle = sxe_new_udp(NULL, "INADDR_ANY", 0, NULL)) != NULL, "Allocated the midle SXE");
     ok((la_st = sxe_new_udp(NULL, "INADDR_ANY", 0, NULL)) != NULL, "Allocated the la_st SXE");
     ok(sxe_is_valid(first),                                        "First SXE is valid");
     ok(sxe_is_valid(la_st),                                        "La_st SXE is valid");
@@ -51,6 +53,12 @@ main(void)
     ok(!sxe_is_valid(la_st + 1),                                   "(la_st + 1) is not valid");
     ok(!sxe_is_valid((SXE *)~0UL),                                 "~NULL is not a valid SXE");
     ok(!sxe_is_valid((SXE *)((char *)la_st - sizeof(SXE) / 2)),    "Missaligned point is not a valid SXE");
+
+    is(sxe_diag_get_free_count(), 0,                               "Reporting 0 free SXE");
+    is(sxe_diag_get_used_count(), 3,                               "Reporting 3 used SXEs");
+    sxe_close(midle);
+    is(sxe_diag_get_free_count(), 1,                               "Reporting 1 free SXE  after a close");
+    is(sxe_diag_get_used_count(), 2,                               "Reporting 2 used SXEs after a close");
 
     return exit_status();
 }

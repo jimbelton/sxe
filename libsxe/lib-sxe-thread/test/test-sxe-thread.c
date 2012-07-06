@@ -36,10 +36,6 @@
 
 #define TEST_YIELD_MAX 1000000
 
-//#ifndef LOCAL_SXE_DEBUG
-//__thread unsigned        sxe_log_indent_maximum = ~0U;
-//#endif
-
 SXE_LOG_LEVEL     test_log_level;
 SXE_SPINLOCK      ping;
 SXE_SPINLOCK      pong;
@@ -47,7 +43,7 @@ volatile unsigned thread_indent = 0;
 volatile unsigned main_indent   = 0;
 
 static void
-test_log_line(SXE_LOG_LEVEL level, char * line)
+test_log_line(SXE_LOG_LEVEL level, const char * line)
 {
     char * tag;
 
@@ -69,19 +65,19 @@ test_log_line(SXE_LOG_LEVEL level, char * line)
 static SXE_THREAD_RETURN SXE_STDCALL
 test_thread_main(void * lock)
 {
-    SXEE81("test_thread_main(lock=%p)", lock);
+    SXEE6("test_thread_main(lock=%p)", lock);
 
-    SXEA10(lock                     == &ping,                     "Ping lock not passed to the thread");
-    SXEA10(sxe_spinlock_take(&pong) == SXE_SPINLOCK_STATUS_TAKEN, "Pong lock not taken by thread");
-    SXEA10(sxe_spinlock_take(&ping) == SXE_SPINLOCK_STATUS_TAKEN, "Ping lock not taken by thread");
-    SXEL10("thread: about to pong the main thread");
+    SXEA1(lock                     == &ping,                     "Ping lock not passed to the thread");
+    SXEA1(sxe_spinlock_take(&pong) == SXE_SPINLOCK_STATUS_TAKEN, "Pong lock not taken by thread");
+    SXEA1(sxe_spinlock_take(&ping) == SXE_SPINLOCK_STATUS_TAKEN, "Ping lock not taken by thread");
+    SXEL1("thread: about to pong the main thread");
     sxe_spinlock_give(&pong);
 
     for (;;) {
         sleep(1);
     }
 
-    SXER80("return NULL");
+    SXER6("return NULL");
     return (SXE_THREAD_RETURN)0;
 }
 
@@ -94,7 +90,7 @@ main(void)
 
     plan_tests(6);
     sxe_log_hook_line_out(test_log_line);
-    test_log_level = sxe_log_set_level(SXE_LOG_LEVEL_LIBRARY_TRACE);    /* Required to do indentation test */
+    test_log_level = sxe_log_set_level(SXE_LOG_LEVEL_TRACE);    /* Required to do indentation test */
     sxe_spinlock_construct(&ping);
     sxe_spinlock_construct(&pong);
     is(sxe_spinlock_take(&ping), SXE_SPINLOCK_STATUS_TAKEN, "Ping lock taken by main");
@@ -110,7 +106,7 @@ main(void)
     }
 
     ok(i < TEST_YIELD_MAX,                                  "Thread log indent set to %u after %u yeilds", thread_indent, i);
-    SXEL10("main: about to confirm the pong from the thread");
+    SXEL1("main: about to confirm the pong from the thread");
     is(sxe_spinlock_take(&pong), SXE_SPINLOCK_STATUS_TAKEN, "Pong lock taken by main");
     ok(main_indent > 0,                                     "Main log indent set to %u", main_indent);
     ok(thread_indent > main_indent,                         "Thread indent is greater than main indent");

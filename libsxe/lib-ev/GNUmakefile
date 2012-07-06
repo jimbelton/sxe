@@ -78,6 +78,7 @@ $(DST.dir)/ev$(EXT.lib):	$(DST.dir)/$(THIRD_PARTY.dir)/.libs/libev$(EXT.lib)
 $(DST.dir)/$(THIRD_PARTY.dir)/.libs/libev$(EXT.lib):   $(DST.dir)/$(THIRD_PARTY.dir)/Makefile
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
 	$(MAKE_RUN) $(COPY) ../lib-sxe-log/sxe-log.h                  $(DST.dir)/$(THIRD_PARTY.dir)
+	$(MAKE_RUN) $(COPY) ../lib-sxe-log/sxe-log-legacy.h           $(DST.dir)/$(THIRD_PARTY.dir)
 	$(MAKE_RUN) $(COPY) ../lib-sxe-log/$(DST.dir)/sxe-*-proto.h   $(DST.dir)/$(THIRD_PARTY.dir)
 	$(MAKE_RUN) $(MAKE) -C $(DST.dir)/$(THIRD_PARTY.dir)
 

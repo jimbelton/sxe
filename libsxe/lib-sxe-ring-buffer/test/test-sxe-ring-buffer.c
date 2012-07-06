@@ -38,7 +38,7 @@ validate_ring_buffer_array   (SXE_RING_BUFFER base, const char * buf, unsigned l
 
     if (LOG_BUFFER_DETAILS) {
         for (i = 0; i < len; i++) {
-            SXEL83("[%u]='%c', expected '%c'", i, *(SXE_RING_BUFFER_ARRAY_BASE + i), buf[i]);
+            SXEL6("[%u]='%c', expected '%c'", i, *(SXE_RING_BUFFER_ARRAY_BASE + i), buf[i]);
         }
     }
 }

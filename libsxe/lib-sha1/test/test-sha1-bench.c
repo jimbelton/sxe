@@ -41,6 +41,6 @@ main(void)
         sophos_sha1(value, sizeof(value) - 1, (char *)&sha1);
     }
 
-    ok(i > 0, "Computed %u SHA1's of %u byte messages in 1 second", i, sizeof(value) - 1);
+    ok(i > 0, "Computed %u SHA1's of %u byte messages in 1 second", i, (unsigned)sizeof(value) - 1);
     return exit_status();
 }

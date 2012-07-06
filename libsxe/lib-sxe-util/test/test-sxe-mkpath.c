@@ -35,7 +35,7 @@ main(void)
 
     plan_tests(2);
 
-    SXEA10((system("rm -rf " TEST_DIR) == 0) || (stat(TEST_DIR, &status) < 0), "Couldn't remove " TEST_DIR);
+    SXEA1((system("rm -rf " TEST_DIR) == 0) || (stat(TEST_DIR, &status) < 0), "Couldn't remove " TEST_DIR);
     is(sxe_mkpath(TEST_PATH), SXE_RETURN_OK, "sxe_mkpath succeeded");
     ok(stat(TEST_PATH, &status) >= 0,        "sxe_mkpath created " TEST_PATH);
     return exit_status();

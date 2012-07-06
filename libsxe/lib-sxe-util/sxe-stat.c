@@ -27,14 +27,14 @@
 SXE_STAT *
 sxe_stat(SXE_STAT * status, const char * file)
 {
-    SXEE83("%s(status=%p,file=%s", __func__, status, file);
+    SXEE6("%s(status=%p,file=%s", __func__, status, file);
 
     if (stat(file, status) < 0) {
-        SXEL43("%s: warning: can't stat file '%s': %s", __func__, file, strerror(errno));
+        SXEL4("%s: warning: can't stat file '%s': %s", __func__, file, strerror(errno));
         status = NULL;
     }
 
-    SXER81("return status=%p // 0 on error", status);
+    SXER6("return status=%p // 0 on error", status);
     return status;
 }
 

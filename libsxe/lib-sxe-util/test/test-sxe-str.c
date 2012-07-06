@@ -32,10 +32,13 @@ main(void)
     const char * needle;
     int length;
 
-    plan_tests(20);
+    plan_tests(23);
     is(    sxe_strnchr(foobar, 'b',     6), &foobar[3], "Found 'b' in 'foobarino':6");
     is(    sxe_strnchr(foobar, 'b',     2), NULL,       "Did not find 'b' in 'foobarino':2");
     is(    sxe_strnchr(foobar, 'x',    10), NULL,       "Did not find 'x' in 'foobarino':10");
+    is(    sxe_strnchr(foobar, 'o',     3), &foobar[1], "Found first 'o' in 'foobarino':3");
+    is(    sxe_rstrnchr(foobar, 'o',    3), &foobar[2], "Found last 'o' in 'foobarino':3");
+    is(    sxe_rstrnchr(foobar, 'x',    3), NULL,       "Did not find 'x' in 'foobar':3");
     is(    sxe_strnstr(foobar, "foo",   6), &foobar[0], "Found 'foo' in 'foobarino':6");
     is(    sxe_strnstr(foobar, "bar",   6), &foobar[3], "Found 'bar' in 'foobarino':6");
     is(    sxe_strnstr(foobar, "foo",   2), NULL,       "Did not find 'foo' in 'foobarino':2");

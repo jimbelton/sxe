@@ -22,38 +22,41 @@
 #ifndef __SXE_EXPOSE_H__
 #define __SXE_EXPOSE_H__
 
+#include <stdbool.h>
 #include "sxe-log.h"
 #include "sxe.h"
 
 typedef enum SXE_EXPOSE_DATA_TYPE {
     SXE_EXPOSE_UINT32,
+    SXE_EXPOSE_INT32,
+    SXE_EXPOSE_CHAR_ARY
 } SXE_EXPOSE_DATA_TYPE;
 
 typedef struct SXE_EXPOSE_DATA {
-    SXE_EXPOSE_DATA_TYPE  type;
-    int                   perms;
-    void *                data_ptr;
-    char *                name;
+    char *               name;
+    SXE_EXPOSE_DATA_TYPE type;
+    void *               data_ptr;
+    unsigned             size;
+    const char *         com;
+    const char *         perms;
 } SXE_EXPOSE_DATA;
 
 extern SXE_EXPOSE_DATA * sxe_expose_gdata;
 extern SXE_EXPOSE_DATA * sxe_expose_gdata_tmp;
 extern unsigned          sxe_expose_gdata_cnt;
 
-#define READABLE 0x01
-#define WRITABLE 0x02
-
-#define SXE_EXPOSE_REG(mname, mtype, mperm) do {                                                          \
-    sxe_expose_gdata_cnt++;                                                                               \
-    sxe_expose_gdata_tmp = malloc(sxe_expose_gdata_cnt * sizeof(SXE_EXPOSE_DATA));                        \
-    memcpy(sxe_expose_gdata_tmp, sxe_expose_gdata, (sxe_expose_gdata_cnt - 1) * sizeof(SXE_EXPOSE_DATA)); \
-    free(sxe_expose_gdata);                                                                               \
-    sxe_expose_gdata = sxe_expose_gdata_tmp;                                                              \
-    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].data_ptr    = &mname;                                      \
-    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].type        = SXE_EXPOSE_##mtype;                          \
-    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].name        = strdup(#mname);                              \
-    if (strchr(mperm, 'R') != NULL) { sxe_expose_gdata[sxe_expose_gdata_cnt - 1].perms  = READABLE; }     \
-    if (strchr(mperm, 'W') != NULL) { sxe_expose_gdata[sxe_expose_gdata_cnt - 1].perms += WRITABLE; }     \
+#define SXE_EXPOSE_REG(mname, mtype, msize, mperm, mcom) do {                                                    \
+    sxe_expose_gdata_cnt++;                                                                                      \
+    sxe_expose_gdata_tmp = malloc(sxe_expose_gdata_cnt * sizeof(SXE_EXPOSE_DATA));                               \
+    memcpy(sxe_expose_gdata_tmp, sxe_expose_gdata, (sxe_expose_gdata_cnt - 1) * sizeof(SXE_EXPOSE_DATA));        \
+    free(sxe_expose_gdata);                                                                                      \
+    sxe_expose_gdata = sxe_expose_gdata_tmp;                                                                     \
+    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].type           = SXE_EXPOSE_##mtype;                              \
+    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].data_ptr       = &mname;                                          \
+    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].size           = msize;                                           \
+    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].name           = strdup(#mname);                                  \
+    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].com            = strdup(mcom);                                    \
+    sxe_expose_gdata[sxe_expose_gdata_cnt - 1].perms          = strdup(mperm);                                   \
     } while(0)
 
 #include "lib-sxe-expose-proto.h"

@@ -46,6 +46,15 @@
 #include <signal.h>
 #endif
 
+#if defined(__APPLE__) || defined(__FreeBSD__)
+#define sighandler_t sig_t
+#endif
+#if defined(__APPLE__)
+#define _NSIG        __DARWIN_NSIG
+#elif defined(__FreeBSD__)
+#define _NSIG        NSIG
+#endif
+
 #include "tap.h"
 
 static int          no_plan        = 0;
@@ -609,8 +618,14 @@ exit_status(void)
     return r;
 }
 
+const char *
+tap_get_test_case_name(void)
+{
+    return test_case_name;
+}
+
 void
-tap_test_case_name(const char * name)
+tap_set_test_case_name(const char * name)
 {
     test_case_name = name;
 }

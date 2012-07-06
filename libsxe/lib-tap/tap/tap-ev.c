@@ -166,6 +166,40 @@ tap_ev_shift(void)
     return tap_ev_queue_shift(&tap_ev_queue_default);
 }
 
+tap_ev
+tap_ev_queue_shift_next(tap_ev_queue queue, const char * identifier)
+{
+    tap_ev  ev = queue->head;
+    tap_ev  prev;
+
+    if (ev == NULL) {
+        assert(queue->queue_count == 0);
+        return NULL;
+    }
+
+    if (strcmp(ev->identifier, identifier) == 0) {
+        return tap_ev_queue_shift(queue);
+    }
+
+    for (prev = ev, ev = ev->next; ev != NULL; prev = ev, ev = ev->next) {
+        if (strcmp(ev->identifier, identifier) == 0) {
+            prev->next = ev->next;
+            ev->next = NULL;
+            assert(queue->queue_count != 0);
+            queue->queue_count--;
+            return ev;
+        }
+    }
+
+    return NULL;
+}
+
+tap_ev
+tap_ev_shift_next(const char * identifier)
+{
+    return tap_ev_queue_shift_next(&tap_ev_queue_default, identifier);
+}
+
 void
 tap_ev_queue_flush(tap_ev_queue queue)
 {

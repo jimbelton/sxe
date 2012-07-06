@@ -26,6 +26,8 @@
  */
 #ifdef WINDOWS_NT
 static char success[] = "The operation completed successfully.";
+#elif defined(__APPLE__)
+static char success[] = "Unknown error: 0";
 #else
 static char success[] = "Success";
 #endif
@@ -41,8 +43,24 @@ main(int argc, char ** argv)
 
     sxe_socket_init();
 
+    /* Previous system calls may set errno to non-zero */
+    errno = 0;
+
     ok   ((sock = socket(AF_INET,  SOCK_STREAM, 0)) != SXE_SOCKET_INVALID       , "Allocated a socket"             );
-    is_eq(sxe_socket_get_last_error_as_str()        ,  success                  , "Last error is '%s'", success    );
+
+#ifdef __FreeBSD__
+    (void)success;
+    skip(1, "On FreeBSD, errno is set to seemingly random values on successful calls");
+#else
+#if defined(__APPLE__)
+    todo_start("Apple seems to change strerror(0) every release");
+#endif
+    is_eq(sxe_socket_get_last_error_as_str()        ,  success                  , "Last error is '%s' (%d)", success, sxe_socket_get_last_error());
+#if defined(__APPLE__)
+    todo_end();
+#endif
+#endif
+
     ok   (sxe_socket_set_nonblock(sock, 1)          != SXE_SOCKET_ERROR_OCCURRED, "Set socket to non blocking mode");
 
     sxe_socket_set_last_error(-1);

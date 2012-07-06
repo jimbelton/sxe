@@ -49,45 +49,45 @@ static SXE * pipe_accepted = NULL;    /* Emulates the WDX service   */
 static void
 test_event_tcp_connected(SXE * this)
 {
-    SXEE60I("test_event_tcp_connected()");
+    SXEE6I("test_event_tcp_connected()");
 
     if (this != tcp_connector) {
-        SXEA10I(tcp_accepted == NULL, "A TCP connection has already been accepted");
+        SXEA1I(tcp_accepted == NULL, "A TCP connection has already been accepted");
         tcp_accepted = this;
     }
 
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_pipe_connected(SXE * this)
 {
-    SXEE60I("test_event_pipe_connected()");
+    SXEE6I("test_event_pipe_connected()");
 
     if (this != pipe_connector) {
-        SXEA10I(pipe_accepted == NULL, "A pipe connection has already been accepted");
+        SXEA1I(pipe_accepted == NULL, "A pipe connection has already been accepted");
         pipe_accepted = this;
     }
 
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE61I("test_event_read(length=%d)", length);
+    SXEE6I("test_event_read(length=%d)", length);
     tap_ev_push(__func__, 2, "this", this, "length", length);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE60I("test_event_close()");
+    SXEE6I("test_event_close()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 int
