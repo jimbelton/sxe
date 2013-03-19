@@ -23,6 +23,7 @@
 #ifndef __SXE_HTTP_H__
 #define __SXE_HTTP_H__
 
+#include <stdint.h>
 #include <string.h>
 #include "sxe-log.h"
 
@@ -113,7 +114,7 @@ sxe_http_message_set_ignore_line(SXE_HTTP_MESSAGE * message) {
 static inline void
 sxe_http_message_buffer_shift_ignore_length(SXE_HTTP_MESSAGE * message) {
     /* Bypass the "cast discards qualifiers ..." warning */
-    memmove((char *)((unsigned)(message->buffer)), message->buffer + message->ignore_length, message->buffer_length);
+    memmove((char *)((uintptr_t)(message->buffer)), message->buffer + message->ignore_length, message->buffer_length);
 }
 
 #include "lib-sxe-http-proto.h"

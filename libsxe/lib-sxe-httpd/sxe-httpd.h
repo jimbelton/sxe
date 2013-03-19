@@ -96,7 +96,7 @@ typedef void (*sxe_httpd_sendfile_handler)(struct SXE_HTTPD_REQUEST *, SXE_RETUR
 #define SXE_HTTPD_REQUEST_SERVER_USER_DATA(request)                  (request)->server->user_data
 
 /* Pointer substraction is signed but index is unsigned */
-#define SXE_HTTPD_REQUEST_INDEX(base_ptr, object_ptr) (((unsigned)(object_ptr) - (unsigned)(base_ptr))/sizeof(SXE_HTTPD_REQUEST))
+#define SXE_HTTPD_REQUEST_INDEX(base_ptr, object_ptr) (((uintptr_t)(object_ptr) - (uintptr_t)(base_ptr))/sizeof(SXE_HTTPD_REQUEST))
 
 typedef struct SXE_HTTPD_REQUEST {
     struct SXE_HTTPD         * server;

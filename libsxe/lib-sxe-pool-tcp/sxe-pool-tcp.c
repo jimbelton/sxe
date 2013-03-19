@@ -72,7 +72,8 @@ connect_ramp(SXE * this, SXE_POOL_TCP * pool)
     SXEE81I("connect_ramp(pool=%s)", SXE_POOL_TCP_GET_NAME(pool));
     SXE_POOL_TCP_ASSERT_CONSISTENT(pool);
     connections_in_use = pool->concurrency - sxe_pool_get_number_in_state(pool->nodes, SXE_POOL_TCP_STATE_UNCONNECTED);
-
+	SXE_UNUSED_PARAMETER(connections_in_use);
+	
     if (SXE_POOL_TCP_GET_NUMBER_IN_STATE(pool, SXE_POOL_TCP_STATE_UNCONNECTED) == 0) {
         SXEL81I("All %u TCP connections are in use", pool->concurrency);
         goto SXE_EARLY_OUT;

@@ -243,6 +243,7 @@ sxe_pool_new(const char * name, unsigned number, unsigned size, unsigned states,
 
     array = sxe_pool_construct(base, name, number, size, states, options);
     pool  = SXE_POOL_ARRAY_TO_IMPL(array);
+    SXE_UNUSED_PARAMETER(pool);
     SXER84("return array=%p // pool=%p, pool->nodes=%p, pool->name=%s", array, pool, SXE_POOL_NODES(pool), pool->name);
     return array;
 }
@@ -459,7 +460,7 @@ unsigned
 sxe_pool_try_to_set_indexed_element_state(void * array, unsigned id, unsigned old_state, unsigned * new_state_inout)
 {
     SXE_POOL_IMPL * pool   = SXE_POOL_ARRAY_TO_IMPL(array);
-    unsigned        result = SXE_POOL_INCORRECT_STATE;
+    uintptr_t       result = SXE_POOL_INCORRECT_STATE;
 
     SXE_UNUSED_PARAMETER(old_state);   /* Used to verify sanity in debug build only */
     SXE_POOL_ASSERT_ARRAY_INITIALIZED(array);

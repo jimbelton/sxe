@@ -110,6 +110,7 @@ sxe_spawn(SXE                    * this,
         sock = socket(AF_INET, SOCK_STREAM, 0);
         SXEA61I(sock != -1, "Unable to allocate a socket to complete connection: %s", strerror(errno));
         ret  = connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+        SXE_UNUSED_PARAMETER(ret);
         SXEA61I(ret  != -1, "Can't connect back from child process: %s",              strerror(errno));
         SXEL61I("Child process: redirect stdout/stderr to associated socket fd=%d", sock);
         close(0);    /* Should not need this (see dup2 manual page) */
