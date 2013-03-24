@@ -66,7 +66,7 @@ t_openlog(const char * ident, int option, int facility)
 {
     tap_ev_queue_push(q_syslog, "openlog", 3,
                       "ident", tap_dup(ident, strlen(ident)),
-                      "option", option,
+                      "option", (intptr_t)option,
                       "facility", facility);
 }
 

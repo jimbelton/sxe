@@ -55,8 +55,8 @@ void plan_tests(unsigned int tests);
 # error "Needs gcc or C99 compiler for variadic macros."
 #else
 
-#define is(g, e, ...)                  _gen_result(1, (const void *)(long)(g), (const void *)(long)(e), (void *)0, (void *)0, \
-                                                   __func__, __FILE__, __LINE__, __VA_ARGS__)
+#define is(g, e, ...)                  _gen_result(1, (const void *)(intptr_t)(g), (const void *)(intptr_t)(e), (void *)0, \
+												   (void *)0, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define is_eq(g, e, ...)               _gen_result(2, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)

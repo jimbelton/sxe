@@ -44,7 +44,7 @@
 void
 sxe_list_construct_impl(SXE_LIST * list, unsigned id, size_t offset)
 {
-    SXEE92("sxe_list_construct_impl(list=%p, id=%u, offset=%u)", list, offset);
+    SXEE93("sxe_list_construct_impl(list=%p, id=%u, offset=%u)", list, id, offset);
     list->HEAD          = SENTINEL_PTR_REL(list);
     list->TAIL          = SENTINEL_PTR_REL(list);
     list->sentinel.id   = id;

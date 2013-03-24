@@ -171,16 +171,16 @@ main(int argc, char ** argv)
     line = test_log_first("2");
 
     for (i = 0; i < TEST_LINES_EXPECTED; i++) {
-        ok(line != NULL,                                            "Got line %u", 2 * i + 1);
-        ok(strstr(line, test_expected[i]) != NULL,                  "Found '%s' in '%.*s'", test_expected[i], strlen(line) - 1, line);
+        ok(line != NULL,                           "Got line %u", 2 * i + 1);
+        ok(strstr(line, test_expected[i]) != NULL, "Found '%s' in '%.*s'", test_expected[i], (unsigned)(strlen(line) - 1), line);
 
         if (i > 2) {
-            ok(test_log_next() != NULL,                             "Got line %u", 2 * i + 2);
+            ok(test_log_next() != NULL,            "Got line %u", 2 * i + 2);
         }
 
         line = test_log_next();
     }
 
-    ok(line == NULL,                                                "Got EOF");
+    ok(line == NULL,                               "Got EOF");
     return exit_status();
 }

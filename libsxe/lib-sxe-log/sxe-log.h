@@ -1484,11 +1484,17 @@ static inline void
 sxe_log_frame_push(SXE_LOG_FRAME * frame, const char * file, unsigned id, int line)
 {
     if (sxe_log_stack_top != NULL) {
+#if FUTURE /* Simon has the fix that makes this work */
         if (frame >= sxe_log_stack_top) {
             sxe_log_assert(NULL, file, id, line, "frame < sxe_log_stack_top",
                            "New stack frame %p is not lower than previous %p; maybe SXEE## was called and SXER## was not?",
                            frame, sxe_log_stack_top);
         }
+#else
+	SXE_UNUSED_ARGUMENT(file);
+	SXE_UNUSED_ARGUMENT(id);
+	SXE_UNUSED_ARGUMENT(line);
+#endif
 #if SXE_DEBUG
         SXEA62(sxe_log_stack_top->indent <= sxe_log_indent_maximum, "Log indent %u exceeds maximum log indent %u",
                sxe_log_stack_top->indent,   sxe_log_indent_maximum);
