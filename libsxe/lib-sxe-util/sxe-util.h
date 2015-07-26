@@ -64,4 +64,10 @@ typedef struct \
 
 #include "lib-sxe-util-proto.h"
 
+/* Return a nonconst version of a pointer. Not tested under Windows.
+ */
+static inline void * sxe_unconst(const void * pointer) {
+    return (void *)(uintptr_t)pointer;
+}
+
 #endif

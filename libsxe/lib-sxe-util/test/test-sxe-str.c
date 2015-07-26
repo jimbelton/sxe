@@ -38,16 +38,16 @@ main(void)
     is(    sxe_strnchr(foobar, 'x',    10), NULL,       "Did not find 'x' in 'foobarino':10");
     is(    sxe_strnstr(foobar, "foo",   6), &foobar[0], "Found 'foo' in 'foobarino':6");
     is(    sxe_strnstr(foobar, "bar",   6), &foobar[3], "Found 'bar' in 'foobarino':6");
-    is(    sxe_strnstr(foobar, "foo",   2), NULL,       "Did not find 'foo' in 'foobarino':2");
+    is(    sxe_strnstr(foobar, "fog",   2), &foobar[0], "Found 'fog':2 in 'foobarino':2");
     is(    sxe_strnstr(foobar, "rino",  6), NULL,       "Did not find 'rino' in 'foobarino':6");
     is(    sxe_strnstr(foobar, "gorp", 13), NULL,       "Did not find 'gorp' in 'foobarino':13");
     is(sxe_strncasestr(FOObar, "foo",   6), &FOObar[0], "Found 'foo' in 'FOObar':6");
-    is(sxe_strncasestr(FOObar, "foo",   2), NULL,       "Did not find 'foo' in 'FOObar':2");
+    is(sxe_strncasestr(FOObar, "fog",   2), &FOObar[0], "Found 'fog' in 'FOObar':2");
     is(sxe_strncasestr(FOObar, "gorp", 10), NULL,       "Did not find 'gorp' in 'FOObar':10");
     is(   sxe_strncspn(foobar, "=& ",  10), NULL,       "Did not find '=', '&' or ' ' in 'foobarino'");
     is(   sxe_strncspn(foobar, "ni",   10), &foobar[6], "Found 'n' or 'i' in 'foobarino':10 at character 6");
     is(   sxe_strncspn(foobar, "ni",    6), NULL,       "Didn't find 'n' or 'i' in 'foobarino':6");
-    
+
     needle = "abc";
     length = 3;
     is(sxe_rstrnstr(abc, needle, length), &abc[0],      "Found the last occurrence of '%s' in '%s' :%d", needle, abc, length);

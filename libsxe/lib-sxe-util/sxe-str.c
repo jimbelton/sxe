@@ -22,6 +22,7 @@
 #include <string.h>
 #include "sxe-util.h"
 
+
 char *
 sxe_strnchr(const char * buf, char c, unsigned n)
 {
@@ -49,7 +50,7 @@ sxe_strncspn(const char * buf, const char * reject, unsigned n)
     for (i = 0; (i < n) && (buf[i] != '\0'); i++) {
         for (j = 0; reject[j] != '\0'; j++) {
             if (buf[i] == reject[j]) {
-                return (char *)(unsigned long)&buf[i];
+                return sxe_unconst(&buf[i]);
             }
         }
     }
@@ -58,18 +59,18 @@ sxe_strncspn(const char * buf, const char * reject, unsigned n)
 }
 
 char *
-sxe_strnstr(const char * buf, const char * str, unsigned n)
+sxe_strnstr(const char * haystack, const char * str, unsigned maximum_length)
 {
-    unsigned     length = strlen(str);
+    unsigned     length = strnlen(str, maximum_length);    /* If use of strnlen breaks Windows, need to implement it in lib-port */
     const char * end;
 
-    for (end = &buf[n - length]; buf <= end; buf++) {
-        if (*buf == '\0') {
+    for (end = &haystack[maximum_length - length]; haystack <= end; haystack++) {
+        if (*haystack == '\0') {
             break;
         }
 
-        if (memcmp(buf, str, length) == 0) {
-            return (char *)(unsigned long)buf;
+        if (memcmp(haystack, str, length) == 0) {
+            return sxe_unconst(haystack);
         }
     }
 
@@ -77,14 +78,14 @@ sxe_strnstr(const char * buf, const char * str, unsigned n)
 }
 
 char *
-sxe_rstrnstr(const char * haystack, const char * needle, unsigned haystack_len)
+sxe_rstrnstr(const char * haystack, const char * needle, unsigned maximum_len)
 {
-    unsigned needle_len = strlen(needle);
+    unsigned needle_len = strnlen(needle, maximum_len);    /* If use of strnlen breaks Windows, need to implement it in lib-port */
     const char * ptr;
 
-    for (ptr = haystack + haystack_len - needle_len; ptr >= haystack; ptr--) {
+    for (ptr = haystack + maximum_len - needle_len; ptr >= haystack; ptr--) {
         if (memcmp(ptr, needle, needle_len) == 0) {
-            return (char *)(unsigned long)ptr;
+            return sxe_unconst(ptr);
         }
     }
 
@@ -92,18 +93,18 @@ sxe_rstrnstr(const char * haystack, const char * needle, unsigned haystack_len)
 }
 
 char *
-sxe_strncasestr(const char * buf, const char * str, unsigned n)
+sxe_strncasestr(const char * haystack, const char * str, unsigned maximum_length)
 {
-    unsigned     length = strlen(str);
+    unsigned     length = strnlen(str, maximum_length);    /* If use of strnlen breaks Windows, need to implement it in lib-port */
     const char * end;
 
-    for (end = &buf[n - length]; buf <= end; buf++) {
-        if (*buf == '\0') {
+    for (end = &haystack[maximum_length - length]; haystack <= end; haystack++) {
+        if (*haystack == '\0') {
             break;
         }
 
-        if (strncasecmp(buf, str, length) == 0) {
-            return (char *)(unsigned long)buf;
+        if (strncasecmp(haystack, str, length) == 0) {
+            return sxe_unconst(haystack);
         }
     }
 

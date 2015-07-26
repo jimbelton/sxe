@@ -21,6 +21,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <process.h>
@@ -76,9 +77,8 @@ main(int argc, char ** argv)
         SXEL11("Instance %u just     set shared memory", instance);
         SXEA11(shared[instance] == instance, "WTF! Thought I wrote %u", instance);
 
-        shared_spinlock = (SXE_SPINLOCK *)(unsigned)(shared + 1024);
-
-        InterlockedExchangeAdd((long* )(unsigned)&shared[0], 1);
+        shared_spinlock = (SXE_SPINLOCK *)(uintptr_t)(shared + 1024);
+        InterlockedExchangeAdd((long *)(uintptr_t)&shared[0], 1);
         start_time = sxe_get_time_in_seconds();
 
         while (shared[0] != TEST_MMAP_INSTANCES) {
@@ -142,7 +142,7 @@ main(int argc, char ** argv)
     sxe_mmap_open(&memmap, "memmap");
     shared = SXE_MMAP_ADDR(&memmap);
 
-    shared_spinlock = (SXE_SPINLOCK *)(unsigned)(shared + 1024);
+    shared_spinlock = (SXE_SPINLOCK *)(uintptr_t)(shared + 1024);
     sxe_spinlock_construct(&shared_spinlock[0]);
     sxe_spinlock_construct(&shared_spinlock[1]);
     shared[0] = 0;
