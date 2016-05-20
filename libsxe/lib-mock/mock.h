@@ -42,12 +42,6 @@
 
 /* CONVENTION EXCLUSION: system functions mocked using #define */
 
-#ifdef MOCK
-
-#define MOCK_SET_HOOK(func, test) mock_ ## func = (test)
-#define MOCK_SKIP_START(numtests)
-#define MOCK_SKIP_END
-
 #ifdef WINDOWS_NT
 #define MOCK_SIZE_T         unsigned
 #define MOCK_STDCALL        __stdcall
@@ -67,6 +61,12 @@
 #define MOCK_SOCKLEN_T      socklen_t
 
 #endif
+
+#ifdef MOCK
+
+#define MOCK_SET_HOOK(func, test) mock_ ## func = (test)
+#define MOCK_SKIP_START(numtests)
+#define MOCK_SKIP_END
 
 /* External definitions of the mock function table
  *  - MOCK_STDCALL signifies that Windows implements this function in an OS API, not the C runtime
