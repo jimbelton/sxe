@@ -704,19 +704,23 @@ sxe_httpd_response_start(SXE_HTTPD_REQUEST * request, int code, const char *stat
     SXER80I("return");
 }
 
-void
+SXE_RETURN
 sxe_httpd_response_header(SXE_HTTPD_REQUEST * request, const char *header, const char *value, unsigned length)
 {
-    SXE    * this      = request->sxe;
-    unsigned vlen      = length ? length : strlen(value);
-    unsigned hlen      = strlen(header) + vlen + SXE_LITERAL_LENGTH(": \r\n");
-    char   * headerfmt = alloca(hlen + 1);    /* leave room for NUL */
+    SXE      * this      = request->sxe;
+    unsigned   vlen      = length ? length : strlen(value);
+    unsigned   hlen      = strlen(header) + vlen + SXE_LITERAL_LENGTH(": \r\n");
+    char   *   headerfmt = alloca(hlen + 1);    /* leave room for NUL */
+    SXE_RETURN result;
 
     SXEE84I("sxe_httpd_response_header(request=%p,header=%s,value=%.*s)", request, header, vlen, value);
     SXEA11I(headerfmt != NULL, "failed to allocate %u bytes", hlen);
     snprintf(headerfmt, hlen + 1, "%s: %.*s\r\n", header, vlen, value);
-    SXEA10(sxe_write(this, headerfmt, hlen) == SXE_RETURN_OK, "sxe_write wrote all the data in one write");
-    SXER80I("return");
+    result = sxe_write(this, headerfmt, hlen);
+    SXEA10(result == SXE_RETURN_OK || result == SXE_RETURN_ERROR_NO_CONNECTION,
+           "Expected sxe_write to write all the data or to fail with no connection");
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
 }
 
 void
