@@ -24,6 +24,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <process.h>
+#include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,9 +34,26 @@
 intptr_t
 spawnl(int mode, const char * command, const char * arg0, ...)
 {
-    int pid;
+    va_list         arg_ptr;
+    unsigned        num_args;
+    char  const  *  *  args;
+    int             pid;
 
     assert(mode == P_NOWAIT);    /* Only the P_NOWAIT mode is supported */
+    va_start(arg_ptr, arg0);
+
+    for (num_args = 2; va_arg(arg_ptr, const char *) != NULL; num_args++) {
+    }
+
+    va_end(arg_ptr);
+    args    = alloca(num_args * sizeof(const char *));    /* Allocate space on the stack */
+    args[0] = arg0;
+    va_start(arg_ptr, arg0);
+
+    for (num_args = 1; (args[num_args] = va_arg(arg_ptr, const char *)) != NULL; num_args++) {
+    }
+
+    va_end(arg_ptr);
 
     /* On error or if parent, return -1 or pid
      */
@@ -42,8 +61,8 @@ spawnl(int mode, const char * command, const char * arg0, ...)
         return (intptr_t)pid;
     }
 
-    execv(command, (char * const *)(long)&arg0);
-    fprintf(stderr, "Failed to execute %s: %s", command, strerror(errno));
+    execv(command, (char * const *)(uintptr_t)args);
+    fprintf(stderr, "Failed to execute %s: %s\n", command, strerror(errno));
     exit(1);
     return (intptr_t)-1;    /* Can't happen */
 }

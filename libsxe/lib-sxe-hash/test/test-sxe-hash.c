@@ -51,13 +51,13 @@ test_hash_sha1(void)
 
     is(sxe_hash_set   (hash, SHA1_1ST, length, 1), 4                     , "set keys 1: Inserted at index 4"                   );
     is(sxe_hash_get   (hash, SHA1_1ST, length   ), 1                     , "set keys 1: Got correct value for first sha"       );
-    is(sxe_hash_get   (hash, SHA1_2ND, length   ), SXE_HASH_KEY_NOT_FOUND, "set keys 1: Second sha is not in hash pool yet"    );
-    is(sxe_hash_get   (hash, SHA1_3RD, length   ), SXE_HASH_KEY_NOT_FOUND, "set keys 1: Third sha is not in hash pool yet"     );
+    is((unsigned)sxe_hash_get(hash, SHA1_2ND, length), SXE_HASH_KEY_NOT_FOUND, "set keys 1: Second sha is not in hash pool yet");
+    is((unsigned)sxe_hash_get(hash, SHA1_3RD, length), SXE_HASH_KEY_NOT_FOUND, "set keys 1: Third sha is not in hash pool yet" );
 
     is(sxe_hash_set   (hash, SHA1_2ND, length, 2), 3                     , "set keys 2: Inserted at index 3"                   );
     is(sxe_hash_get   (hash, SHA1_1ST, length   ), 1                     , "set keys 2: Still got correct value for first sha" );
     is(sxe_hash_get   (hash, SHA1_2ND, length   ), 2                     , "set keys 2: Got correct value for second sha"      );
-    is(sxe_hash_get   (hash, SHA1_3RD, length   ), SXE_HASH_KEY_NOT_FOUND, "set keys 2: Third sha is not in hash pool yet"     );
+    is((unsigned)sxe_hash_get(hash, SHA1_3RD, length), SXE_HASH_KEY_NOT_FOUND, "set keys 2: Third sha is not in hash pool yet" );
 
     is(sxe_hash_set   (hash, SHA1_3RD, length, 3), 2                     , "set keys 3: Inserted at index 2"                   );
     is(sxe_hash_get   (hash, SHA1_1ST, length   ), 1                     , "set keys 3: Still got correct value for first sha" );
@@ -70,11 +70,12 @@ test_hash_sha1(void)
 
     is(sxe_hash_remove(hash, SHA1_1ST, length   ), 1                     , "remove keys: Remove returns the correct value"     );
     is(sxe_hash_remove(hash, SHA1_2ND, length   ), 2                     , "remove keys: Remove returns the correct value"     );
-    is(sxe_hash_get   (hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "remove keys: First sha has been deleted"           );
-    is(sxe_hash_get   (hash, SHA1_2ND, length   ), SXE_HASH_KEY_NOT_FOUND, "remove keys: Second sha has been deleted"          );
+    is((unsigned)sxe_hash_get(hash, SHA1_1ST, length), SXE_HASH_KEY_NOT_FOUND, "remove keys: First sha has been deleted"       );
+    is((unsigned)sxe_hash_get(hash, SHA1_2ND, length), SXE_HASH_KEY_NOT_FOUND, "remove keys: Second sha has been deleted"      );
     is(sxe_hash_get   (hash, SHA1_3RD, length   ), 3                     , "remove keys: Still got correct value for third sha");
 
-    is(sxe_hash_remove(hash, SHA1_1ST, length   ), SXE_HASH_KEY_NOT_FOUND, "remove non-existent key: returns expected value"   );
+    is((unsigned)sxe_hash_remove(hash, SHA1_1ST, length), SXE_HASH_KEY_NOT_FOUND,
+                                                                           "remove non-existent key: returns expected value"   );
 
     sxe_hash_delete(hash); /* for coverage */
 }

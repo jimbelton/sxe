@@ -225,9 +225,9 @@ static void test_five_headers(void)
     is(message.ignore_length, 0, "No ignore");
     is(message.ignore_length, 0, "Ignore length is 0");
     is_strncmp(sxe_http_message_get_header_name(&message), HEADER(1), strlen(HEADER(1)), "Name is " HEADER(1));
-    is(sxe_http_message_get_header_name_length(&message), strlen(HEADER(1)), "Name length is %u", strlen(HEADER(1)));
+    is(sxe_http_message_get_header_name_length(&message), strlen(HEADER(1)), "Name length is %u",   (unsigned)strlen(HEADER(1)));
     is_strncmp(sxe_http_message_get_header_value(&message), VALUE(1), strlen(VALUE(1)), "Value is " VALUE(1));
-    is(sxe_http_message_get_header_value_length(&message), strlen(VALUE(1)), "Value length is %u", strlen(VALUE(1)));
+    is(sxe_http_message_get_header_value_length(&message), strlen(VALUE(1)), "Value length is %u",  (unsigned)strlen(VALUE(1)));
 
     /* Don't do any consume since last sxe_http_message_parse_next_header() returns OK */
 
@@ -258,9 +258,9 @@ static void test_five_headers(void)
     is(sxe_http_message_parse_next_header(&message), SXE_RETURN_OK, "Get normal header 3");
     is(message.ignore_length, 0, "No ignore");
     is_strncmp(sxe_http_message_get_header_name(&message), HEADER(333), strlen(HEADER(333)), "Name is " HEADER(333));
-    is(sxe_http_message_get_header_name_length(&message), strlen(HEADER(333)), "Name length is %u", strlen(HEADER(333)));
+    is(sxe_http_message_get_header_name_length(&message), strlen(HEADER(333)), "Name length is %u", (unsigned)strlen(HEADER(333)));
     is_strncmp(sxe_http_message_get_header_value(&message), VALUE(3333), strlen(VALUE(3333)), "Value is " VALUE(3333));
-    is(sxe_http_message_get_header_value_length(&message), strlen(VALUE(3333)), "Value length is %u", strlen(VALUE(3333)));
+    is(sxe_http_message_get_header_value_length(&message), strlen(VALUE(3333)), "Value length is %u", (unsigned)strlen(VALUE(3333)));
 
     /* Don't do any consume since last sxe_http_message_parse_next_header() returns OK */
 
@@ -302,9 +302,9 @@ static void test_five_headers(void)
     is(message.ignore_line, 0, "Ignore buffer flag is clear");
     is(message.ignore_length, 0, "Ignore length is 0");
     is_strncmp(sxe_http_message_get_header_name(&message), HEADER(55), strlen(HEADER(55)), "Name is " HEADER(55));
-    is(sxe_http_message_get_header_name_length(&message), strlen(HEADER(55)), "Name length is %u", strlen(HEADER(55)));
-    is_strncmp(sxe_http_message_get_header_value(&message), VALUE(5), strlen(VALUE(5)), "Value is " VALUE(5));
-    is(sxe_http_message_get_header_value_length(&message), strlen(VALUE(5)), "Value length is %u", strlen(VALUE(5)));
+    is(sxe_http_message_get_header_name_length(&message), strlen(HEADER(55)), "Name length is %u",    (unsigned)strlen(HEADER(55)));
+    is_strncmp(sxe_http_message_get_header_value(&message), VALUE(5), strlen(VALUE(5)), "Value is "   VALUE(5));
+    is(sxe_http_message_get_header_value_length(&message), strlen(VALUE(5)), "Value length is %u",    (unsigned)strlen(VALUE(5)));
 
     /* Don't do any consume since last sxe_http_message_parse_next_header() returns OK */
 

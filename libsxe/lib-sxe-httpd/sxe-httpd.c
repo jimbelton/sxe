@@ -39,7 +39,7 @@ sxe_httpd_default_connect_handler(SXE_HTTPD_REQUEST *request) /* Coverage Exclus
     SXER90I("return");
 } /* Coverage Exclusion - todo: win32 coverage */
 
-static void
+static SXE_RETURN
 sxe_httpd_default_request_handler(SXE_HTTPD_REQUEST *request, const char * method, unsigned method_length,
                                   const char * url, unsigned url_length, const char * version, unsigned version_length)
 {
@@ -54,7 +54,8 @@ sxe_httpd_default_request_handler(SXE_HTTPD_REQUEST *request, const char * metho
     SXE_UNUSED_PARAMETER(version_length);
     SXEE98I("%s(request=%p,method='%.*s',url='%.*s',version='%.*s')", __func__, request,
             method_length, method, url_length, url, version_length, version);
-    SXER90I("return");
+    SXER90I("return SXE_RETURN_OK");
+    return SXE_RETURN_OK;
 }
 
 static void
@@ -125,6 +126,18 @@ sxe_httpd_set_connect_handler(SXE_HTTPD *self, sxe_httpd_connect_handler new_han
     return old_handler;
 }
 
+/**
+ * Set the function to be called when a request header has been recieved by an HTTPD.
+ *
+ * @param self        Pointer to the HTTPD
+ * @param new_handler Pointer to the new request handler function
+ *
+ * @return A pointer to the previous handler function
+ *
+ * @note The type of the handler has been altered in the current version of the library to return SXE_RETURN value. This allows
+ *       returning a value other than SXE_RETURN_OK if there was an error in the request. In this case, the handler should send
+ *       an error response before returning.
+ */
 sxe_httpd_request_handler
 sxe_httpd_set_request_handler(SXE_HTTPD *self, sxe_httpd_request_handler new_handler)
 {
@@ -157,6 +170,14 @@ sxe_httpd_set_body_handler(SXE_HTTPD *self, sxe_httpd_body_handler new_handler)
     return old_handler;
 }
 
+/**
+ * Set the function to be called when a complete request has been recieved by an HTTPD.
+ *
+ * @param self        Pointer to the HTTPD
+ * @param new_handler Pointer to the new handler function
+ *
+ * @return A pointer to the previous response function
+ */
 sxe_httpd_respond_handler
 sxe_httpd_set_respond_handler(SXE_HTTPD *self, sxe_httpd_respond_handler new_handler)
 {
@@ -231,7 +252,18 @@ sxe_httpd_close(SXE_HTTPD_REQUEST * request)
     SXER80I("return");
 }
 
-void
+/**
+ * Send a simple HTTP response to a request
+ *
+ * @param request Pointer to the request
+ * @param code    Status code (e.g. 404)
+ * @param status  Status message (e.g. "Not Found")
+ * @param body    Body string
+ * @param ...     NULL terminated list of header strings
+ *
+ * @return SXE_RETURN_OK on success.
+ */
+SXE_RETURN
 sxe_httpd_response_simple(SXE_HTTPD_REQUEST * request, int code, const char * status, const char * body, ...)
 {
     SXE        * this = request->sxe;
@@ -240,29 +272,47 @@ sxe_httpd_response_simple(SXE_HTTPD_REQUEST * request, int code, const char * st
     const char * value;
     unsigned     length;
     unsigned     header_cnt = 0;
+    SXE_RETURN   result;
 
     SXE_UNUSED_PARAMETER(this);
     SXEE85I("%s(request=%p,code=%d,status=%s,body='%s',...)", __func__, request, code, status, body);
+
+    if ((result = sxe_httpd_response_start(request, code, status)) != SXE_RETURN_OK) {
+        goto SXE_EARLY_OUT;
+    }
+
     va_start(headers, body);
-    sxe_httpd_response_start(request, code, status);
 
     while ((name = va_arg(headers, const char *)) != NULL) {
         header_cnt++;
         SXEA12((value = va_arg(headers, const char *)) != NULL, "%s: header %s has no value", __func__, name);
-        sxe_httpd_response_header(request, name, value, 0);
+
+        if ((result = sxe_httpd_response_header(request, name, value, 0)) != SXE_RETURN_OK) {
+            break;
+        }
     }
 
-    if (body != NULL) {
-        length = strlen(body);
-        sxe_httpd_response_content_length(request, length);
-        sxe_httpd_response_chunk(request, body, length);
-    } else {
-        sxe_httpd_response_content_length(request, 0);
-    }
-
-    sxe_httpd_response_end(request);
     va_end(headers);
-    SXER80I("return");
+
+    if (result == SXE_RETURN_OK) {
+        if (body != NULL) {
+            length = strlen(body);
+
+            if ((result = sxe_httpd_response_content_length(request, length)) == SXE_RETURN_OK) {
+                result = sxe_httpd_response_chunk(request, body, length);
+            }
+        } else {
+            result = sxe_httpd_response_content_length(request, 0);
+        }
+    }
+
+    if (result == SXE_RETURN_OK) {
+        result = sxe_httpd_response_end(request);
+    }
+
+SXE_EARLY_OUT:
+    SXER81I("return result=%s", sxe_return_to_string(result));
+    return result;
 }
 
 static void
@@ -409,12 +459,14 @@ sxe_httpd_parse_version(const char * version_string, unsigned version_length)
     return version;
 }
 
-/* Note: This function should be called after the whole request line is received */
+/* Note: This function should be called after the whole request line is received
+ */
 static SXE_RETURN
 sxe_httpd_parse_request_line(SXE_HTTPD_REQUEST * request)
 {
     SXE_HTTPD  * server           = request->server;
     SXE        * this             = request->sxe;
+    const char * error_body       = NULL;
     SXE_RETURN   result;
     const char * method_string;
     unsigned     method_length;
@@ -423,62 +475,76 @@ sxe_httpd_parse_request_line(SXE_HTTPD_REQUEST * request)
     const char * version_string;
     unsigned     version_length;
 
+
     SXEE81I("sxe_httpd_parse_request_line(request=%p)", request);
 
     /* Look for the method */
     result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN);
+
     if (result != SXE_RETURN_OK) {
         goto SXE_ERROR_OUT;
     }
-    method_string    = sxe_http_message_get_line_element(       &request->message);
-    method_length    = sxe_http_message_get_line_element_length(&request->message);
-    request->method  = sxe_httpd_parse_method(method_string, method_length);
+
+    method_string   = sxe_http_message_get_line_element(       &request->message);
+    method_length   = sxe_http_message_get_line_element_length(&request->message);
+    request->method = sxe_httpd_parse_method(method_string, method_length);
+
     if (request->method == SXE_HTTP_METHOD_INVALID) {
         SXEL23I("%s: Invalid method in HTTP request line: '%.*s'", __func__, method_length, method_string);
-        result = SXE_RETURN_ERROR_BAD_MESSAGE;
+        error_body = "Invalid method";
+        result     = SXE_RETURN_ERROR_BAD_MESSAGE;
         goto SXE_ERROR_OUT;
     }
+
     SXEL93I("Method: '%.*s' (%u)", method_length, method_string, request->method);
 
     /* Look for the Url */
     result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN);
+
     if (result != SXE_RETURN_OK) {
         goto SXE_ERROR_OUT;
     }
+
     url_string    = sxe_http_message_get_line_element(       &request->message);
     url_length    = sxe_http_message_get_line_element_length(&request->message);
     SXEL92I("Url: '%.*s'", url_length, url_string);
 
     /* Look for the HTTP version */
     result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN);
+
     if (result != SXE_RETURN_OK) {
         goto SXE_ERROR_OUT;
     }
+
     version_string    = sxe_http_message_get_line_element(       &request->message);
     version_length    = sxe_http_message_get_line_element_length(&request->message);
     request->version  = sxe_httpd_parse_version(version_string, version_length);
+
     if (request->version == SXE_HTTP_VERSION_UNKNOWN) {
         SXEL23I("%s: Invalid version in HTTP request line: '%.*s'", __func__, version_length, version_string);
-        result = SXE_RETURN_ERROR_BAD_MESSAGE;
+        error_body = "Invalid HTTP version";
+        result     = SXE_RETURN_ERROR_BAD_MESSAGE;
         goto SXE_ERROR_OUT;
     }
+
     SXEL92I("Version: '%.*s'", version_length, version_string);
 
     /* Look for the end of line */
     result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_END_OF_LINE);
+
+    /* EOF is okay here */
     if (result != SXE_RETURN_OK && result != SXE_RETURN_END_OF_FILE) {
         goto SXE_ERROR_OUT;
     }
-    else {
-        result = SXE_RETURN_OK; /* EOF is okay here */
-    }
 
-    (*server->on_request)(request,
-                          method_string,  method_length,
-                          url_string,     url_length,
-                          version_string, version_length);
+    result = (*server->on_request)(request, method_string, method_length, url_string, url_length, version_string, version_length);
+    goto SXE_EARLY_OUT;
 
 SXE_ERROR_OUT:
+    sxe_httpd_response_simple(request, 400, "Bad request", error_body,
+                              HTTPD_CONNECTION_CLOSE_HEADER, HTTPD_CONNECTION_CLOSE_VALUE, NULL);
+
+SXE_EARLY_OUT:
     SXER81I("return result=%s", sxe_return_to_string(result));
     return result;
 }
@@ -496,8 +562,6 @@ sxe_httpd_event_read(SXE * this, int additional_length)
     unsigned            length;
     unsigned            consumed             = 0;
     unsigned            buffer_left          = 0;
-    int                 response_status_code = 400;
-    const char        * response_reason      = "Bad request";
     SXE_RETURN          result;
     const char        * key;
     unsigned            key_length;
@@ -530,19 +594,20 @@ sxe_httpd_event_read(SXE * this, int additional_length)
 
         if (end == NULL) {
             if (length == SXE_BUF_SIZE) {
-                response_status_code = 414;
-                response_reason = "Request-URI too large";
+                sxe_httpd_response_simple(request, 414, "Request-URI too large", NULL,
+                                  HTTPD_CONNECTION_CLOSE_HEADER, HTTPD_CONNECTION_CLOSE_VALUE, NULL);
                 goto SXE_ERROR_OUT;
             }
+
             goto SXE_EARLY_OUT;    /* Buffer is not full. Try again when there is more data */
         }
 
         if (*--end != '\r') {
-            goto SXE_ERROR_OUT;
+            goto SXE_BAD_REQUEST_OUT;
         }
 
         if ((result = sxe_httpd_parse_request_line(request)) != SXE_RETURN_OK) {
-            goto SXE_ERROR_OUT;
+            goto SXE_ERROR_OUT;    /* The parse_request_line function has already sent the error reply */
         }
 
         SXEL90I("state LINE -> REQ_HEADERS");
@@ -558,15 +623,17 @@ sxe_httpd_event_read(SXE * this, int additional_length)
          */
         while ((result = sxe_http_message_parse_next_header(message)) != SXE_RETURN_END_OF_FILE) {
             if (result == SXE_RETURN_ERROR_BAD_MESSAGE) {
-                goto SXE_ERROR_OUT;
+                goto SXE_BAD_REQUEST_OUT;
             }
 
             if ((consumed = sxe_http_message_get_ignore_length(message))) {
                 sxe_buf_consume(this, consumed);
+
                 if ((buffer_left = sxe_http_message_get_buffer_length(message))) {
                     SXEL92I("%u bytes ignored , move the remaining %u bytes to the beginning of buffer", consumed, buffer_left);
                     sxe_http_message_buffer_shift_ignore_length(message);
                 }
+
                 goto SXE_EARLY_OUT;
             }
 
@@ -607,7 +674,7 @@ sxe_httpd_event_read(SXE * this, int additional_length)
             {
                 if (value_length == 0) {
                     SXEL31I("%s: Bad request: Content-Length header field value is empty", __func__);
-                    goto SXE_ERROR_OUT;
+                    goto SXE_BAD_REQUEST_OUT;
                 }
 
                 request->in_content_length = 0;
@@ -616,7 +683,7 @@ sxe_httpd_event_read(SXE * this, int additional_length)
                     if (!isdigit(value[i])) {
                         SXEL32I("%s: Bad request: Content-Length header field value contains a non-digit '%c'", __func__,
                                 value[i]);
-                        goto SXE_ERROR_OUT;
+                        goto SXE_BAD_REQUEST_OUT;
                     }
 
                     request->in_content_length = request->in_content_length * 10 + value[i] - '0';
@@ -676,10 +743,12 @@ sxe_httpd_event_read(SXE * this, int additional_length)
         goto SXE_EARLY_OUT;
     }
 
+SXE_BAD_REQUEST_OUT:
+    sxe_httpd_response_simple(request, 400, "Bad request", NULL, HTTPD_CONNECTION_CLOSE_HEADER, HTTPD_CONNECTION_CLOSE_VALUE, NULL);
+
 SXE_ERROR_OUT:
     sxe_buf_clear(this);
-    sxe_httpd_response_simple(request, response_status_code, response_reason, NULL,
-                              HTTPD_CONNECTION_CLOSE_HEADER, HTTPD_CONNECTION_CLOSE_VALUE, NULL);
+
     /* Set the state to BAD so from now on it will just early out (sink mode) */
     sxe_pool_set_indexed_element_state(request_pool, request_id, SXE_HTTPD_CONN_IDLE, SXE_HTTPD_CONN_BAD);
     consumed = 0;
@@ -692,16 +761,18 @@ SXE_EARLY_OUT:
     SXER80I("return");
 }
 
-void
+SXE_RETURN
 sxe_httpd_response_start(SXE_HTTPD_REQUEST * request, int code, const char *status)
 {
-    SXE * this = request->sxe;
-    char  rbuf[4096];
+    SXE      * this = request->sxe;
+    char       rbuf[4096];
+    SXE_RETURN result;
 
     SXEE83I("sxe_httpd_response_start(request=%p,code=%d,status=%s)", request, code, status);
     snprintf(rbuf, sizeof rbuf, "HTTP/1.1 %d %s\r\n", code, status);
-    SXEA10(sxe_write(this, rbuf, strlen(rbuf)) == SXE_RETURN_OK, "sxe_write wrote all the data in one write");
-    SXER80I("return");
+    SXEA10((result = sxe_write(this, rbuf, strlen(rbuf))) != SXE_RETURN_WARN_WOULD_BLOCK, "sxe_write failed to write all the data");
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
 }
 
 SXE_RETURN
@@ -723,46 +794,55 @@ sxe_httpd_response_header(SXE_HTTPD_REQUEST * request, const char *header, const
     return result;
 }
 
-void
+SXE_RETURN
 sxe_httpd_response_content_length(SXE_HTTPD_REQUEST * request, int length)
 {
-    SXE *this = request->sxe;
-    char ibuf[32];
+    SXE      * this = request->sxe;
+    char       ibuf[32];
+    SXE_RETURN result;
 
     SXE_UNUSED_PARAMETER(this);
     SXEE92I("sxe_httpd_response_content_length(request=%p,length=%d)", request, length);
     snprintf(ibuf, sizeof ibuf, "%d", length);
-    sxe_httpd_response_header(request, HTTPD_CONTENT_LENGTH, ibuf, 0);
-    SXER90I("return");
+    result = sxe_httpd_response_header(request, HTTPD_CONTENT_LENGTH, ibuf, 0);
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
 }
 
-void
+SXE_RETURN
 sxe_httpd_response_raw(SXE_HTTPD_REQUEST *request, const char *chunk, unsigned length)
 {
-    SXE *this = request->sxe;
+    SXE_RETURN result;
+    SXE      * this = request->sxe;
     SXE_UNUSED_PARAMETER(this);
 
     SXEE84I("%s(request=%p, chunk=%p, length=%u)", __func__, request, chunk, length);
     request->out_eoh = true; /* NOTE: you're on your own! */
-    SXEA10(sxe_write(request->sxe, chunk, length) == SXE_RETURN_OK, "sxe_write wrote all the data in one write");
-    SXER80I("return");
+    SXEA10((result = sxe_write(request->sxe, chunk, length)) != SXE_RETURN_WARN_WOULD_BLOCK, "sxe_write failed to write all the data");
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
 }
 
-void
+SXE_RETURN
 sxe_httpd_response_chunk(SXE_HTTPD_REQUEST *request, const char *chunk, unsigned length)
 {
-    SXE *this = request->sxe;
+    SXE_RETURN result = SXE_RETURN_OK;
+    SXE      * this   = request->sxe;
     SXE_UNUSED_PARAMETER(this);
 
     SXEE84I("%s(request=%p, chunk=%p, length=%u)", __func__, request, chunk, length);
 
     if (!request->out_eoh) {
-        SXEA10(sxe_write(this, "\r\n", 2) == SXE_RETURN_OK, "sxe_write wrote all the data in one write");
+        SXEA10((result = sxe_write(this, "\r\n", 2)) != SXE_RETURN_WARN_WOULD_BLOCK, "sxe_write failed to write all the data");
         request->out_eoh = true;
     }
 
-    SXEA10(sxe_write(request->sxe, chunk, length) == SXE_RETURN_OK, "sxe_write wrote all the data in one write");
-    SXER80I("return");
+    if (result == SXE_RETURN_OK) {
+        SXEA10((result = sxe_write(request->sxe, chunk, length)) != SXE_RETURN_WARN_WOULD_BLOCK, "sxe_write failed to write all the data");
+    }
+
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
 }
 
 #ifndef WINDOWS_NT
@@ -776,25 +856,35 @@ sxe_httpd_event_sendfile_done(SXE * this, SXE_RETURN final_result)
     SXER80I("return");
 }
 
-void
+SXE_RETURN
 sxe_httpd_response_sendfile(SXE_HTTPD_REQUEST *request, int fd, unsigned length, sxe_httpd_sendfile_handler handler, void *user_data)
 {
+    SXE      * this   = request->sxe;
+    SXE_RETURN result = SXE_RETURN_OK;
+
+    SXEE86I("%s(request=%p, fd=%d, length=%u, handler=%p, user_data=%p)", __func__, request, fd, length, handler, user_data);
     request->sendfile_handler  = handler;
     request->sendfile_userdata = user_data;
 
     if (!request->out_eoh) {
-        SXEA10(sxe_write(request->sxe, "\r\n", 2) == SXE_RETURN_OK, "sxe_write wrote all the data in one write");
+        SXEA10((result = sxe_write(this, "\r\n", 2)) != SXE_RETURN_WARN_WOULD_BLOCK, "sxe_write failed to write all the data");
         request->out_eoh = true;
     }
 
-    sxe_sendfile(request->sxe, fd, length, sxe_httpd_event_sendfile_done);
+    if (result == SXE_RETURN_OK) {
+        result = sxe_sendfile(request->sxe, fd, length, sxe_httpd_event_sendfile_done);
+    }
+
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
 }
 #endif
 
-void
+SXE_RETURN
 sxe_httpd_response_end(SXE_HTTPD_REQUEST *request)
 {
-    SXE               * this = request->sxe;
+    SXE_RETURN          result       = SXE_RETURN_OK;
+    SXE               * this         = request->sxe;
     SXE_HTTPD_REQUEST * request_pool = request->server->requests;
     unsigned            request_id   = SXE_HTTPD_REQUEST_INDEX(request_pool, request);
     unsigned            state        = sxe_pool_index_to_state(request_pool, request_id);
@@ -803,18 +893,28 @@ sxe_httpd_response_end(SXE_HTTPD_REQUEST *request)
     SXEE81I("sxe_httpd_response_end(request=%p)", request);
 
     if (!request->out_eoh) {
-        SXEA10(sxe_write(this, "\r\n", 2) == SXE_RETURN_OK, "sxe_write wrote all the data in one write");
+        SXEA10((result = sxe_write(this, "\r\n", 2)) != SXE_RETURN_WARN_WOULD_BLOCK, "sxe_write failed to write all the data");
     }
 
     sxe_httpd_clear_request(request);
     sxe_pool_set_indexed_element_state(request_pool, request_id, state, SXE_HTTPD_CONN_IDLE);
-    sxe_buf_resume(this, SXE_BUF_RESUME_IMMEDIATE);
+    sxe_buf_resume(this, SXE_BUF_RESUME_WHEN_MORE_DATA);
 
-    SXER80I("return");
+    SXER81I("return %s", sxe_return_to_string(result));
+    return result;
 }
 
+/**
+ * Listen for connections on a SXE httpd
+ *
+ * @param self    Pointer to the httpd to listen on, constructed with httpd_construct
+ * @param address Pointer to the address to listen on (e.g. "127.0.0.1")
+ * @param port    TCP port number to listen on (e.g. 8080)
+ *
+ * @return The associated SXE TCP connection on success, NULL on error (e.g. if the address is in use)
+ */
 SXE *
-sxe_httpd_listen(SXE_HTTPD * self, const char *address, unsigned short port)
+sxe_httpd_listen(SXE_HTTPD * self, const char * address, unsigned short port)
 {
     SXE * this;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010 Sophos Group.
+/* Copyright (c) 2016 by Jim Belton
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,28 +19,35 @@
  * THE SOFTWARE.
  */
 
-#include <string.h>
-
-#include "sha1.h"
-#include "sxe-time.h"
+#include "process.h"
 #include "tap.h"
 
-char value[] = "the quick brown fox jumped over the lazy dog 01234567890!@#$%^&*";
-
 int
-main(void)
+main(int argc, char ** argv)
 {
-    SXE_TIME    start_time;
-    unsigned    i;
-    SOPHOS_SHA1 sha1;
+    intptr_t child_pid;
+    intptr_t dead_pid;
+    int      status;
 
     plan_tests(1);
-    start_time = sxe_time_get();
 
-    for (i = 0; sxe_time_get() - start_time < sxe_time_from_unix_time(1); i++) {
-        sophos_sha1(value, sizeof(value) - 1, (char *)&sha1);
+    /* If this is the spawned process, exit with the low byte of the PID as the status
+     */
+    if (argc > 1) {
+        int pid = getpid();
+        return pid & 0xFF;
     }
 
-    ok(i > 0, "Computed %u SHA1's of %u byte messages in 1 second", i, (unsigned)sizeof(value) - 1);
+    if ((child_pid = spawnl(P_NOWAIT, argv[0], argv[0], "child process", NULL)) < 0) {
+        fail("Failed to spawn a child process");
+    }
+    else if ((dead_pid = cwait(&status, child_pid, WAIT_CHILD)) < 0) {
+        fail("Expect cwait to return child pid %p, got %p", (void *)child_pid, (void *)dead_pid);
+    }
+    else {
+        fprintf(stderr, "Status %x", status);
+        is(status >> 8, child_pid & 0xFF, "Expected the high byte of the status to be the low byte of child pid");
+    }
+
     return exit_status();
 }

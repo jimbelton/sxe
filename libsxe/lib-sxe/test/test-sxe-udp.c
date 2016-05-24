@@ -32,6 +32,8 @@
 
 #define TEST_WAIT 5.0
 
+#define LITERAL_LENGTH(literal) ((unsigned)SXE_LITERAL_LENGTH(literal))
+
 static void
 test_event_read(SXE * this, int length)
 {
@@ -133,8 +135,8 @@ test_case_sxe_udp_both_ends(void)
     is(sxe_write_to(client, "HELo\n", 5, &addr), SXE_RETURN_OK,           "Sent query to server (port %hu)", SXE_LOCAL_PORT(server));
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_read", "Got a read event");
     is(tap_ev_arg(ev, "this"),   server,                                  "...on the server");
-    is(tap_ev_arg(ev, "length"), SXE_LITERAL_LENGTH("HELo\n"),            "'length' is %u", SXE_LITERAL_LENGTH("HELo\n"));
-    is(tap_ev_arg(ev, "used"),   SXE_LITERAL_LENGTH("HELo\n"),            "'used' is %u",   SXE_LITERAL_LENGTH("HELo\n"));
+    is(tap_ev_arg(ev, "length"), LITERAL_LENGTH("HELo\n"),                "'length' is %u", LITERAL_LENGTH("HELo\n"));
+    is((unsigned)(uintptr_t)tap_ev_arg(ev, "used"), LITERAL_LENGTH("HELo\n"), "'used' is %u",   LITERAL_LENGTH("HELo\n"));
     is_eq(tap_ev_arg(ev, "buf"), "HELo\n",                                "'buf' is 'HELo\\n'");
     is(tap_ev_length(), 0,                                                "No more events in the queue");
 

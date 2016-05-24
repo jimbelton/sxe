@@ -63,13 +63,15 @@ typedef enum {
 struct SXE_HTTPD;
 struct SXE_HTTPD_REQUEST;
 
-typedef void (*sxe_httpd_connect_handler)(struct SXE_HTTPD_REQUEST *);
-typedef void (*sxe_httpd_request_handler)(struct SXE_HTTPD_REQUEST *, const char *method, unsigned mlen, const char *url, unsigned ulen, const char *version, unsigned vlen);
-typedef void (*sxe_httpd_header_handler)(struct SXE_HTTPD_REQUEST *, const char *key, unsigned klen, const char *val, unsigned vlen);
-typedef void (*sxe_httpd_eoh_handler)(struct SXE_HTTPD_REQUEST *);
-typedef void (*sxe_httpd_body_handler)(struct SXE_HTTPD_REQUEST *, const char *chunk, unsigned chunklen);
-typedef void (*sxe_httpd_respond_handler)(struct SXE_HTTPD_REQUEST *);
-typedef void (*sxe_httpd_close_handler)(struct SXE_HTTPD_REQUEST *);
+typedef void       (*sxe_httpd_connect_handler)(struct SXE_HTTPD_REQUEST *);
+typedef SXE_RETURN (*sxe_httpd_request_handler)(struct SXE_HTTPD_REQUEST *, const char *method, unsigned mlen,
+                                                const char *url, unsigned ulen, const char *version, unsigned vlen);
+typedef void       (*sxe_httpd_header_handler)(struct SXE_HTTPD_REQUEST *, const char *key, unsigned klen,
+                                             const char *val, unsigned vlen);
+typedef void       (*sxe_httpd_eoh_handler)(struct SXE_HTTPD_REQUEST *);
+typedef void       (*sxe_httpd_body_handler)(struct SXE_HTTPD_REQUEST *, const char *chunk, unsigned chunklen);
+typedef void       (*sxe_httpd_respond_handler)(struct SXE_HTTPD_REQUEST *);
+typedef void       (*sxe_httpd_close_handler)(struct SXE_HTTPD_REQUEST *);
 
 /* Invoked from sxe_http_header_parse(buffer, length, callback, user_data) for
  * each HTTP header found in buffer.
