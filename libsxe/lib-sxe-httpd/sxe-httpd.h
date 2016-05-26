@@ -108,6 +108,8 @@ typedef struct SXE_HTTPD_REQUEST {
     /* Parsed info from the request line and headers */
     SXE_HTTP_METHOD            method;
     SXE_HTTP_VERSION           version;
+    const char *               url;
+    unsigned                   url_length;
     SXE_HTTP_MESSAGE           message;
     unsigned                   in_content_length;    /* value from Content-Length header */
     unsigned                   in_content_seen;      /* number of body bytes read */
