@@ -25,47 +25,58 @@
 #include "sxe-log.h"
 #include "sxe-http.h"
 
+/**
+ * Construct a URL from a string
+ *
+ * @param  url_out       The constructed URL
+ * @param  string        The string
+ * @param  string_length The string's length
+ * @param  options       0 if the string includes a scheme, SXE_HTTP_URL_OPTION_NOSCHEME if not
+ *
+ * @return SXE_RETURN_OK on success or SXE_RETURN_ERROR_INVALID_URI if the URL is invalid
+ */
 SXE_RETURN
 sxe_http_url_parse(SXE_HTTP_URL * url_out, const char * string, unsigned string_length, unsigned options)
 {
     unsigned     string_maximum_length = string_length == 0 ? ~0U : string_length;
     SXE_RETURN   result                = SXE_RETURN_ERROR_INVALID_URI;
+    unsigned     idx                   = 0;
     const char * reason;
-    unsigned     idx;
     unsigned     start;
 
     SXEE85("sxe_http_url_parse(url_out=%p, string='%.*s', string_length=%u, options=0x%x)",
            url_out, string_maximum_length, string, string_length, options);
-    SXE_UNUSED_ARGUMENT(options);
     memset(url_out, 0, sizeof(*url_out));
 
-    /* Parse the scheme
+    /* Optionally parse the scheme
      */
-    for (idx = 0; true; idx++) {
-        if ((idx >= string_maximum_length) || (string[idx] == '\0')) {
-            reason = "scheme is not terminated with a colon";
-            goto SXE_ERROR_OUT;
-        }
-
-        if (string[idx] == ':') {
-            if (idx == 0) {
-                reason = "starts with a colon";
+    if (!(options & SXE_HTTP_URL_OPTION_NOSCHEME)) {
+        for (;; idx++) {
+            if ((idx >= string_maximum_length) || (string[idx] == '\0')) {
+                reason = "scheme is not terminated with a colon";
                 goto SXE_ERROR_OUT;
             }
 
-            url_out->scheme        = string;
-            url_out->scheme_length = idx;
-            idx++;
-            break;
+            if (string[idx] == ':') {
+                if (idx == 0) {
+                    reason = "starts with a colon";
+                    goto SXE_ERROR_OUT;
+                }
+
+                url_out->scheme        = string;
+                url_out->scheme_length = idx;
+                idx++;
+                break;
+            }
         }
-    }
 
-    if ((idx + 1 >= string_maximum_length) || (string[idx] != '/') || (string[idx + 1] != '/')) {
-        reason = "scheme is not followed by '//'";
-        goto SXE_ERROR_OUT;
-    }
+        if ((idx + 1 >= string_maximum_length) || (string[idx] != '/') || (string[idx + 1] != '/')) {
+            reason = "scheme is not followed by '//'";
+            goto SXE_ERROR_OUT;
+        }
 
-    idx += 2;
+        idx += 2;
+    }
 
     /* TODO: If needed, add support for username:password@ in URLs */
 
