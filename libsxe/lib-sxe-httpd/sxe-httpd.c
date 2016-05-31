@@ -470,9 +470,10 @@ sxe_httpd_parse_request_line(SXE_HTTPD_REQUEST * request)
     SXE_RETURN   result;
     const char * method_string;
     unsigned     method_length;
+    const char * url_string;
+    unsigned     url_length;
     const char * version_string;
     unsigned     version_length;
-
 
     SXEE81I("sxe_httpd_parse_request_line(request=%p)", request);
 
@@ -503,9 +504,9 @@ sxe_httpd_parse_request_line(SXE_HTTPD_REQUEST * request)
         goto SXE_ERROR_OUT;
     }
 
-    request->url        = sxe_http_message_get_line_element(       &request->message);
-    request->url_length = sxe_http_message_get_line_element_length(&request->message);
-    SXEL92I("Url: '%.*s'", request->url_length, request->url);
+    url_string = sxe_http_message_get_line_element(       &request->message);
+    url_length = sxe_http_message_get_line_element_length(&request->message);
+    SXEL92I("Url: '%.*s'", url_length, url_string);
 
     /* Look for the HTTP version */
     result = sxe_http_message_parse_next_line_element(&request->message, SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN);
@@ -535,7 +536,7 @@ sxe_httpd_parse_request_line(SXE_HTTPD_REQUEST * request)
         goto SXE_ERROR_OUT;
     }
 
-    result = (*server->on_request)(request, method_string, method_length, request->url, request->url_length,
+    result = (*server->on_request)(request, method_string, method_length, url_string, url_length,
                                    version_string, version_length);
     goto SXE_EARLY_OUT;
 
