@@ -217,3 +217,9 @@ sxe_cstr_cspn(const SXE_CSTR * cstr, unsigned start_at, const char * reject)
 
     return length;
 }
+
+bool
+sxe_cstr_overflowed(const SXE_CSTR * cstr)
+{
+	return (cstr->flags & SXE_CSTR_FLAG_OVERFLOW) != 0;
+}
