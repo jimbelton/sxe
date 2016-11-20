@@ -91,32 +91,6 @@ $(PERL) -e $(OSQUOTE) \
     $(OSQUOTE)
 endef
 
-#
-# - Example usage:
-#   - $(CAT) $(notdir $<).out | $(MAKE_PERL_GREP_NOT_OK)
-#
-
-define MAKE_PERL_GREP_NOT_OK
-$(PERL) -lane $(OSQUOTE) \
-    if ( m~^20\d{6}~ ) { \
-        $$debug .= $$_ . qq[\n]; \
-    } \
-    elsif ( m~^ok ~ ) { \
-        $$lines .= $$_ . qq[\n]; \
-        undef $$debug; \
-    } \
-    else { \
-        $$lines .= $$debug; \
-        $$lines .= $$_ . qq[\n]; \
-        undef $$debug; \
-    } \
-    sub END { \
-        printf qq[$(OSPC)s$(OSPC)s\n], $$lines, $$debug; \
-        exit 0; \
-    } \
-	$(OSQUOTE)
-endef
-
 define COPYFILES2DIR_SUB
 	use File::Copy; \
 	use File::stat; \
@@ -223,9 +197,9 @@ endef
 
 define TEST_OUT_ON_ERROR
  > $(notdir $<).out 2>&1 \
-|| (    $(MAKE_PERL_ECHO_ERROR) "make[$(MAKELEVEL)]: ERROR: Dumping filtered $(call OSPATH,$(DST.dir)/$(notdir $<).out)" \
-     && $(CAT) $(notdir $<).out | $(MAKE_PERL_GREP_NOT_OK) \
-     && $(MAKE_PERL_ECHO_ERROR) "make[$(MAKELEVEL)]: ERROR: Dumped filtered $(call OSPATH,$(DST.dir)/$(notdir $<).out)" \
+|| (    $(MAKE_PERL_ECHO_ERROR) "make[$(MAKELEVEL)]: ERROR: Dumping $(call OSPATH,$(DST.dir)/$(notdir $<).out)" \
+     && $(CAT) $(notdir $<).out \
+     && $(MAKE_PERL_ECHO_ERROR) "make[$(MAKELEVEL)]: ERROR: Dumped $(call OSPATH,$(DST.dir)/$(notdir $<).out)" \
      && exit 1 \
    )
 endef

@@ -31,15 +31,15 @@
 #include "sxe-util.h"
 #include "tap.h"
 
-#define TEST_WAIT          2
-#define SXE_MTU_SIZE       1500
+#define TEST_WAIT     2
+#define SXE_MTU_SIZE  1500
+#define MTUS_TO_BLOCK 3000    // Number of MTUs to send to insure TCP connection blocks
 
-SXE *           server_side_connected_sxe;
-tap_ev_queue    tap_q_client;
-tap_ev_queue    tap_q_server;
-
-unsigned        do_writes_inside_writable_callback = 0;
-char            buf[SXE_MTU_SIZE]; // dumby data buffer
+SXE *        server_side_connected_sxe;
+tap_ev_queue tap_q_client;
+tap_ev_queue tap_q_server;
+unsigned     do_writes_inside_writable_callback = 0;
+char         buf[SXE_MTU_SIZE]; // dumby data buffer
 
 static void
 test_event_connected_server(SXE * this)
@@ -92,7 +92,7 @@ test_cb_server_sxe_writable(SXE * this, SXE_RETURN sxe_return)
         SXEL60("Writing inside writable callback");
         do_writes_inside_writable_callback = 0;
 
-        for(x = 0; x < 1000; x++) {
+        for(x = 0; x < MTUS_TO_BLOCK; x++) {
             result = sxe_write(server_side_connected_sxe, buf, sizeof(buf));
             if (result != SXE_RETURN_OK) {
                 is(result, SXE_RETURN_WARN_WOULD_BLOCK, "Write '%u' failed because the connection backed up", x);
@@ -138,7 +138,7 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending events at this point");
 
-    for(x = 0; x < 1000; x++) {
+    for(x = 0; x < MTUS_TO_BLOCK; x++) {
         result = sxe_write(server_side_connected_sxe, buf, sizeof(buf));
         if (result != SXE_RETURN_OK) {
             is(result, SXE_RETURN_WARN_WOULD_BLOCK, "Write '%u' failed because the connection backed up", x);
@@ -172,7 +172,7 @@ main(void)
 
 
     // Server becomes backed up again...
-    for(x = 0; x < 1000; x++) {
+    for(x = 0; x < MTUS_TO_BLOCK; x++) {
         result = sxe_write(server_side_connected_sxe, buf, sizeof(buf));
         if (result != SXE_RETURN_OK) {
             is(result, SXE_RETURN_WARN_WOULD_BLOCK, "Write '%u' failed because the connection backed up", x);
@@ -228,7 +228,7 @@ main(void)
     is(tap_ev_queue_length(tap_q_client),  0, "There are no pending client events at this point");
     is(tap_ev_queue_length(tap_q_server),  0, "There are no pending server events at this point");
 
-    for(x = 0; x < 1000; x++) {
+    for(x = 0; x < MTUS_TO_BLOCK; x++) {
         result = sxe_write(server_side_connected_sxe, buf, sizeof(buf));
         if (result != SXE_RETURN_OK) {
             is(result, SXE_RETURN_WARN_WOULD_BLOCK, "Write '%u' failed because the connection backed up", x);
