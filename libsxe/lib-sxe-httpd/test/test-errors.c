@@ -140,7 +140,8 @@ main(void)
         is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event), "evhttp_connect",     "Got a server connect event");
         SXEA10(SXE_WRITE_LITERAL(client, "GISSLERB\r\n") == SXE_RETURN_OK,                           "Failed to write GISSLERB request");
 
-        test_ev_queue_wait_read(tq_client, TEST_WAIT, &event, client, "test_event_read", buffer, SXE_LITERAL_LENGTH(TEST_400), "client");
+        test_ev_queue_wait_read(tq_client, TEST_WAIT, &event, client, "test_event_read", buffer, SXE_LITERAL_LENGTH(TEST_400), 
+								"client");
 
         is_strncmp(buffer, TEST_400, SXE_LITERAL_LENGTH(TEST_400),                                   "Got correct error response");
 

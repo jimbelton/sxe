@@ -28,7 +28,7 @@
 #include <signal.h> /* for..  um, signal() */
 #include <unistd.h> /* for __func__ on Windows */
 
-static jmp_buf           abort_jmpbuf_env;
+static jmp_buf abort_jmpbuf_env;
 
 static void
 test_signal_handler_sigabrt(int signum)
@@ -44,9 +44,9 @@ test_signal_handler_sigabrt(int signum)
 int
 test_expect_abort_in_function(void (*func)(void *), void * user_data)
 {
-    int    result   = 1;
-    int    savesigs = 0;
-    void * old_signal_handler;
+    volatile int result   = 1;
+    int          savesigs = 0;
+    void *       old_signal_handler;
 
     SXEE62("%s(user_data=%p)", __func__, user_data);
     SXE_UNUSED_ARGUMENT(savesigs); /* sigsetjmp may not 'use' this, but its required by the API */
