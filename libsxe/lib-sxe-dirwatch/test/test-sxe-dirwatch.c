@@ -133,6 +133,7 @@ main(void)
         is_eq(tap_ev_arg(ev, "chfile"), rel,                                       "Got filename %s", fname);
         is(tap_ev_arg(ev, "chflags"), SXE_DIRWATCH_DELETED,                        "Got flags=SXE_DIRWATCH_DELETED");
         is(tap_ev_arg(ev, "user_data"), 3,                                         "Got user_data=3 (%s)", tempdir3);
+        close(fd);
     }
 
     rmdir(tempdir1);

@@ -26,7 +26,6 @@
 
 #ifndef WINDOWS_NT
 #define  _GNU_SOURCE /* Required for _IO_cookie_io_functions_t  */
-#include <libio.h>   /* Required by __USE_GNU <stdio.h>         */
 #define  __USE_GNU   /* Required for vasprintf on Linux         */
 #endif
 

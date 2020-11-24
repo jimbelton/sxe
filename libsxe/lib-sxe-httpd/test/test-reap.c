@@ -48,7 +48,7 @@ evhttp_connect(SXE_HTTPD_REQUEST *request)
     SXER60I("return");
 }
 
-static void
+static SXE_RETURN
 evhttp_request(struct SXE_HTTPD_REQUEST *request, const char *method, unsigned mlen, const char *url, unsigned ulen, const char *version, unsigned vlen)
 {
     SXE * this = request->sxe;
@@ -61,7 +61,8 @@ evhttp_request(struct SXE_HTTPD_REQUEST *request, const char *method, unsigned m
     SXE_UNUSED_PARAMETER(vlen);
     SXEE67I("%s(method=[%.*s],url=[%.*s],version=[%.*s])", __func__, mlen, method, ulen, url, vlen, version);
     tap_ev_queue_push(tq_server, __func__, 2, "request", request, "this", this);
-    SXER60I("return");
+    SXER60I("return SXE_RETURN_OK");
+    return SXE_RETURN_OK;
 }
 
 static void
@@ -81,7 +82,6 @@ main(void)
     SXE        * client;
     SXE        * client2;
     SXE        * server;
-    SXE        * server2;
     tap_ev       event;
 
     plan_tests(13);;
@@ -127,7 +127,6 @@ main(void)
     SXEA10(sxe_connect(client2, "127.0.0.1", SXE_LOCAL_PORT(listener)) == SXE_RETURN_OK,         "Failed to connect to HTTPD");
     is_eq(test_tap_ev_queue_identifier_wait(tq_client, TEST_WAIT, &event), "test_event_connect", "Got 2nd client connected event");
     is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event), "evhttp_connect",     "Got 2nd server connect event");
-    server2 = (SXE *)(long)tap_ev_arg(event, "this");
 
     /* 2nd client: send a non-complete request line to not trigger "on_request" server event*/
     SXEA10(SXE_WRITE_LITERAL(client2, "GET /good HTTP/1.1") == SXE_RETURN_OK,                    "Failed to write good request");

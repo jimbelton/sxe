@@ -35,7 +35,7 @@ tap_ev_queue q_httpd;
 
 #ifndef WINDOWS_NT
 
-static void
+static SXE_RETURN
 test_event_httpd_request(SXE_HTTPD_REQUEST *request, const char * method, unsigned method_length, const char * url,
                          unsigned url_length, const char * version, unsigned version_length)
 {
@@ -43,7 +43,8 @@ test_event_httpd_request(SXE_HTTPD_REQUEST *request, const char * method, unsign
            url_length, url, version_length, version);
     tap_ev_queue_push(q_httpd, __func__, 7, "request", request, "method_length", method_length, "method", method,
                      "url_length", url_length, "url", url, "version_length", version_length, "version", version);
-    SXER60("return");
+    SXER60("return SXE_RETURN_OK");
+    return SXE_RETURN_OK;
 }
 
 static void
@@ -144,7 +145,7 @@ main(void)
     sxe_httpd_response_simple(request, 200, "OK", NULL, NULL);
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");
-    is((unsigned)tap_ev_arg(ev, "used"), strlen(TEST_200_RESPONSE),                   "POST response has expected length");
+    is((unsigned)(uintptr_t)tap_ev_arg(ev, "used"), strlen(TEST_200_RESPONSE),        "POST response has expected length");
     is_strncmp(tap_ev_arg(ev, "buf"), TEST_200_RESPONSE, strlen(TEST_200_RESPONSE),   "POST response is a 200 OK");
     SXE_WRITE_LITERAL(client, "GET / HTTP/1.1\r\nHost: foobar\r\nConnection: close\r\n\r\n");
 
@@ -159,7 +160,7 @@ main(void)
     sxe_close(request->sxe);
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_read",      "Got a read event");
-    is((unsigned)tap_ev_arg(ev, "used"), strlen(TEST_200_CLOSE_RESPONSE),             "GET response has expected length");
+    is((unsigned)(uintptr_t)tap_ev_arg(ev, "used"), strlen(TEST_200_CLOSE_RESPONSE),  "GET response has expected length");
     is_strncmp(tap_ev_arg(ev, "buf"), TEST_200_CLOSE_RESPONSE, strlen(TEST_200_CLOSE_RESPONSE),
                                                                                       "GET response is a 200 OK with close");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_client_close",     "Got a close event");

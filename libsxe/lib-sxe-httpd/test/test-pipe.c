@@ -64,7 +64,7 @@ evhttp_connect(SXE_HTTPD_REQUEST *request)
     SXER90I("return");
 }
 
-static void
+static SXE_RETURN
 evhttp_request(SXE_HTTPD_REQUEST *request,
                const char *method, unsigned method_len,
                const char *url, unsigned url_len,
@@ -82,7 +82,8 @@ evhttp_request(SXE_HTTPD_REQUEST *request,
                 "request", request,
                 "url", tap_dup(url, url_len),
                 "url_len", url_len);
-    SXER90I("return");
+    SXER90I("return SXE_RETURN_OK");
+    return SXE_RETURN_OK;
 }
 
 static void

@@ -33,7 +33,7 @@
 
 #define TEST_WAIT     2
 #define SXE_MTU_SIZE  1500
-#define MTUS_TO_BLOCK 3000    // Number of MTUs to send to insure TCP connection blocks
+#define MTUS_TO_BLOCK 100000    // Number of MTUs to send to insure TCP connection blocks
 
 SXE *        server_side_connected_sxe;
 tap_ev_queue tap_q_client;

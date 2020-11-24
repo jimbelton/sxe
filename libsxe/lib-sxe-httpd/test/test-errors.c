@@ -6,11 +6,13 @@
 #include "sxe-test.h"
 #include "tap.h"
 
-#define TEST_WAIT 2
-#define TEST_400  "HTTP/1.1 400 Bad request\r\n"           "Connection: close\r\n" "Content-Length: 0\r\n\r\n"
-#define TEST_414  "HTTP/1.1 414 Request-URI too large\r\n" "Connection: close\r\n" "Content-Length: 0\r\n\r\n"
-#define A100      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-#define A1000     A100 A100 A100 A100 A100 A100 A100 A100 A100 A100
+#define TEST_WAIT  2
+#define TEST_400HD "HTTP/1.1 400 Bad request\r\n"           "Connection: close\r\n" "Content-Length: "
+#define TEST_400IM "HTTP/1.1 400 Bad request\r\n"           "Connection: close\r\n" "Content-Length: 14\r\n\r\nInvalid method"
+#define TEST_400   "HTTP/1.1 400 Bad request\r\n"           "Connection: close\r\n" "Content-Length: 0\r\n\r\n"
+#define TEST_414   "HTTP/1.1 414 Request-URI too large\r\n" "Connection: close\r\n" "Content-Length: 0\r\n\r\n"
+#define A100       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+#define A1000      A100 A100 A100 A100 A100 A100 A100 A100 A100 A100
 #define TEST_CASES (sizeof(cases)/sizeof(cases[0]))
 
 /* Table of error cases
@@ -24,9 +26,9 @@ static struct {
     { "\r\n",                                                   TEST_400 },
     { "GET \r\n",                                               TEST_400 },
     { "GET /\r\n",                                              TEST_400 },
-    { "GET / HTTP/9.9\r\n",                                     TEST_400 },
+    { "GET / HTTP/9.9\r\n",                                     TEST_400HD "20\r\n\r\nInvalid HTTP version" },
     { "GET / HTTP/1.1 \n",                                      TEST_400 },
-    { "FIGZZ / HTTP/1.1\r\n\r\n",                               TEST_400 },
+    { "FIGZZ / HTTP/1.1\r\n\r\n",                               TEST_400IM },
     { "GET / HTTP/1.0\r\nSDF\r\n\r\n",                          TEST_400 },
     { "GET / HTTP/1.0\r\nA B\r\n\r\n",                          TEST_400 },
     { "GET / HTTP/1.0\r\n:B\r\n\r\n",                           TEST_400 },
@@ -140,10 +142,10 @@ main(void)
         is_eq(test_tap_ev_queue_identifier_wait(tq_server, TEST_WAIT, &event), "evhttp_connect",     "Got a server connect event");
         SXEA10(SXE_WRITE_LITERAL(client, "GISSLERB\r\n") == SXE_RETURN_OK,                           "Failed to write GISSLERB request");
 
-        test_ev_queue_wait_read(tq_client, TEST_WAIT, &event, client, "test_event_read", buffer, SXE_LITERAL_LENGTH(TEST_400), 
+        test_ev_queue_wait_read(tq_client, TEST_WAIT, &event, client, "test_event_read", buffer, SXE_LITERAL_LENGTH(TEST_400IM), 
 								"client");
 
-        is_strncmp(buffer, TEST_400, SXE_LITERAL_LENGTH(TEST_400),                                   "Got correct error response");
+        is_strncmp(buffer, TEST_400IM, SXE_LITERAL_LENGTH(TEST_400IM),                               "Got correct error response");
 
         /* Anymore writes to this connection are ignored */
         SXEA10(SXE_WRITE_LITERAL(client, "GET /good HTTP/1.1\r\n\r\n") == SXE_RETURN_OK,             "Failed to write good request");

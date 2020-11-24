@@ -156,7 +156,7 @@ int sophos_sha1_final(sophos_sha1_ctx_t * context, char * digest)
   else /* big endian */
     memcpy(digest, context->Message_Digest, 20);
 
-    return 0;
+  return 0;
 }
 
 /*

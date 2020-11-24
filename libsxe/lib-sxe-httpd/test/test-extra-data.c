@@ -43,7 +43,7 @@ h_connect(struct SXE_HTTPD_REQUEST *request)
     SXER60I("return");
 }
 
-static void
+static SXE_RETURN
 h_request(struct SXE_HTTPD_REQUEST *request, const char *method, unsigned mlen, const char *url, unsigned ulen, const char *version, unsigned vlen)
 {
     SXE * this = sxe_httpd_request_get_sxe(request);
@@ -54,7 +54,8 @@ h_request(struct SXE_HTTPD_REQUEST *request, const char *method, unsigned mlen, 
                       "url", tap_dup(url, ulen),
                       "method", tap_dup(method, mlen),
                       "version", tap_dup(version, vlen));
-    SXER60I("return");
+    SXER60I("return SXE_RETURN_OK");
+    return SXE_RETURN_OK;
 }
 
 static void

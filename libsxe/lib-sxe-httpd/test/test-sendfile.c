@@ -49,7 +49,7 @@ handle_sendfile_done(SXE_HTTPD_REQUEST *request, SXE_RETURN final, void *user_da
     SXE_UNUSED_PARAMETER(request);
     SXE_UNUSED_PARAMETER(final);
     SXEE62I("%s(final=%s)", __func__, sxe_return_to_string(final));
-    close((int)user_data);
+    close((int)(intptr_t)user_data);
     SXER60I("return");
 }
 
