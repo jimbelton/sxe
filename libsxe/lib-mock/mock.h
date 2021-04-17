@@ -79,7 +79,7 @@ extern int          (MOCK_STDCALL * mock_connect)     (MOCK_SOCKET, const struct
 extern FILE *       (             * mock_fopen)       (const char * file, const char * mode);
 extern int          (             * mock_fputs)       (const char * string, FILE * file);
 extern int          (MOCK_STDCALL * mock_getsockopt)  (MOCK_SOCKET, int, int, MOCK_SOCKET_VOID *, MOCK_SOCKLEN_T * __restrict);
-extern int          (             * mock_gettimeofday)(struct timeval * __restrict, __timezone_ptr_t);
+extern int          (             * mock_gettimeofday)(struct timeval * __restrict, void * __restrict);
 extern int          (MOCK_STDCALL * mock_listen)      (MOCK_SOCKET, int);
 extern off_t        (             * mock_lseek)       (int fd, off_t offset, int whence);
 extern void *       (             * mock_malloc)      (size_t);

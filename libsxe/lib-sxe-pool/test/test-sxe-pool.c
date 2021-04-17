@@ -99,7 +99,7 @@ test_pool_3_timeout(void * array, unsigned array_index, void * caller_info)
 static struct timeval test_mock_gettimeofday_timeval;
 
 static int
-test_mock_gettimeofday(struct timeval * SXE_SOCKET_RESTRICT tv, struct timezone * SXE_SOCKET_RESTRICT tz)
+test_mock_gettimeofday(struct timeval * SXE_SOCKET_RESTRICT tv, void * SXE_SOCKET_RESTRICT tz)
 {
     /* Note: It's safe to use log functions here because they don't use mocked versions of gettimeofday() :-) */
     SXEE63("%s(tv=%p, tz=%p)", __func__, tv, tz);

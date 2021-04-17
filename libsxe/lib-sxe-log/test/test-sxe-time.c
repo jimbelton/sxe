@@ -33,7 +33,7 @@
 static struct timeval test_tv;
 
 static int
-test_mock_gettimeofday(struct timeval * __restrict tv, __timezone_ptr_t tz)
+test_mock_gettimeofday(struct timeval * __restrict tv, void * __restrict tz)
 {
     (void)tz;
     memcpy(tv, &test_tv, sizeof(test_tv));

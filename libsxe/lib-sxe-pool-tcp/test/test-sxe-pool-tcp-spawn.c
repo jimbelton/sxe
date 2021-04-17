@@ -108,7 +108,7 @@ test_event_close(SXE * this)
 }
 
 static int
-test_mock_gettimeofday(struct timeval * tv, struct timezone * tz)
+test_mock_gettimeofday(struct timeval * tv, void * tz)
 {
     SXE_UNUSED_ARGUMENT(tz);
     *tv = current_timeval;

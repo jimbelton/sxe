@@ -99,12 +99,13 @@ define COPYFILES2DIR_SUB
 		foreach $$src ( @_ ) { \
 			($$file) = $$src =~ m~([^\\\/]+)$$~; \
 			$$dst = $$dst_folder . q[/] . $$file; \
+			my $$mtime = File::stat::stat($$src)->mtime; \
 			die qq[cp: cannot stat `$$src`: No such file or directory] if ( not -e $$src ); \
-			if ( ( not -e $$dst                                                    ) \
-			||   ( File::stat::stat($$src)->mtime > File::stat::stat($$dst)->mtime ) ) { \
+			if ( ( not -e $$dst ) || ( $$mtime > File::stat::stat($$dst)->mtime ) ) { \
 				printf qq[`$(OSPC)s` -> `$(OSPC)s/`\n], $$src, $$dst; \
 				unlink $$dst; \
-				File::Copy::copy ( $$src, $$dst ) || die qq[$$!]; \
+				File::Copy::copy( $$src, $$dst ) || die qq[$$!]; \
+				utime($$mtime, $$mtime, $$dst); \
 			} \
 		} \
 		return 0; \
@@ -125,7 +126,7 @@ $(PERL) -e $(OSQUOTE) \
         printf qq[MAKE_PERL_COVERAGE_CHECK: running gcov; $$gcov_cmd\n] if ( $(MAKE_DEBUG) ); \
         $$gcov_output = `$$gcov_cmd`; \
 	} \
-	@c_to_copy = glob ( qq[*.c] ); \
+	@c_to_copy = glob( qq[*.c *.h] ); \
 	printf qq[MAKE_PERL_COVERAGE_CHECK: updating @c_to_copy\n] if ( $(MAKE_DEBUG) ); \
 	copyfiles2dir_sub ( @c_to_copy, $$dst_dir ); \
 	$$gcov_cmd = qq[cd $$dst_dir && gcov *.c 2>&1]; \

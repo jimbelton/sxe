@@ -72,7 +72,7 @@ CC_INC             = -I
 #CFLAGS_PROD        = -std=c89 -Winline # for now, use the test flags.
 CFLAGS_PROD        = -std=gnu99
 CFLAGS_TEST        = -std=gnu99
-COPY               = cp -f
+COPY               = cp -pf
 COV_CFLAGS         = -fprofile-arcs -ftest-coverage
 COV_LFLAGS         = -coverage -lgcov
 COV_INIT           = $(DEL) $(DST.dir)/*.gcda $(DST.dir)/*.ok
