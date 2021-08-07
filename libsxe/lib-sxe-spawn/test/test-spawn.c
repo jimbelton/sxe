@@ -48,27 +48,27 @@ static void pause(void) {}
 static void
 test_event_connected(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     SXE_UNUSED_PARAMETER(this);
     tap_ev_push(__func__, 0);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE61I("test_event_read(length=%d)", length);
+    SXEE6I("test_event_read(length=%d)", length);
     tap_ev_push(__func__, 2, "length", length, "buffer", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)));
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE80I("test_event_close()");
+    SXEE6I("test_event_close()");
     SXE_UNUSED_PARAMETER(this);
     tap_ev_push(__func__, 0);
-    SXER80I("return");
+    SXER6I("return");
 }
 
 #endif
@@ -81,12 +81,12 @@ test_program_reader(void)
     int  ret;
 
     if ((length = read(fileno(stdin), buffer, sizeof(buffer))) <= 0) {
-        SXEL22("test_program_reader: read returned %d: %s", length, length == 0 ? "EOF" : strerror(errno));
+        SXEL2("test_program_reader: read returned %d: %s", length, length == 0 ? "EOF" : strerror(errno));
         usleep(100000); /* sleep a tenth of a second if pipe broken */
         return 1;
     }
 
-    SXEA13((ret = write(fileno(stdout), buffer, length)) == length, "Expected to write %d bytes, wrote %d: %s",
+    SXEA1((ret = write(fileno(stdout), buffer, length)) == length, "Expected to write %d bytes, wrote %d: %s",
            length, ret, strerror(errno));
 
     pause();   /* Wait for SIGPIPE */
@@ -99,7 +99,7 @@ test_program_writer(void)
     int  length;
 
     if ((length = write(fileno(stdout), "hello", sizeof("hello"))) < (int)sizeof("hello")) {
-        SXEL23("test_program_writer: write returned %d, expected %d: %s", length, sizeof("hello"), strerror(errno));
+        SXEL2("test_program_writer: write returned %d, expected %zu: %s", length, sizeof("hello"), strerror(errno));
         return 1;
     }
 
@@ -114,10 +114,10 @@ test_program_close(void)
     int  length;
     int  ret;
 
-    SXEA12((ret = write(fileno(stdout), "UP", 2)) == 2, "Expected to write 2 bytes, wrote %d: %s", ret, strerror(errno));
+    SXEA1((ret = write(fileno(stdout), "UP", 2)) == 2, "Expected to write 2 bytes, wrote %d: %s", ret, strerror(errno));
 
     if ((length = read(fileno(stdin), buffer, sizeof(buffer))) <= 0) {
-        SXEL22("test_program_close: read returned %d: %s", length, length == 0 ? "EOF" : strerror(errno));
+        SXEL2("test_program_close: read returned %d: %s", length, length == 0 ? "EOF" : strerror(errno));
         return 1;
     }
 
@@ -136,6 +136,8 @@ main(int argc, char ** argv)
     tap_ev     event;
     pid_t      pid;
 #endif
+
+    signal(SIGHUP, SIG_DFL);
 
     if (argc > 1) {
         if (strcmp(argv[1], "-r") == 0) {
@@ -167,9 +169,13 @@ main(int argc, char ** argv)
 #else
     /* Tests with a non-existent command */
     result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
+
+#ifdef __APPLE__
+    is(result,                              SXE_RETURN_ERROR_COMMAND_NOT_RUN, "Failed to spawn non-existent-command");
+    skip(3,                                                                   "Failed to spawn non-existent-command");
+#else
     is(result,                              SXE_RETURN_OK,                    "'Succeeded' in spawning non-existent-command");
 
-    skip_start(TEST_ON_WINDOWS, 26, "not implemented on Windows yet");
     result = sxe_spawn(NULL, &spawn, "non-existent-command", NULL, NULL, test_event_connected, test_event_read, test_event_close);
     ok(result !=                            SXE_RETURN_OK,                    "Failed to spawn a second non-existent-command");
 
@@ -180,10 +186,11 @@ main(int argc, char ** argv)
     event = test_tap_ev_shift_wait(TEST_WAIT);
     is_eq(tap_ev_identifier(event),         "test_event_close",               "Got the first close event");
     tap_ev_free(event);
+#endif
 
-    SXEL60("----------------------------------------");
-    SXEL60("Make sure spawned program blocks in read");
-    SXEL60("----------------------------------------");
+    SXEL6("----------------------------------------");
+    SXEL6("Make sure spawned program blocks in read");
+    SXEL6("----------------------------------------");
 
     result = sxe_spawn(NULL, &spawn, argv[0], "-r", NULL, test_event_connected, test_event_read, test_event_close);
     is(result,                              SXE_RETURN_OK,                    "Succeeded in spawning %s -r", argv[0]);
@@ -201,9 +208,9 @@ main(int argc, char ** argv)
     is_eq(tap_ev_identifier(event),         "test_event_close",               "Got the second close event");
     tap_ev_free(event);
 
-    SXEL60("-----------------------------------------");
-    SXEL60("Make sure spawned program blocks in write");
-    SXEL60("-----------------------------------------");
+    SXEL6("-----------------------------------------");
+    SXEL6("Make sure spawned program blocks in write");
+    SXEL6("-----------------------------------------");
 
     result = sxe_spawn(NULL, &spawn, argv[0], "-w", NULL, NULL, test_event_read, test_event_close);
     is(result,                              SXE_RETURN_OK,                    "Succeeded in spawning %s -w", argv[0]);
@@ -224,9 +231,9 @@ main(int argc, char ** argv)
     is_eq(tap_ev_identifier(event),         "test_event_close",               "Got the third close event");
     tap_ev_free(event);
 
-    SXEL60("------------------------------------------------------");
-    SXEL60("Make sure spawned program terminates when fd is closed");
-    SXEL60("------------------------------------------------------");
+    SXEL6("------------------------------------------------------");
+    SXEL6("Make sure spawned program terminates when fd is closed");
+    SXEL6("------------------------------------------------------");
 
     result = sxe_spawn(NULL, &spawn, argv[0], "-c", NULL, test_event_connected, test_event_read, test_event_close);
     is(result,                              SXE_RETURN_OK,                    "Succeeded in spawning %s -c", argv[0]);
@@ -243,7 +250,7 @@ main(int argc, char ** argv)
     is_strncmp(tap_ev_arg(event, "buffer"), "UP", 2,                          "It is \"UP\"");
     tap_ev_free(event);
 
-    SXEL60("Closing connection to spawned program");
+    SXEL6("Closing connection to spawned program");
     sxe_close(SXE_SPAWN_GET_SXE(&spawn));
 
     /* TODO - Add the code below to the tests above to check definitively that spawned children have exited */
@@ -253,17 +260,16 @@ main(int argc, char ** argv)
         usleep(10000); /* sleep a hundredth of a second */
         total_seconds_waited += 0.01;
         waitpid(pid, &status, WNOHANG);
-        SXEL61("Spawned child: has %s", WIFEXITED(status) ? "exited" : "not exited yet");
+        SXEL6("Spawned child[%d]: has %s", pid, WIFEXITED(status) ? "exited" : "not exited yet");
     } while(!WIFEXITED(status) && (total_seconds_waited < 2.0));     /* don't wait for more than 2 seconds */
 
-    SXEL61("Spawned child: total_seconds_waited=%.2f", total_seconds_waited);
+    SXEL6("Spawned child: total_seconds_waited=%.2f", total_seconds_waited);
     ok(total_seconds_waited <               2.0,                              "Process ended in less than 2 seconds"                            );
     is(WIFEXITED(status),                   1,                                "Process %d is ended!", pid);
 
     /* TODO - Spawn test: Make sure that we can spawn multiple processes */
     /* TODO - Spawn test: Test child is killed when ctrl-c used on spawn parent */
 
-    skip_end;
 #endif
     return exit_status();
 }

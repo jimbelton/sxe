@@ -71,10 +71,10 @@
 static void
 select_modify (EV_P_ int fd, int oev, int nev)
 {
-  SXEE83("select_modify(fd=%p, oev=%d, nev=%d)", fd, oev, nev);
+  SXEE6("select_modify(fd=%p, oev=%d, nev=%d)", fd, oev, nev);
 
   if (oev == nev) {
-    SXER80("return // oev == nev");
+    SXER6("return // oev == nev");
     return;
   }
 
@@ -86,8 +86,8 @@ select_modify (EV_P_ int fd, int oev, int nev)
     int handle = fd;
     #endif
 
-    SXEL80("#if EV_SELECT_USE_FD_SET");
-    SXEL81("handle = %d", handle);
+    SXEL6("#if EV_SELECT_USE_FD_SET");
+    SXEL6("handle = %d", handle);
 
     assert (("libev: fd >= FD_SETSIZE passed to fd_set-based select backend", fd < FD_SETSIZE));
 
@@ -96,14 +96,14 @@ select_modify (EV_P_ int fd, int oev, int nev)
      */
     #if EV_SELECT_IS_WINSOCKET
     if ((oev ^ nev) & EV_READ) {
-      SXEL80("EV_SELECT_IS_WINSOCKET => (oev ^ nev) & EV_READ == TRUE");
+      SXEL6("EV_SELECT_IS_WINSOCKET => (oev ^ nev) & EV_READ == TRUE");
     #endif
       if (nev & EV_READ) {
-        SXEL82("FD_SET(handle=%d, vec_ri=%p)", handle, vec_ri);
+        SXEL6("FD_SET(handle=%d, vec_ri=%p)", handle, vec_ri);
         FD_SET (handle, (fd_set *)vec_ri);
       }
       else {
-        SXEL82("FD_CLR(handle=%d, vec_ri=%p)", handle, vec_ri);
+        SXEL6("FD_CLR(handle=%d, vec_ri=%p)", handle, vec_ri);
         FD_CLR (handle, (fd_set *)vec_ri);
       }
     #if EV_SELECT_IS_WINSOCKET
@@ -112,25 +112,25 @@ select_modify (EV_P_ int fd, int oev, int nev)
 
     #if EV_SELECT_IS_WINSOCKET
     if ((oev ^ nev) & EV_WRITE) {
-      SXEL80("EV_SELECT_IS_WINSOCKET => (oev ^ nev) & EV_WRITE == TRUE");
+      SXEL6("EV_SELECT_IS_WINSOCKET => (oev ^ nev) & EV_WRITE == TRUE");
     #endif
       if (nev & EV_WRITE) {
-        SXEL82("FD_SET(handle=%d, vec_wi=%p)", handle, vec_wi);
+        SXEL6("FD_SET(handle=%d, vec_wi=%p)", handle, vec_wi);
         FD_SET (handle, (fd_set *)vec_wi);
       }
       else {
-        SXEL82("FD_CLR(handle=%d, vec_wi=%p)", handle, vec_wi);
+        SXEL6("FD_CLR(handle=%d, vec_wi=%p)", handle, vec_wi);
         FD_CLR (handle, (fd_set *)vec_wi);
       }
     #if EV_SELECT_IS_WINSOCKET
     }
     #endif
 
-    SXEL80("#endif // EV_SELECT_USE_FD_SET");
+    SXEL6("#endif // EV_SELECT_USE_FD_SET");
 
 #else
 
-    SXEL80("#if *NOT* EV_SELECT_USE_FD_SET");
+    SXEL6("#if *NOT* EV_SELECT_USE_FD_SET");
 
     int     word = fd / NFDBITS;
     fd_mask mask = 1UL << (fd % NFDBITS);
@@ -160,10 +160,10 @@ select_modify (EV_P_ int fd, int oev, int nev)
     if (!(nev & EV_WRITE))
       ((fd_mask *)vec_wi) [word] &= ~mask;
 
-    SXEL80("#endif // *NOT* EV_SELECT_USE_FD_SET");
+    SXEL6("#endif // *NOT* EV_SELECT_USE_FD_SET");
 #endif
   }
-  SXER80("return");
+  SXER6("return");
 }
 
 static void
@@ -183,13 +183,13 @@ select_poll (EV_P_ ev_tstamp timeout)
   fd_setsize = vec_max * NFDBYTES;
 #endif
 
-  SXEE81("select_poll(timeout=%f)", timeout);
+  SXEE6("select_poll(timeout=%f)", timeout);
 
   memcpy (vec_ro, vec_ri, fd_setsize);
   memcpy (vec_wo, vec_wi, fd_setsize);
 
 #ifdef _WIN32
-  SXEL80("Using select() on Windows");
+  SXEL6("Using select() on Windows");
   /* pass in the write set as except set.
    * the idea behind this is to work around a windows bug that causes
    * errors to be reported as an exception and not by setting
@@ -198,21 +198,21 @@ select_poll (EV_P_ ev_tstamp timeout)
   memcpy (vec_eo, vec_wi, fd_setsize);
   res = select (vec_max * NFDBITS, (fd_set *)vec_ro, (fd_set *)vec_wo, (fd_set *)vec_eo, &tv);
 #elif EV_SELECT_USE_FD_SET
-  SXEL80("Using select() with fd_set...");
+  SXEL6("Using select() with fd_set...");
   fd_setsize = anfdmax < FD_SETSIZE ? anfdmax : FD_SETSIZE;
   res = select (fd_setsize, (fd_set *)vec_ro, (fd_set *)vec_wo, 0, &tv);
 #else
-  SXEL80("Using select() without fd_set...");
+  SXEL6("Using select() without fd_set...");
   res = select (vec_max * NFDBITS, (fd_set *)vec_ro, (fd_set *)vec_wo, 0, &tv);
 #endif
   EV_ACQUIRE_CB;
 
   if (expect_false (res < 0))
     {
-      SXEL81("expect_false (res < 0) // res=%d", res);
+      SXEL6("expect_false (res < 0) // res=%d", res);
       #if EV_SELECT_IS_WINSOCKET
       errno = WSAGetLastError ();
-      SXEL81("errno=%d", errno);
+      SXEL6("errno=%d", errno);
       #endif
       #ifdef WSABASEERR
       /* on windows, select returns incompatible error codes, fix this */
@@ -221,7 +221,7 @@ select_poll (EV_P_ ev_tstamp timeout)
           errno = EBADF;
         else
           errno -= WSABASEERR;
-      SXEL81("errno=%d // after fixing error code", errno);
+      SXEL6("errno=%d // after fixing error code", errno);
       #endif
 
       #ifdef _WIN32
@@ -234,9 +234,9 @@ select_poll (EV_P_ ev_tstamp timeout)
        */
       if (errno == EINVAL)
         {
-          SXEL81("ev_sleep(timeout=%f)", timeout);
+          SXEL6("ev_sleep(timeout=%f)", timeout);
           ev_sleep (timeout);
-          SXER80("return // errno == EINVAL");
+          SXER6("return // errno == EINVAL");
           return;
         }
       #endif
@@ -248,7 +248,7 @@ select_poll (EV_P_ ev_tstamp timeout)
       else if (errno != EINTR)
         ev_syserr ("(libev) select");
 
-      SXER80("return // expect_false (res < 0)");
+      SXER6("return // expect_false (res < 0)");
       return;
     }
 
@@ -257,7 +257,7 @@ select_poll (EV_P_ ev_tstamp timeout)
   {
     int fd;
 
-    SXEL80("#if EV_SELECT_USE_FD_SET");
+    SXEL6("#if EV_SELECT_USE_FD_SET");
 
     for (fd = 0; fd < anfdmax; ++fd)
       if (anfds [fd].events)
@@ -279,7 +279,7 @@ select_poll (EV_P_ ev_tstamp timeout)
             fd_event (EV_A_ fd, events);
         }
 
-    SXEL80("#endif // EV_SELECT_USE_FD_SET");
+    SXEL6("#endif // EV_SELECT_USE_FD_SET");
   }
 
 #else
@@ -287,7 +287,7 @@ select_poll (EV_P_ ev_tstamp timeout)
   {
     int word, bit;
 
-    SXEL80("#if *not* EV_SELECT_USE_FD_SET");
+    SXEL6("#if *not* EV_SELECT_USE_FD_SET");
 
     for (word = vec_max; word--; )
       {
@@ -311,11 +311,11 @@ select_poll (EV_P_ ev_tstamp timeout)
             }
       }
 
-      SXEL80("#endif // *not* EV_SELECT_USE_FD_SET");
+      SXEL6("#endif // *not* EV_SELECT_USE_FD_SET");
   }
 
 #endif
-  SXER80("return");
+  SXER6("return");
 }
 
 int inline_size

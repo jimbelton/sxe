@@ -49,7 +49,7 @@ test_expect_abort_in_function(void (*func)(void *), void * user_data)
     void *       old_signal_handler;
 
     SXEE62("%s(user_data=%p)", __func__, user_data);
-    SXE_UNUSED_ARGUMENT(savesigs); /* sigsetjmp may not 'use' this, but its required by the API */
+    SXE_UNUSED_PARAMETER(savesigs); /* sigsetjmp may not 'use' this, but its required by the API */
     old_signal_handler = signal(SIGABRT, test_signal_handler_sigabrt);
 
     if (setjmp(abort_jmpbuf_env) == 0) {

@@ -14,14 +14,14 @@
 #include <string.h>
 #include "tap.h"
 
-struct tap_ev {
+struct TAP_EV {
     const void *    identifier;
     unsigned        argc;
     void **         argv;
-    struct tap_ev * next;
+    struct TAP_EV * next;
 };
 
-struct tap_ev_queue {
+struct TAP_EV_QUEUE {
     unsigned queue_count;
     tap_ev   head;
     tap_ev   tail;
@@ -31,7 +31,7 @@ struct tap_ev_queue {
  */
 const char   TAP_EV_NO_EVENT[] = "NO EVENT";
 
-static struct tap_ev_queue tap_ev_queue_default = {0, NULL, NULL};
+static struct TAP_EV_QUEUE tap_ev_queue_default = {0, NULL, NULL};
 
 const void * tap_ev_identifier(tap_ev ev) {return ev == NULL ? TAP_EV_NO_EVENT : ev->identifier;}
 unsigned     tap_ev_arg_count( tap_ev ev) {return ev->argc;                                     }
@@ -66,7 +66,7 @@ tap_ev_queue_push_vararg(tap_ev_queue queue, const char * identifier, unsigned a
     tap_ev   ev;
     unsigned i;
 
-    ev = malloc(sizeof(struct tap_ev) + 2 * argc * sizeof(void *));
+    ev = malloc(sizeof(struct TAP_EV) + 2 * argc * sizeof(void *));
     assert(ev != NULL);
     ev->identifier = identifier;
     ev->argc       = argc;
@@ -166,6 +166,40 @@ tap_ev_shift(void)
     return tap_ev_queue_shift(&tap_ev_queue_default);
 }
 
+tap_ev
+tap_ev_queue_shift_next(tap_ev_queue queue, const char * identifier)
+{
+    tap_ev  ev = queue->head;
+    tap_ev  prev;
+
+    if (ev == NULL) {
+        assert(queue->queue_count == 0);
+        return NULL;
+    }
+
+    if (strcmp(ev->identifier, identifier) == 0) {
+        return tap_ev_queue_shift(queue);
+    }
+
+    for (prev = ev, ev = ev->next; ev != NULL; prev = ev, ev = ev->next) {
+        if (strcmp(ev->identifier, identifier) == 0) {
+            prev->next = ev->next;
+            ev->next = NULL;
+            assert(queue->queue_count != 0);
+            queue->queue_count--;
+            return ev;
+        }
+    }
+
+    return NULL;
+}
+
+tap_ev
+tap_ev_shift_next(const char * identifier)
+{
+    return tap_ev_queue_shift_next(&tap_ev_queue_default, identifier);
+}
+
 void
 tap_ev_queue_flush(tap_ev_queue queue)
 {
@@ -193,6 +227,6 @@ tap_ev_queue_new(void)
 {
     tap_ev_queue queue;
 
-    assert((queue = calloc(1, sizeof(struct tap_ev_queue))) != NULL && "tap_ev_queue_new failed");
+    assert((queue = calloc(1, sizeof(struct TAP_EV_QUEUE))) != NULL && "tap_ev_queue_new failed");
     return queue;
 }

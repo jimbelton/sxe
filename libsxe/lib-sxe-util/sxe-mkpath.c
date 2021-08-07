@@ -48,7 +48,7 @@ sxe_mkpath(const char * path)
     unsigned    i;
 #endif
 
-    SXEA10(snprintf(command, sizeof(command), MKDIR_COMMAND " %s", path) >= 0, "Failed to format 'mkdir' command");
+    SXEA1(snprintf(command, sizeof(command), MKDIR_COMMAND " %s", path) >= 0, "Failed to format 'mkdir' command");
 
 #ifdef _WIN32
     /* Remove slash termination (tossers at MS don't implement stat correctly)
@@ -66,10 +66,10 @@ sxe_mkpath(const char * path)
     }
 #endif
 
-    SXEL82("sxe_mkpath(): command '%s'", command, &command[sizeof(MKDIR_COMMAND)]);
+    SXEL6("sxe_mkpath(): command '%s' '%s'", command, &command[sizeof(MKDIR_COMMAND)]);
 
     if (stat(&command[sizeof(MKDIR_COMMAND)], &filestat) >= 0) {
-        SXEL81("sxe_mkpath(): '%s' already exists", path);
+        SXEL6("sxe_mkpath(): '%s' already exists", path);
         result = SXE_RETURN_OK; /* COVERAGE EXCLUSION - harmless, and only happens on windows */
         goto SXE_EARLY_OUT;     /* COVERAGE EXCLUSION - harmless, and only happens on windows */
     }

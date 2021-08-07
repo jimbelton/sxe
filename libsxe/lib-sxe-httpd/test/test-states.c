@@ -35,7 +35,8 @@ main(void)
     plan_tests(1 + SXE_HTTPD_CONN_NUMBER_OF_STATES);
 
     for (state = SXE_HTTPD_CONN_FREE; state < SXE_HTTPD_CONN_NUMBER_OF_STATES; state++) {
-        ok((string = sxe_httpd_state_to_string(state)) != NULL, "SXE HTTPD state %u == %s", state, string ?: "NULL");
+        string = sxe_httpd_state_to_string(state);
+        ok(string, "SXE HTTPD state %u == %s", state, string ?: "NULL");
     }
 
     ok(sxe_httpd_state_to_string(state) == NULL, "SXE HTTPD state %u == NULL", state);

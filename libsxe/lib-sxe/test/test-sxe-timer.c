@@ -33,28 +33,28 @@ static int callback_count = 0;
 
 static void test_cb(EV_P_ ev_timer* timer, int revents)
 {
-    SXEL12("test_cb(timer=%p, revents=%d)", timer, revents);
+    SXEL1("test_cb(timer=%p, revents=%d)", timer, revents);
     SXE_UNUSED_PARAMETER(loop);
     SXE_UNUSED_PARAMETER(timer);
     SXE_UNUSED_PARAMETER(revents);
     ++callback_count;
-    SXEL11("  callback_count=%d", callback_count);
+    SXEL1("  callback_count=%d", callback_count);
     switch(callback_count)
     {
         case 1:
-            SXEL10("  sxe_timer_set");
+            SXEL1("  sxe_timer_set");
             sxe_timer_stop(timer);
             sxe_timer_set(timer, 0.0001, 0.);
             sxe_timer_start(timer);
             break;
         case 2:
-            SXEL10("  sxe_timer_again");
+            SXEL1("  sxe_timer_again");
             sxe_timer_stop(timer);
             sxe_timer_again(timer);
             sxe_timer_start(timer);
             break;
         case 3:
-            SXEL10("  unlooping");
+            SXEL1("  unlooping");
             ev_unloop(EV_A, EVUNLOOP_ALL);
             break;
     }

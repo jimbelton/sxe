@@ -22,7 +22,6 @@
 #include <string.h>
 #include "sxe-util.h"
 
-
 char *
 sxe_strnchr(const char * buf, char c, unsigned n)
 {
@@ -34,7 +33,21 @@ sxe_strnchr(const char * buf, char c, unsigned n)
         }
 
         if (*buf == c) {
-            return (char *)(unsigned long)buf;
+            return SXE_CAST_NOCONST(char *, buf);
+        }
+    }
+
+    return NULL;
+}
+
+char *
+sxe_rstrnchr(const char * buf, char c, unsigned n)
+{
+    const char * end;
+
+    for (end = &buf[n - 1]; buf <= end; end--) {
+        if (*end == c) {
+            return SXE_CAST_NOCONST(char *, end);
         }
     }
 
@@ -50,7 +63,7 @@ sxe_strncspn(const char * buf, const char * reject, unsigned n)
     for (i = 0; (i < n) && (buf[i] != '\0'); i++) {
         for (j = 0; reject[j] != '\0'; j++) {
             if (buf[i] == reject[j]) {
-                return sxe_unconst(&buf[i]);
+                return SXE_CAST_NOCONST(char *, &buf[i]);
             }
         }
     }
@@ -59,18 +72,22 @@ sxe_strncspn(const char * buf, const char * reject, unsigned n)
 }
 
 char *
-sxe_strnstr(const char * haystack, const char * str, unsigned maximum_length)
+sxe_strnstr(const char * buf, const char * str, unsigned n)
 {
-    unsigned     length = strnlen(str, maximum_length);    /* If use of strnlen breaks Windows, need to implement it in lib-port */
+    unsigned     length = strlen(str);
     const char * end;
 
-    for (end = &haystack[maximum_length - length]; haystack <= end; haystack++) {
-        if (*haystack == '\0') {
+    if (n < length) {
+        return NULL;
+    }
+
+    for (end = &buf[n - length]; buf <= end; buf++) {
+        if (*buf == '\0') {
             break;
         }
 
-        if (memcmp(haystack, str, length) == 0) {
-            return sxe_unconst(haystack);
+        if (memcmp(buf, str, length) == 0) {
+            return SXE_CAST_NOCONST(char *, buf);
         }
     }
 
@@ -78,14 +95,14 @@ sxe_strnstr(const char * haystack, const char * str, unsigned maximum_length)
 }
 
 char *
-sxe_rstrnstr(const char * haystack, const char * needle, unsigned maximum_len)
+sxe_rstrnstr(const char * haystack, const char * needle, unsigned haystack_len)
 {
-    unsigned needle_len = strnlen(needle, maximum_len);    /* If use of strnlen breaks Windows, need to implement it in lib-port */
+    unsigned needle_len = strlen(needle);
     const char * ptr;
 
-    for (ptr = haystack + maximum_len - needle_len; ptr >= haystack; ptr--) {
+    for (ptr = haystack + haystack_len - needle_len; ptr >= haystack; ptr--) {
         if (memcmp(ptr, needle, needle_len) == 0) {
-            return sxe_unconst(ptr);
+            return SXE_CAST_NOCONST(char *, ptr);
         }
     }
 
@@ -93,18 +110,22 @@ sxe_rstrnstr(const char * haystack, const char * needle, unsigned maximum_len)
 }
 
 char *
-sxe_strncasestr(const char * haystack, const char * str, unsigned maximum_length)
+sxe_strncasestr(const char * buf, const char * str, unsigned n)
 {
-    unsigned     length = strnlen(str, maximum_length);    /* If use of strnlen breaks Windows, need to implement it in lib-port */
+    unsigned     length = strlen(str);
     const char * end;
 
-    for (end = &haystack[maximum_length - length]; haystack <= end; haystack++) {
-        if (*haystack == '\0') {
+    if (n < length) {
+        return NULL;
+    }
+
+    for (end = &buf[n - length]; buf <= end; buf++) {
+        if (*buf == '\0') {
             break;
         }
 
-        if (strncasecmp(haystack, str, length) == 0) {
-            return sxe_unconst(haystack);
+        if (strncasecmp(buf, str, length) == 0) {
+            return SXE_CAST_NOCONST(char *, buf);
         }
     }
 

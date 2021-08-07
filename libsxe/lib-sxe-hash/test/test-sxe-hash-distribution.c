@@ -33,7 +33,7 @@
 #include "sha1sum.h"
 
 #define HASH_SIZE                       10000
-#define MAX_BUCKET_INDEX                (HASH_SIZE + 1)
+#define NBUCKETS                        (HASH_SIZE + 2) /* HASH_SIZE + SXE_HASH_BUCKET_RESERVED */
 #define MAX_ALLOWED_PER_BUCKET_INDEX    7
 
 int
@@ -43,24 +43,24 @@ main(void)
     unsigned      i;
     unsigned      id;
     unsigned      bucket;
-    int           counter[MAX_BUCKET_INDEX];
+    int           counter[NBUCKETS];
 
     plan_tests(2);
     sxe_log_set_level(SXE_LOG_LEVEL_DEBUG);
 
-    memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
+    memset(counter, 0, NBUCKETS * sizeof(int));
     hash = sxe_hash_new("test-hash", HASH_SIZE);
 
     for (i = 0; i < HASH_SIZE; i++)
     {
-        char in_buf[5];
+        char in_buf[6];
         char out_buf[41];
 
-        snprintf(in_buf, 5, "%d", i);
+        snprintf(in_buf, 6, "%d", i);
         sha1sum( in_buf, 4, out_buf);
         id = sxe_hash_set(hash, out_buf, SXE_HASH_SHA1_AS_HEX_LENGTH, 1U);
         bucket = sxe_pool_index_to_state(hash, id);
-        SXEA11(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
+        SXEA1(bucket < NBUCKETS, "Bucket index %u (id %u) is out of range", bucket, id);
         counter[bucket]++;
 
         if (counter[bucket] > MAX_ALLOWED_PER_BUCKET_INDEX) {
@@ -71,7 +71,7 @@ main(void)
 
     is(i, HASH_SIZE, "%u items SHA1 hashed and no bucket has more that %u entries", i, MAX_ALLOWED_PER_BUCKET_INDEX);
 
-    memset(counter, 0, MAX_BUCKET_INDEX * sizeof(int));
+    memset(counter, 0, NBUCKETS * sizeof(int));
     hash = sxe_hash_new_plus("lookup3", HASH_SIZE, sizeof(SXE_HASH), 0, 8, SXE_HASH_OPTION_LOOKUP3_HASH);
 
     for (i = 0; i < HASH_SIZE; i++)
@@ -81,7 +81,7 @@ main(void)
         sxe_hash_add(hash, id);
 
         bucket = sxe_pool_index_to_state(hash, id);
-        SXEA11(bucket < MAX_BUCKET_INDEX, "Bucket index %u is out of range", bucket);
+        SXEA1(bucket < NBUCKETS, "Bucket index %u is out of range", bucket);
         counter[bucket]++;
 
         if (counter[bucket] > MAX_ALLOWED_PER_BUCKET_INDEX + 1) {

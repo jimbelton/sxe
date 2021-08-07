@@ -32,17 +32,15 @@
 
 #define TEST_WAIT 5.0
 
-#define LITERAL_LENGTH(literal) ((unsigned)SXE_LITERAL_LENGTH(literal))
-
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE62I("%s(length=%d)", __func__, length);
+    SXEE6I("%s(length=%d)", __func__, length);
     tap_ev_push(__func__, 4, "this",   this,
                              "length", length,
                              "buf",    tap_dup(SXE_BUF(this), SXE_BUF_USED(this)),
                              "used",   SXE_BUF_USED(this));
-    SXER60("return");
+    SXER6("return");
 }
 
 #define SXE_CAST_SSIZE_T_TO_LONG(_x) ((long)(_x))
@@ -57,17 +55,17 @@ test_mock_recvfrom(MOCK_SOCKET s, MOCK_SOCKET_VOID *buf, MOCK_SOCKET_SSIZE_T len
     SXE_UNUSED_PARAMETER(from);
     SXE_UNUSED_PARAMETER(fromlen);
 
-    SXEE67("%s(s=%d,buf=%p,len=%ld,flags=%d,from=%p,fromlen=%p)", __func__, s, buf, SXE_CAST_SSIZE_T_TO_LONG(len), flags, from, fromlen);
+    SXEE6("%s(s=%d,buf=%p,len=%ld,flags=%d,from=%p,fromlen=%p)", __func__, s, buf, SXE_CAST_SSIZE_T_TO_LONG(len), flags, from, fromlen);
     tap_ev_push(__func__, 0);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EINVAL));
-    SXER60("return -1");
+    SXER6("return -1");
     return -1;
 }
 
 static void
 test_case_setup_server_sxe_and_client_socket(int port, SXE ** sxe_server, int * client_socket, struct sockaddr_in * client_addr, struct sockaddr_in * server_address)
 {
-    SXEE61("%s()", __func__);
+    SXEE6("%s()", __func__);
 
     sxe_register(1, 0);
     ok(sxe_init() == SXE_RETURN_OK, "init succeeded");
@@ -90,13 +88,13 @@ test_case_setup_server_sxe_and_client_socket(int port, SXE ** sxe_server, int * 
     server_address->sin_port           = htons(port);
     server_address->sin_addr.s_addr    = inet_addr("127.0.0.1");
 
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_case_cleanup_server_sxe_and_client_socket(SXE * sxe_server, int client_socket)
 {
-    SXEE61("%s()", __func__);
+    SXEE6("%s()", __func__);
 
     sxe_close(sxe_server);
 
@@ -106,7 +104,7 @@ test_case_cleanup_server_sxe_and_client_socket(SXE * sxe_server, int client_sock
 
     sxe_fini();
 
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
@@ -117,7 +115,7 @@ test_case_sxe_udp_both_ends(void)
     struct sockaddr_in addr;
     tap_ev             ev;
 
-    SXEE61("%s()", __func__);
+    SXEE6("%s()", __func__);
 
     sxe_register(2, 0);
     ok(sxe_init() == SXE_RETURN_OK, "init succeeded");
@@ -135,8 +133,9 @@ test_case_sxe_udp_both_ends(void)
     is(sxe_write_to(client, "HELo\n", 5, &addr), SXE_RETURN_OK,           "Sent query to server (port %hu)", SXE_LOCAL_PORT(server));
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &ev), "test_event_read", "Got a read event");
     is(tap_ev_arg(ev, "this"),   server,                                  "...on the server");
-    is(tap_ev_arg(ev, "length"), LITERAL_LENGTH("HELo\n"),                "'length' is %u", LITERAL_LENGTH("HELo\n"));
-    is((unsigned)(uintptr_t)tap_ev_arg(ev, "used"), LITERAL_LENGTH("HELo\n"), "'used' is %u",   LITERAL_LENGTH("HELo\n"));
+    is(tap_ev_arg(ev, "length"), SXE_LITERAL_LENGTH("HELo\n"),            "'length' is %u", (unsigned)SXE_LITERAL_LENGTH("HELo\n"));
+    is(SXE_CAST_NOCONST(unsigned, tap_ev_arg(ev, "used")),
+                                 SXE_LITERAL_LENGTH("HELo\n"),            "'used' is %u",   (unsigned)SXE_LITERAL_LENGTH("HELo\n"));
     is_eq(tap_ev_arg(ev, "buf"), "HELo\n",                                "'buf' is 'HELo\\n'");
     is(tap_ev_length(), 0,                                                "No more events in the queue");
 
@@ -144,7 +143,7 @@ test_case_sxe_udp_both_ends(void)
     sxe_close(server);
     sxe_fini();
 
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
@@ -165,7 +164,7 @@ test_case_sxe_udp_happy_path(void)
     int                last_socket_error;
     int                read_ok = 0;
 
-    SXEE61("%s()", __func__);
+    SXEE6("%s()", __func__);
 
     test_case_setup_server_sxe_and_client_socket(port, &server, &client_socket, &client_addr, &server_address);
 
@@ -192,7 +191,7 @@ READ_AGAIN:
     else {
         last_socket_error = sxe_socket_get_last_error();
         if (last_socket_error == SXE_SOCKET_ERROR(EWOULDBLOCK)) { /* EAGAIN */
-            SXEL60("Got an EAGAIN error, will try to read again...");
+            SXEL6("Got an EAGAIN error, will try to read again...");
             usleep(100000); /* 100 ms */
             goto READ_AGAIN;
         }
@@ -204,7 +203,7 @@ READ_AGAIN:
 
     test_case_cleanup_server_sxe_and_client_socket(server, client_socket);
 
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
@@ -218,7 +217,7 @@ test_case_sxe_recvfrom_sendto_errors(void)
     struct sockaddr_in client_addr;
     struct sockaddr_in server_address;
 
-    SXEE61("%s()", __func__);
+    SXEE6("%s()", __func__);
 
     test_case_setup_server_sxe_and_client_socket(port, &server, &client_socket, &client_addr, &server_address);
 
@@ -243,7 +242,7 @@ test_case_sxe_recvfrom_sendto_errors(void)
 
     test_case_cleanup_server_sxe_and_client_socket(server, client_socket);
 
-    SXER60("return");
+    SXER6("return");
 }
 
 int

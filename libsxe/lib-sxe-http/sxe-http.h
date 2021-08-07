@@ -23,12 +23,32 @@
 #ifndef __SXE_HTTP_H__
 #define __SXE_HTTP_H__
 
-#include <stdint.h>
 #include <string.h>
+#include <sys/types.h>
+
 #include "sxe-log.h"
+#include "sxe-time.h"
+#include "sxe-util.h"
 
 #define SXE_HTTP_VERB_LENGTH_MAXIMUM 8
-#define SXE_HTTP_URL_OPTION_NOSCHEME 1
+
+#define SXE_HTTP_DIGEST_LENGTH  32
+#define SXE_HTTP_DIGEST_BUFSIZE (SXE_HTTP_DIGEST_LENGTH + 1)
+
+typedef enum {
+    SXE_HTTP_METHOD_INVALID=0,
+    SXE_HTTP_METHOD_GET,
+    SXE_HTTP_METHOD_HEAD,
+    SXE_HTTP_METHOD_PUT,
+    SXE_HTTP_METHOD_POST,
+    SXE_HTTP_METHOD_DELETE
+} SXE_HTTP_METHOD;
+
+typedef enum {
+    SXE_HTTP_VERSION_UNKNOWN=0,
+    SXE_HTTP_VERSION_1_0,
+    SXE_HTTP_VERSION_1_1
+} SXE_HTTP_VERSION;
 
 typedef enum SXE_HTTP_LINE_ELEMENT_TYPE {
     SXE_HTTP_LINE_ELEMENT_TYPE_TOKEN,
@@ -59,10 +79,15 @@ typedef struct SXE_HTTP_MESSAGE {
     unsigned     ignore_length;
 } SXE_HTTP_MESSAGE;
 
+typedef struct SXE_HTTP_NONCE {
+    SXE_TIME time;
+    uint64_t sequence_number;
+} SXE_HTTP_NONCE;
+
 static inline const char *
 sxe_http_message_get_line_element(SXE_HTTP_MESSAGE * message)
 {
-    SXEA11(message->element_length > 0, "%s: called when no line element parsed", __func__);
+    SXEA1(message->element_length > 0, "%s: called when no line element parsed", __func__);
     return &message->buffer[message->consumed];
 }
 
@@ -72,10 +97,16 @@ sxe_http_message_get_line_element_length(SXE_HTTP_MESSAGE * message)
     return message->element_length;
 }
 
+static inline unsigned
+sxe_http_message_get_request_line_length(SXE_HTTP_MESSAGE * message)
+{
+    return message->element_length + message->consumed;
+}
+
 static inline const char *
 sxe_http_message_get_header_name(SXE_HTTP_MESSAGE * message)
 {
-    SXEA11(message->name_length > 0, "%s: called when no header parsed", __func__);
+    SXEA1(message->name_length > 0, "%s: called when no header parsed", __func__);
     return &message->buffer[message->consumed];
 }
 
@@ -114,8 +145,21 @@ sxe_http_message_set_ignore_line(SXE_HTTP_MESSAGE * message) {
 
 static inline void
 sxe_http_message_buffer_shift_ignore_length(SXE_HTTP_MESSAGE * message) {
-    /* Bypass the "cast discards qualifiers ..." warning */
-    memmove((char *)((uintptr_t)(message->buffer)), message->buffer + message->ignore_length, message->buffer_length);
+    memmove(SXE_CAST_NOCONST(char *, message->buffer), message->buffer + message->ignore_length, message->buffer_length);
+}
+
+/**
+ * Convert a nonce in a 32 character hex string
+ *
+ * @param nonce        Pointer to a nonce
+ * @param nonce_in_hex Pointer to a buffer at least 2 * sizeof(SXE_HTTP_NONCE) characters in size.
+ *
+ * @return nonce_in_hex
+ */
+static inline char *
+sxe_http_nonce_to_hex(SXE_HTTP_NONCE * nonce, char * nonce_in_hex)
+{
+    return sxe_hex_from_bytes(nonce_in_hex, (unsigned char *)nonce, sizeof(*nonce));
 }
 
 #include "lib-sxe-http-proto.h"

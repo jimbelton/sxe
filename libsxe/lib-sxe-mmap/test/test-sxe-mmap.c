@@ -21,11 +21,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <stdint.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <process.h>
-#include <unistd.h>
+#include <unistd.h>     /* for PATH_MAX     on WIN32 */
+#include <limits.h>     /* for PATH_MAX not on WIN32 */
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -34,6 +35,7 @@
 #include "sxe-spinlock.h"
 #include "sxe-test.h"
 #include "sxe-time.h"
+#include "sxe-util.h"
 #include "tap.h"
 
 #define TEST_MMAP_INSTANCES 16
@@ -50,11 +52,11 @@
 int
 main(int argc, char ** argv)
 {
-    (void)argc;
-    (void)argv;
-#if 0    /* COWARDLY DISABLING DUE TO ERROR */
     int                     fd;
-    unsigned                instance;
+    unsigned                instance = 0;                /* e.g. master=0, slaves=1, 2, 3, etc */
+    char                  * unique_memmap_path_and_file; /* e.g. /tmp/test-sxe-mmap-pid-1234.bin */
+    char                    unique_memmap_path_and_file_master_buffer[PATH_MAX];
+    unsigned                unique_memmap_path_and_file_master_buffer_used;
     SXE_MMAP                memmap;
     volatile unsigned     * shared;
     SXE_SPINLOCK          * shared_spinlock;
@@ -71,31 +73,35 @@ main(int argc, char ** argv)
     sxe_log_decrease_level(SXE_LOG_LEVEL_WARNING); /* A lot of stuff going on here, don't want logging to slow us down */
 
     if (argc > 1) {
-        instance = atoi(argv[1]);
-        sxe_mmap_open(&memmap, "memmap");
-        shared = SXE_MMAP_ADDR(&memmap);
-        SXEL11("Instance %u about to set shared memory", instance);
-        shared[instance] = instance;
-        SXED10((char *)(unsigned long)SXE_MMAP_ADDR(&memmap), sizeof(long) * (TEST_MMAP_INSTANCES + 2));
-        SXEL11("Instance %u just     set shared memory", instance);
-        SXEA11(shared[instance] == instance, "WTF! Thought I wrote %u", instance);
+        instance                    = atoi(argv[1]);
+        unique_memmap_path_and_file =      argv[2] ;
 
-        shared_spinlock = (SXE_SPINLOCK *)(uintptr_t)(shared + 1024);
-        InterlockedExchangeAdd((long *)(uintptr_t)&shared[0], 1);
+        SXEL1("Instance %2u unique memmap path and file: %s", instance, unique_memmap_path_and_file);
+        sxe_mmap_open(&memmap, unique_memmap_path_and_file);
+        shared = SXE_MMAP_ADDR(&memmap);
+        SXEL1("Instance %2u about to set shared memory", instance);
+        shared[instance] = instance;
+        SXED1(SXE_CAST(char *, SXE_MMAP_ADDR(&memmap)), sizeof(long) * (TEST_MMAP_INSTANCES + 2));
+        SXEL1("Instance %2u just     set shared memory", instance);
+        SXEA1(shared[instance] == instance, "WTF! Thought I wrote %u", instance);
+
+        shared_spinlock = SXE_CAST(SXE_SPINLOCK *, shared + 1024);
+
+        InterlockedExchangeAdd(SXE_CAST(long *, &shared[0]), 1);
         start_time = sxe_get_time_in_seconds();
 
         while (shared[0] != TEST_MMAP_INSTANCES) {
-            SXEA10(sxe_get_time_in_seconds() < TEST_WAIT + start_time, "");
+            SXEA1(sxe_get_time_in_seconds() < TEST_WAIT + start_time, "Timeout after %f seconds", TEST_WAIT);
             usleep(10000);
         }
 
-        SXEL11("Instance %u ready to rumble", instance);
+        SXEL1("Instance %2u ready to rumble", instance);
         start_time = sxe_get_time_in_seconds();
 
         for (i = 0; i < TEST_ITERATIONS; i++) {
-            SXEA11(sxe_get_time_in_seconds() < start_time + TEST_WAIT, "Unexpected timeout i=%u... is the hardware too slow?", i);
-            SXEA11(sxe_spinlock_take(&shared_spinlock[0]) == SXE_SPINLOCK_STATUS_TAKEN,
-                                     "Instance %u failed to take lock", instance);
+            SXEA1(sxe_get_time_in_seconds() < start_time + TEST_WAIT, "Unexpected timeout i=%u... is the hardware too slow?", i);
+            SXEA1(sxe_spinlock_take(&shared_spinlock[0]) == SXE_SPINLOCK_STATUS_TAKEN,
+                                     "Instance %2u failed to take lock", instance);
             shared_spinlock[1           ].lock++;
             shared_spinlock[1 + instance].lock++;
             sxe_spinlock_give(&shared_spinlock[0]);
@@ -104,7 +110,7 @@ main(int argc, char ** argv)
         start_time = sxe_get_time_in_seconds();
 
         while (shared[0] != 0xDEADBABE) {
-            SXEA10(sxe_get_time_in_seconds() < start_time + TEST_WAIT, "Unexpected timeout... is the hardware too slow?");
+            SXEA1(sxe_get_time_in_seconds() < start_time + TEST_WAIT, "Unexpected timeout... is the hardware too slow?");
             usleep(10000);
         }
 
@@ -115,7 +121,7 @@ main(int argc, char ** argv)
             for (i = 0; i < TEST_PING_PONGS; ) {
                 unsigned flag;
 
-                SXEA10(sxe_spinlock_take(&shared_spinlock[0]) != SXE_SPINLOCK_STATUS_NOT_TAKEN, "Child failed to take lock");
+                SXEA1(sxe_spinlock_take(&shared_spinlock[0]) != SXE_SPINLOCK_STATUS_NOT_TAKEN, "Child failed to take lock");
                 flag = shared[1];
 
                 if (flag == 0) {
@@ -130,39 +136,47 @@ main(int argc, char ** argv)
 #endif
 
         sxe_mmap_close(&memmap);
-        SXEL12("Instance %2u exiting // count_hi %u", instance, count_hi);
+        SXEL1("Instance %2u exiting // count_hi %u", instance, count_hi);
         return 0;
     }
 
     plan_tests(3);
 
-    /* TODO: Make multiple simultaneous runs safe */
+    sxe_test_get_temp_file_name("test-sxe-mmap-pool", unique_memmap_path_and_file_master_buffer, sizeof(unique_memmap_path_and_file_master_buffer), &unique_memmap_path_and_file_master_buffer_used);
+    unique_memmap_path_and_file = &unique_memmap_path_and_file_master_buffer[0];
+    SXEL1("Instance %2d unique memmap path and file: %s", instance, unique_memmap_path_and_file);
 
-    SXEA11((fd = open("memmap", O_CREAT | O_TRUNC | O_WRONLY, 0666)) >= 0, "Failed to create file 'memmap': %s",         strerror(errno));
-    SXEA12(ftruncate(fd, TEST_FILE_SIZE)                             >= 0, "Failed to extend the file to %lu bytes: %s", TEST_FILE_SIZE, strerror(errno));
+    /* TODO: make creating the file faster on Windows! */
+
+    SXEL1("Instance %2d creating memory mapped file contents", instance);
+    SXEA1((fd = open(unique_memmap_path_and_file, O_CREAT | O_TRUNC | O_WRONLY, 0666)) >= 0, "Failed to create file '%s': %s"           , unique_memmap_path_and_file, strerror(errno));
+    SXEA1(ftruncate(fd, TEST_FILE_SIZE)                                                >= 0, "Failed to extend the file to %u bytes: %s", TEST_FILE_SIZE, strerror(errno));
     close(fd);
 
-    sxe_mmap_open(&memmap, "memmap");
+    SXEL1("Instance %2d memory mapping file", instance);
+    sxe_mmap_open(&memmap, unique_memmap_path_and_file);
     shared = SXE_MMAP_ADDR(&memmap);
 
-    shared_spinlock = (SXE_SPINLOCK *)(uintptr_t)(shared + 1024);
+    shared_spinlock = SXE_CAST(SXE_SPINLOCK *, shared + 1024);
     sxe_spinlock_construct(&shared_spinlock[0]);
     sxe_spinlock_construct(&shared_spinlock[1]);
     shared[0] = 0;
 
+    SXEL1("Instance %2d spawning slaves", instance);
     for (instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
         char buffer[12];
 
+        SXEL1("Launching %d of %d", instance, TEST_MMAP_INSTANCES);
         snprintf(buffer, sizeof(buffer), "%u", instance);
-        hell_spawn[instance - 1] = spawnl(P_NOWAIT, argv[0], argv[0], buffer, NULL);
-        SXEA13(hell_spawn[instance - 1] != -1, "Failed to spawn '%s %s': %s", argv[0], buffer, strerror(errno));
+        hell_spawn[instance - 1] = spawnl(P_NOWAIT, argv[0], argv[0], buffer, unique_memmap_path_and_file, NULL);
+        SXEA1(hell_spawn[instance - 1] != -1, "Failed to spawn (%d of %d) '%s %s': %s", instance, TEST_MMAP_INSTANCES, argv[0], buffer, strerror(errno));
     }
 
     i = 0;
     start_time = sxe_get_time_in_seconds();
 
     while (i < TEST_MMAP_INSTANCES) {
-        SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
+        SXEA1((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         usleep(10000);
 
         for (i = 0, instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
@@ -174,7 +188,7 @@ main(int argc, char ** argv)
     start_time = sxe_get_time_in_seconds();
 
     while (shared_spinlock[1].lock < (TEST_MMAP_INSTANCES * TEST_ITERATIONS)) {
-        SXEA10((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
+        SXEA1((TEST_WAIT + start_time ) > sxe_get_time_in_seconds(), "Unexpected timeout... is the hardware too slow?");
         usleep(10000);
     }
 
@@ -182,7 +196,7 @@ main(int argc, char ** argv)
 
     for (instance = 1; instance <= TEST_MMAP_INSTANCES; instance++) {
         total += shared_spinlock[1 + instance].lock;
-        SXEL12("Instance %u incremented %d times", instance, shared_spinlock[1 + instance].lock);
+        SXEL1("Instance %2u incremented %ld times", instance, shared_spinlock[1 + instance].lock);
     }
 
     is(total                  , (TEST_MMAP_INSTANCES * TEST_ITERATIONS), "Total of counts is as expected");
@@ -197,7 +211,7 @@ main(int argc, char ** argv)
     for (i = 0; i < TEST_PING_PONGS; ) {
         unsigned flag;
 
-        SXEA10(sxe_spinlock_take(&shared_spinlock[0]) != SXE_SPINLOCK_STATUS_NOT_TAKEN, "Parent failed to take lock");
+        SXEA1(sxe_spinlock_take(&shared_spinlock[0]) != SXE_SPINLOCK_STATUS_NOT_TAKEN, "Parent failed to take lock");
         flag = shared[1];
 
         if (flag == 1) {
@@ -209,19 +223,21 @@ main(int argc, char ** argv)
     }
 
     time_after = sxe_get_time_in_seconds();
-    SXEL13("Just switched back and forth %u times in %f seconds, or %f times/second", TEST_PING_PONGS,
+    SXEL1("Just switched back and forth %u times in %f seconds, or %f times/second", TEST_PING_PONGS,
            (time_after - time_before), TEST_PING_PONGS / (time_after - time_before));
 #endif
 
     start_time = sxe_get_time_in_seconds();
 
     for (instance = 0; instance < TEST_MMAP_INSTANCES; instance++) {
-        SXEA10(TEST_WAIT + start_time > sxe_get_time_in_seconds(),                    "Unexpected timeout... is the hardware too slow?");
-        SXEA12(cwait(NULL, hell_spawn[instance], WAIT_CHILD) == hell_spawn[instance], "Unexpected return from cwait for process 0x%08x: %s",
+        SXEA1(TEST_WAIT + start_time > sxe_get_time_in_seconds(),                    "Unexpected timeout... is the hardware too slow?");
+        SXEA1(cwait(NULL, hell_spawn[instance], WAIT_CHILD) == hell_spawn[instance], "Unexpected return from cwait for process %"PRIdPTR": %s",
                hell_spawn[instance], strerror(errno));
     }
 
     sxe_mmap_close(&memmap);
+    SXEL1("Instance %02d unlinking: %s", instance, unique_memmap_path_and_file);
+    unlink(unique_memmap_path_and_file);
+    SXEL1("Instance %02d exiting // master", instance);
     return exit_status();
-#endif
 }

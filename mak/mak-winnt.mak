@@ -19,6 +19,12 @@
 # THE SOFTWARE.
 #
 
+# TODO: Make Windows build able to build C++
+
+# TODO: Make Windows build able to link against openssl like the unix build can
+SXE_DISABLE_OPENSSL := 1
+CFLAGS    += -DSXE_DISABLE_OPENSSL
+
 PERL       = perl
 
 #
@@ -78,7 +84,8 @@ COV_CFLAGS 	=
 COV_LFLAGS 	=
 COV_INIT   	=
 CXX         = cl.exe
-LINK       	= link.exe
+LINK           ?= link.exe
+LINK_TEST      ?= $(LINK)
 LINK_CHECK 	= $(LINK) --version | $(PERL) -lane "$$lines .= $$_; sub END{die qq[make[$(MAKELEVEL)]: ERROR: link.exe in path is not from Microsoft; need to delete your GNU win32 link.exe? ($$lines)] if($$lines !~ m~microsoft~is);}" &&
 LINK_OUT   	= /OUT:
 LINK_FLAGS += /nologo /DEBUG /PDB:$@.pdb /DEFAULTLIB:Ws2_32.lib /NODEFAULTLIB:libc.lib /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:libcd.lib /NODEFAULTLIB:msvcrtd.lib
@@ -94,6 +101,8 @@ endif
 LIB_CMD    	= $(MAKE_PERL_LIB)
 LIB_OUT    	= /OUT:
 LIB_FLAGS  	= /nologo
+LIB_LIST   	= lib $(LIB_FLAGS) /list
+LIB_LIST_FILTER 	= $(PERL) -pe $(OSQUOTE)s{.*/}{}$(OSQUOTE)
 OS_class   	= any-winnt
 OS_name	   	= winnt
 OS_bits     = $(shell echo %PROCESSOR_ARCHITEW6432% | $(PERL) -lane "$$o.=$$_;sub END{printf qq[%%d], $$o =~ m~64~s ? 64 : 32;}")
@@ -202,4 +211,4 @@ CFLAGS.more += -D__func__=__FUNCTION__
 
 endif
 
-CFLAGS += $(CFLAGS.base) $(CFLAGS.more)
+CFLAGS += $(CFLAGS.base) $(CFLAGS.more) $(CFLAGS_EXTRA)

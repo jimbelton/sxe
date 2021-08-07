@@ -71,23 +71,46 @@ else
 
 # On UNIX like OSs, use autoconf
 
-$(DST.dir)/ev$(EXT.lib):	$(DST.dir)/$(THIRD_PARTY.dir)/.libs/libev$(EXT.lib)
-	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+$(DST.dir)/ev$(EXT.lib):	$(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/.libs/libev$(EXT.lib)
+ifdef MAKE_CACHE_THIRD_PARTY
+	$(MAKE_RUN) $(MKDIR) $(DST.dir)/$(THIRD_PARTY.dir)
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: copying:  $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/ev$(EXT.obj) $(DST.dir)/$(THIRD_PARTY.dir)/ev$(EXT.obj)"
+	$(MAKE_RUN) $(COPY) $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/ev$(EXT.obj) $(DST.dir)/$(THIRD_PARTY.dir)/ev$(EXT.obj)
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: copying:  $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/event$(EXT.obj) $(DST.dir)/$(THIRD_PARTY.dir)/event$(EXT.obj)"
+	$(MAKE_RUN) $(COPY) $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/event$(EXT.obj) $(DST.dir)/$(THIRD_PARTY.dir)/event$(EXT.obj)
+endif
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: copying:  $@"
 	$(MAKE_RUN) $(COPY) $^ $@
 
-$(DST.dir)/$(THIRD_PARTY.dir)/.libs/libev$(EXT.lib):   $(DST.dir)/$(THIRD_PARTY.dir)/Makefile
+$(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/.libs/libev$(EXT.lib):   $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/Makefile
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: copying:  misc sxe header files into third party build folder"
+	$(MAKE_RUN) $(COPY) ../lib-sxe-log/sxe-log.h                  $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)
+	$(MAKE_RUN) $(COPY) ../lib-sxe-log/sxe-log-legacy.h           $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)
+	$(MAKE_RUN) $(COPY) ../lib-sxe-log/$(DST.dir)/sxe-*-proto.h   $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
-	$(MAKE_RUN) $(COPY) ../lib-sxe-log/sxe-log.h                  $(DST.dir)/$(THIRD_PARTY.dir)
-	$(MAKE_RUN) $(COPY) ../lib-sxe-log/$(DST.dir)/sxe-*-proto.h   $(DST.dir)/$(THIRD_PARTY.dir)
-	$(MAKE_RUN) $(MAKE) -C $(DST.dir)/$(THIRD_PARTY.dir)
+	$(MAKE_RUN) $(MAKE) -C $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)
 
-$(DST.dir)/$(THIRD_PARTY.dir)/Makefile:			$(DST.dir)/$(THIRD_PARTY.dir)/configure
+ifneq ($(filter debug,$(MAKECMDGOALS)),)
+SUBMAKE_CFLAGS = ${CFLAGS_OPT_OFF}
+else
+SUBMAKE_CFLAGS = ${CFLAGS_OPT_ON}
+endif
+
+ifeq ($(OS_bits),32)
+LIBEV_CONFIGURE_PREFIX  = env CFLAGS="-m32 ${SUBMAKE_CFLAGS}" LDFLAGS=-m32
+LIBEV_CONFIGURE_POSTFIX = --build=i686-unknown-linux-gnu --disable-ld64
+else
+LIBEV_CONFIGURE_PREFIX  = env CFLAGS="${SUBMAKE_CFLAGS}"
+LIBEV_CONFIGURE_POSTFIX =
+endif
+
+$(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/Makefile:			$(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/configure
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
-	$(MAKE_RUN) cd $(DST.dir)/$(THIRD_PARTY.dir) && ./configure
+	$(MAKE_RUN) cd $(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir) && $(LIBEV_CONFIGURE_PREFIX) ./configure $(LIBEV_CONFIGURE_POSTFIX)
 
 endif
 
-$(DST.dir)/ev.h:			$(DST.dir)/$(THIRD_PARTY.dir)/ev.h
-	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
+$(DST.dir)/ev.h:			$(THIRD_PARTY_DST.dir)/$(THIRD_PARTY.dir)/ev.h
+	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: copying:  $@"
 	$(MAKE_RUN) $(COPY) $(call OSPATH,$^) $(call OSPATH,$@)
 

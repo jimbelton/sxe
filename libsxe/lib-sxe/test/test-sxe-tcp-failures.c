@@ -40,72 +40,72 @@ static SXE        * third_connector;
 static void
 test_event_connected(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE62I("test_event_read(this->socket=%d, length=%d)", this->socket, length);
-    tap_ev_push(__func__, 3, "this", this, "length", length, "buf_used", SXE_BUF_USED(this));
-    SXER60I("return");
+    SXEE6I("test_event_read(this->socket=%d, length=%d)", this->socket, length);
+    tap_ev_push(__func__, 3, "this", this, "length", length, "buf_used", (size_t)SXE_BUF_USED(this));
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE61I("test_event_close(this->socket=%d)", this->socket);
-    tap_ev_push(__func__, 2, "this", this, "buf_used", SXE_BUF_USED(this));
-    SXER60I("return");
+    SXEE6I("test_event_close(this->socket=%d)", this->socket);
+    tap_ev_push(__func__, 2, "this", this, "buf_used", (size_t)SXE_BUF_USED(this));
+    SXER6I("return");
 }
 
 static void
 test_event_client_connected(SXE * this)
 {
-    SXEE60I("test_event_client_connected()");
+    SXEE6I("test_event_client_connected()");
     tap_ev_queue_push(client_queue, __func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_client_read(SXE * this, int length)
 {
-    SXEE62I("test_event_client_read(this->socket=%d, length=%d)", this->socket, length);
-    tap_ev_queue_push(client_queue, __func__, 3, "this", this, "length", length, "buf_used", SXE_BUF_USED(this));
-    SXER60I("return");
+    SXEE6I("test_event_client_read(this->socket=%d, length=%d)", this->socket, length);
+    tap_ev_queue_push(client_queue, __func__, 3, "this", this, "length", length, "buf_used", (size_t)SXE_BUF_USED(this));
+    SXER6I("return");
 }
 
 static void
 test_event_client_close(SXE * this)
 {
-    SXEE61I("test_event_client_close(this->socket=%d)", this->socket);
+    SXEE6I("test_event_client_close(this->socket=%d)", this->socket);
     tap_ev_queue_push(client_queue, __func__, 2, "this", this, "buf_used", SXE_BUF_USED(this));
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static MOCK_SOCKET SXE_STDCALL
 test_mock_accept(SXE_SOCKET sock, struct sockaddr * peer_addr, MOCK_SOCKLEN_T * peer_addr_size)
 {
-    SXEE63("test_mock_accept(sock=%d,peer_addr=%p,peer_addr_size=%p)", sock, peer_addr, peer_addr_size);
-    SXEL65("tap_ev_push(%s=%d, sock=%p, peer_addr=%p, peer_addr_size=%d);", __func__, 3, sock, tap_dup(peer_addr, *peer_addr_size), *peer_addr_size);
+    SXEE6("test_mock_accept(sock=%d,peer_addr=%p,peer_addr_size=%p)", sock, peer_addr, peer_addr_size);
+    SXEL6("tap_ev_push(%s=%d, sock=%d, peer_addr=%p, peer_addr_size=%d);", __func__, 3, sock, tap_dup(peer_addr, *peer_addr_size), *peer_addr_size);
     tap_ev_push(__func__, 3, "sock", sock, "peer_addr", tap_dup(peer_addr, *peer_addr_size), "peer_addr_size", *peer_addr_size);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EINVAL));
     MOCK_SET_HOOK(accept, accept);
-    SXER60("return -1 // error=EINVAL");
+    SXER6("return -1 // error=EINVAL");
     return -1;
 }
 
 static SXE_SOCKET SXE_STDCALL
 test_mock_socket(int domain, int type, int protocol)
 {
-    SXEE63("test_mock_socket(domain=%d,type=%d,protocol=%d)", domain, type, protocol);
+    SXEE6("test_mock_socket(domain=%d,type=%d,protocol=%d)", domain, type, protocol);
     SXE_UNUSED_PARAMETER(domain);
     SXE_UNUSED_PARAMETER(type);
     SXE_UNUSED_PARAMETER(protocol);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EMFILE));
-    SXER60("return -1 // error=EMFILE");
+    SXER6("return -1 // error=EMFILE");
     return -1;
 }
 
@@ -121,12 +121,12 @@ test_mock_listen(SXE_SOCKET sock, int backlog)
 static int SXE_STDCALL
 test_mock_bind_efault(SXE_SOCKET sock, const struct sockaddr* addr, SXE_SOCKLEN_T len)
 {
-    SXEE90("test_mock_bind_efault()");
+    SXEE7("test_mock_bind_efault()");
     SXE_UNUSED_PARAMETER(sock);
     SXE_UNUSED_PARAMETER(addr);
     SXE_UNUSED_PARAMETER(len);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EFAULT));
-    SXER90("return -1 (last_error=EFAULT)");
+    SXER7("return -1 (last_error=EFAULT)");
     return -1;
 }
 
@@ -162,14 +162,14 @@ test_mock_connect(SXE_SOCKET sock, const struct sockaddr* addr, SXE_SOCKLEN_T le
 static int SXE_STDCALL
 test_mock_getsockopt(SXE_SOCKET sock, int level, int optname, SXE_SOCKET_VOID * optval, SXE_SOCKLEN_T * SXE_SOCKET_RESTRICT optlen)
 {
-    SXEE65("test_mock_getsockopt(sock=%d, level=%d, optname=%d, optval=%p, optlen=%p)", sock, level, optname, optval, optlen);
+    SXEE6("test_mock_getsockopt(sock=%d, level=%d, optname=%d, optval=%p, optlen=%p)", sock, level, optname, optval, optlen);
     SXE_UNUSED_PARAMETER(sock);
     SXE_UNUSED_PARAMETER(level);
     SXE_UNUSED_PARAMETER(optname);
     SXE_UNUSED_PARAMETER(optval);
     SXE_UNUSED_PARAMETER(optlen);
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EBADF));
-    SXER60("return -1");
+    SXER6("return -1");
     return -1;
 }
 
@@ -178,11 +178,11 @@ static int test_mock_send_error = 0;
 static MOCK_SSIZE_T SXE_STDCALL
 test_mock_send(SXE_SOCKET sock, const MOCK_SOCKET_VOID *buf, MOCK_SOCKET_SSIZE_T count, int flags)
 {
-    SXEE64("test_mock_send(sock=%d, buf=%p, count=%d, flags=%d)", sock, buf, count, flags);
-    SXEL66("tap_ev_push(%s=%d, sock=%p, buf=%p, count=%d, flags=%d);", __func__, 4, sock, tap_dup(buf, count), count, flags);
+    SXEE6("test_mock_send(sock=%d, buf=%p, count=%zu, flags=%d)", sock, buf, count, flags);
+    SXEL6("tap_ev_push(%s=%d, sock=%d, buf=%p, count=%zu, flags=%d);", __func__, 4, sock, tap_dup(buf, count), count, flags);
     tap_ev_push(__func__, 4, "sock", sock, "buf", tap_dup(buf, count), "count", count, "flags", flags);
     sxe_socket_set_last_error(test_mock_send_error);
-    SXER60("return -1");
+    SXER6("return -1");
     return -1;
 }
 
@@ -254,7 +254,7 @@ main(void)
     ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "2nd connector: Got second client event");
     is_eq(tap_ev_identifier(ev),     "test_event_client_close",              "2nd connector: Second event is client close");
     is(tap_ev_arg(ev, "this"),       second_connector,                       "2nd connector: Second connector closed");
-    is(tap_ev_arg(ev, "buf_used"), 0,                                        "2nd connector: 0 bytes in receive buffer");
+    is(SXE_CAST_NOCONST(unsigned, tap_ev_arg(ev, "buf_used")), 0,            "2nd connector: 0 bytes in receive buffer");
 
     /* Close and reallocate connections.
      */
@@ -298,7 +298,7 @@ main(void)
     ok((ev = test_tap_ev_queue_shift_wait(client_queue, 2)) != NULL,         "Connection failure: Got another event");
     is_eq(tap_ev_identifier(ev), "test_event_client_close",                  "Connection failure: It's a client close event");
     is(tap_ev_arg(ev, "this"), first_connector,                              "Connection failure: third connection close indication" );
-    is(tap_ev_arg(ev, "buf_used"), 0,                                        "Connection failure: 0 bytes in receive buffer");
+    is(SXE_CAST_NOCONST(unsigned, tap_ev_arg(ev, "buf_used")), 0,            "Connection failure: 0 bytes in receive buffer");
 
     listener = sxe_new_tcp(NULL, "INADDR_ANY", SXE_LOCAL_PORT(listener), test_event_connected, test_event_read, test_event_close);
     is(sxe_listen(listener), SXE_RETURN_OK,                                  "Reconnect failure: Recreated listener");
@@ -310,7 +310,7 @@ main(void)
     is(tap_ev_arg(ev, "this"), first_connector,                              "Reconnect failure: Closed connection is the first connector");
     ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "Reconnect failure: Got a server event");
     is_eq(tap_ev_identifier(ev), "test_event_connected",                     "Reconnect failure: It's a connected event");
-    connectee = (SXE *)(unsigned long)tap_ev_arg(ev, "this");
+    connectee = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
     ok(connectee != first_connector,                                         "Reconnect failure: It's not the first connector");
     ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "Reconnect failure: Got another server event");
     is_eq(tap_ev_identifier(ev), "test_event_close",                         "Reconnect failure: It's a closed event");
@@ -334,7 +334,7 @@ main(void)
     is(tap_ev_arg(ev, "this"), first_connector,                              "Send failure: It's on the first connector");
     ok((ev = test_tap_ev_shift_wait(2)) != NULL,                             "Send failure: Got a server event");
     is_eq(tap_ev_identifier(ev), "test_event_connected",                     "Send failure: Server connected event (connectee)");
-    connectee = (SXE *)(unsigned long)tap_ev_arg(ev, "this");
+    connectee = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
     ok(connectee != first_connector,                                         "Send failure: It's not on the first connector");
 
     /* Fake a stale read on the connectee (for code coverage)

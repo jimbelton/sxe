@@ -69,7 +69,7 @@ epoll_modify (EV_P_ int fd, int oev, int nev)
   struct epoll_event ev;
   unsigned char oldmask;
 
-  SXEE63("epoll_modify(fd=%d,oev=%d,nev=%d)", fd, oev, nev);
+  SXEE6("epoll_modify(fd=%d,oev=%d,nev=%d)", fd, oev, nev);
 
   /*
    * we handle EPOLL_CTL_DEL by ignoring it here
@@ -84,7 +84,7 @@ epoll_modify (EV_P_ int fd, int oev, int nev)
       /* Sophos Fix: To be able to discard the event, must change the generation number of the ev_io structure
        */
       anfds[fd].egen++;
-      SXER60("return; // nev == 0");
+      SXER6("return; // nev == 0");
     return;
     }
 
@@ -99,7 +99,7 @@ epoll_modify (EV_P_ int fd, int oev, int nev)
 
   if (expect_true (!epoll_ctl (backend_fd, oev ? EPOLL_CTL_MOD : EPOLL_CTL_ADD, fd, &ev)))
     {
-      SXER60("return; // epoll_ctl succeeded");
+      SXER6("return; // epoll_ctl succeeded");
     return;
     }
 
@@ -111,7 +111,7 @@ epoll_modify (EV_P_ int fd, int oev, int nev)
 
       if (!epoll_ctl (backend_fd, EPOLL_CTL_ADD, fd, &ev))
         {
-          SXER60("return; // epoll_ctl succeeded after ENOENT");
+          SXER6("return; // epoll_ctl succeeded after ENOENT");
         return;
     }
     }
@@ -124,7 +124,7 @@ epoll_modify (EV_P_ int fd, int oev, int nev)
 
       if (!epoll_ctl (backend_fd, EPOLL_CTL_MOD, fd, &ev))
         {
-          SXER60("return; // epoll_ctl succeeded after EEXIST");
+          SXER6("return; // epoll_ctl succeeded after EEXIST");
         return;
     }
     }
@@ -134,7 +134,7 @@ epoll_modify (EV_P_ int fd, int oev, int nev)
 dec_egen:
   /* we didn't successfully call epoll_ctl, so decrement the generation counter again */
   --anfds [fd].egen;
-  SXER60("return; // epoll_ctl failed");
+  SXER6("return; // epoll_ctl failed");
 }
 
 static void
@@ -166,7 +166,7 @@ epoll_poll (EV_P_ ev_tstamp timeout)
       int got  = (ev->events & (EPOLLOUT | EPOLLERR | EPOLLHUP) ? EV_WRITE : 0)
                | (ev->events & (EPOLLIN  | EPOLLERR | EPOLLHUP) ? EV_READ  : 0);
 
-      SXEL64("epoll_poll: i(event)=%d, fd=%d, anfds[fd].egen=%u, ev->egen=%u", i, fd,
+      SXEL6("epoll_poll: i(event)=%d, fd=%d, anfds[fd].egen=%u, ev->egen=%u", i, fd,
              (uint32_t)anfds[fd].egen, (uint32_t)(ev->data.u64 >> 32));
       /* check for spurious notification */
       if (expect_false ((uint32_t)anfds [fd].egen != (uint32_t)(ev->data.u64 >> 32)))

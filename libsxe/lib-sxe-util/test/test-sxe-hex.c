@@ -39,13 +39,24 @@ main(void)
 {
     TEST_SHA1 sha1_expected;
     TEST_SHA1 sha1_got;
+    char      hex_buffer[sizeof(SHA1_HEX)];
+    unsigned  val = 0;
+    char invalid_hex[2] = {-50, -1};
 
-    plan_tests(7);
-    is(sxe_hex_to_unsigned("0",     2), 0,                            "'0':2    -> 0");
-    is(sxe_hex_to_unsigned("face",  4), 0xface,                       "'face':4 -> 0xface");
-    is(sxe_hex_to_unsigned("B00B",  2), 0xb0,                         "'B00B':2 -> 0xb0");
-    is(sxe_hex_to_unsigned("XXXX",  4), SXE_UNSIGNED_MAXIMUM,         "'XXXX':4 -> 0x%x (SXE_UNSIGNED_MAXIMUM)",
+    plan_tests(17);
+    is(sxe_hex_to_unsigned("0",     2), 0,                                  "'0':2    -> 0");
+    is(sxe_hex_to_unsigned("face",  4), 0xface,                             "'face':4 -> 0xface");
+    is(sxe_hex_to_unsigned("B00B",  2), 0xb0,                               "'B00B':2 -> 0xb0");
+    is(sxe_hex_to_unsigned("XXXX",  4), SXE_UNSIGNED_MAXIMUM,               "'XXXX':4 -> 0x%x (SXE_UNSIGNED_MAXIMUM)",
        sxe_hex_to_unsigned("XXXX",  4));
+    is(sxe_hex_to_unsigned(invalid_hex, 2), SXE_UNSIGNED_MAXIMUM,           "invalid_hex -> SXE_UNSIGNED_MAXIMUM");
+
+    is(sxe_valid_hex_to_unsigned("0a", 2, &val), SXE_RETURN_OK,             "0a is valid hex");
+    is(val, 10,                                                             "0a hex is 10 decimal");
+    is(sxe_valid_hex_to_unsigned("F45C6AC6", 8, &val), SXE_RETURN_OK,       "F45C6AC6 is valid hex");
+    is(val, 4099697350,                                                     "F45C6AC6 hex is 4099697350 decimal");
+    is(sxe_valid_hex_to_unsigned("ZZ", 2, &val), SXE_RETURN_ERROR_INTERNAL, "ZZ is not valid hex");
+    is(sxe_valid_hex_to_unsigned(invalid_hex, 2, &val), SXE_RETURN_ERROR_INTERNAL, "invalid_hex -> SXE_RETURN_ERROR_INTERNAL");
 
     ok(sxe_hex_to_bytes((unsigned char *)&sha1_got, "goofy goober", 12) != SXE_RETURN_OK, "Conversion from hex 'goofy goober' to bytes failed");
     is(sxe_hex_to_bytes((unsigned char *)&sha1_got, SHA1_HEX,       40),   SXE_RETURN_OK, "Conversion from hex '%s' to bytes succeeded", SHA1_HEX);
@@ -56,12 +67,17 @@ main(void)
         pass(                                                         "bytes are as expected");
     }
     else {
-        SXEL10("Expected:");
-        SXED10(&sha1_expected, sizeof(sha1_expected));
-        SXEL10("Got:");
-        SXED10(&sha1_got,      sizeof(sha1_got));
+        SXEL1("Expected:");
+        SXED1(&sha1_expected, sizeof(sha1_expected));
+        SXEL1("Got:");
+        SXED1(&sha1_got,      sizeof(sha1_got));
         fail(                                                         "bytes are not as expected");
     }
 
+    tap_test_case_name("sxe_hex_from_bytes");
+    hex_buffer[sizeof(hex_buffer) - 1] = 0xBE;
+    is(sxe_hex_from_bytes(hex_buffer, sxe_sha1_expected_bytes, sizeof(sxe_sha1_expected_bytes)), hex_buffer, "Returns hex buffer");
+    is_strncmp(hex_buffer, SHA1_HEX, SXE_LITERAL_LENGTH(SHA1_HEX),    "SHA1 converted to hex as expected");
+    is((unsigned char)hex_buffer[sizeof(hex_buffer) - 1], 0xBE,       "Guard byte is intact");
     return exit_status();
 }

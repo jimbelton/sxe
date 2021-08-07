@@ -27,6 +27,8 @@
 #include "ev.h"
 #include "tap.h"
 
+extern unsigned (*test_tap_ev_queue_shift_wait_get_deferred_count)(void);
+
 #include "lib-sxe-test-proto.h"
 
 #endif

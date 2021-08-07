@@ -47,10 +47,10 @@ static int SXE_STDCALL
 test_mock_connect(SXE_SOCKET sockfd, const struct sockaddr *serv_addr, SXE_SOCKLEN_T addrlen)
 {
     int result = 0;
-    SXEE63("test_mock_connect(sockfd=%d, serv_addr=%p, addrlen=%d)", sockfd, serv_addr, addrlen);
-    SXE_UNUSED_ARGUMENT(sockfd);
-    SXE_UNUSED_ARGUMENT(serv_addr);
-    SXE_UNUSED_ARGUMENT(addrlen);
+    SXEE6("test_mock_connect(sockfd=%d, serv_addr=%p, addrlen=%d)", sockfd, serv_addr, addrlen);
+    SXE_UNUSED_PARAMETER(sockfd);
+    SXE_UNUSED_PARAMETER(serv_addr);
+    SXE_UNUSED_PARAMETER(addrlen);
     ++connect_count;
 
     /* Call the real connect function.
@@ -59,85 +59,85 @@ test_mock_connect(SXE_SOCKET sockfd, const struct sockaddr *serv_addr, SXE_SOCKL
     result = connect(sockfd, serv_addr, addrlen);
     MOCK_SET_HOOK(connect, test_mock_connect);
 
-    SXER61("return %d", result);
+    SXER6("return %d", result);
     return result;
 }
 
 static int SXE_STDCALL
 test_mock_getsockopt_fails(SXE_SOCKET fd, int level, int optname, SXE_SOCKET_VOID * optval, SXE_SOCKLEN_T * SXE_SOCKET_RESTRICT optlen)
 {
-    SXEE65("test_mock_getsockopt_fails(fd=%d, level=%d, optname=%d, optval=%p, optlen=%p)", fd, level, optname, optval, optlen);
-    SXE_UNUSED_ARGUMENT(fd);
-    SXE_UNUSED_ARGUMENT(level);
-    SXE_UNUSED_ARGUMENT(optname);
-    SXE_UNUSED_ARGUMENT(optval);
-    SXE_UNUSED_ARGUMENT(optlen);
+    SXEE6("test_mock_getsockopt_fails(fd=%d, level=%d, optname=%d, optval=%p, optlen=%p)", fd, level, optname, optval, optlen);
+    SXE_UNUSED_PARAMETER(fd);
+    SXE_UNUSED_PARAMETER(level);
+    SXE_UNUSED_PARAMETER(optname);
+    SXE_UNUSED_PARAMETER(optval);
+    SXE_UNUSED_PARAMETER(optlen);
     ++getsockopt_count;
     sxe_socket_set_last_error(SXE_SOCKET_ERROR(EBADF));
-    SXER60("return -1");
+    SXER6("return -1");
     return -1;
 }
 
 static int SXE_STDCALL
 test_mock_getsockopt_connection_failed(SXE_SOCKET fd, int level, int optname, SXE_SOCKET_VOID * optval, SXE_SOCKLEN_T * SXE_SOCKET_RESTRICT optlen)
 {
-    SXEE65("test_mock_getsockopt_connection_failed(fd=%d, level=%d, optname=%d, optval=%p, optlen=%p)", fd, level, optname, optval, optlen);
-    SXE_UNUSED_ARGUMENT(fd);
-    SXE_UNUSED_ARGUMENT(level);
-    SXE_UNUSED_ARGUMENT(optname);
+    SXEE6("test_mock_getsockopt_connection_failed(fd=%d, level=%d, optname=%d, optval=%p, optlen=%p)", fd, level, optname, optval, optlen);
+    SXE_UNUSED_PARAMETER(fd);
+    SXE_UNUSED_PARAMETER(level);
+    SXE_UNUSED_PARAMETER(optname);
     ++getsockopt_count;
-    SXEA10(level == SOL_SOCKET, "getsockopt() expects level to be SOL_SOCKET");
-    SXEA10(optname == SO_ERROR, "getsockopt() expects option to be SO_ERROR");
-    SXEA10(*optlen >= 4, "getsockopt() must be passed at least four bytes");
+    SXEA1(level == SOL_SOCKET, "getsockopt() expects level to be SOL_SOCKET");
+    SXEA1(optname == SO_ERROR, "getsockopt() expects option to be SO_ERROR");
+    SXEA1(*optlen >= 4, "getsockopt() must be passed at least four bytes");
     *(unsigned*)(optval) = SXE_SOCKET_ERROR(ECONNREFUSED);
     *optlen = 4;
 
-    SXER60("return 0 (ECONNREFUSED as passed via parameters)");
+    SXER6("return 0 (ECONNREFUSED as passed via parameters)");
     return 0;
 }
 static void
 test_event_timeout(SXE_POOL_TCP * pool, void * info)
 {
-    SXEE63("%s(pool=%s, info=%p)", __func__, SXE_POOL_TCP_GET_NAME(pool), info);
-    SXE_UNUSED_ARGUMENT(pool);
-    SXE_UNUSED_ARGUMENT(info);
-    SXEA10(0, "test_event_timeout should never get called in this test");
-    SXER60("return");
+    SXEE6("%s(pool=%s, info=%p)", __func__, SXE_POOL_TCP_GET_NAME(pool), info);
+    SXE_UNUSED_PARAMETER(pool);
+    SXE_UNUSED_PARAMETER(info);
+    SXEA1(0, "test_event_timeout should never get called in this test");
+    SXER6("return");
 }
 
 static void
 test_event_ready_to_write(SXE_POOL_TCP * pool, void * info)
 {
-    SXE_UNUSED_ARGUMENT(pool);
-    SXE_UNUSED_ARGUMENT(info);
-    SXEE62("test_event_ready_to_write(pool=%s, info=%p)", SXE_POOL_TCP_GET_NAME(pool), info);
+    SXE_UNUSED_PARAMETER(pool);
+    SXE_UNUSED_PARAMETER(info);
+    SXEE6("test_event_ready_to_write(pool=%s, info=%p)", SXE_POOL_TCP_GET_NAME(pool), info);
     ++ready_to_write_count;
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
 test_event_read(SXE* this, int length)
 {
-    SXEE61I("test_event_read(length=%d)", length);
-    SXE_UNUSED_ARGUMENT(this);
-    SXE_UNUSED_ARGUMENT(length);
-    SXEA10(0, "test_event_read should never get called in this test");
-    SXER60I("return");
+    SXEE6I("test_event_read(length=%d)", length);
+    SXE_UNUSED_PARAMETER(this);
+    SXE_UNUSED_PARAMETER(length);
+    SXEA1(0, "test_event_read should never get called in this test");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE* this)
 {
-    SXEE60I("test_event_close()");
-    SXE_UNUSED_ARGUMENT(this);
+    SXEE6I("test_event_close()");
+    SXE_UNUSED_PARAMETER(this);
     ++close_count;
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 process_all_libev_events(void)
 {
-    SXEE60("process_all_libev_events()");
+    SXEE6("process_all_libev_events()");
 
     /* TODO: work out if there's a better way of processessing all outstanding
      * libev events, including new events which are generated by our callbacks
@@ -146,7 +146,7 @@ process_all_libev_events(void)
     ev_loop(ev_default_loop(EVFLAG_AUTO), EVLOOP_NONBLOCK);
     ev_loop(ev_default_loop(EVFLAG_AUTO), EVLOOP_NONBLOCK);
     ev_loop(ev_default_loop(EVFLAG_AUTO), EVLOOP_NONBLOCK);
-    SXER60("return");
+    SXER6("return");
     return;
 }
 
@@ -156,7 +156,7 @@ check_invalid_destination(void)
     SXE_POOL_TCP * pool;
     double         deadline = 0.0;
 
-    SXEE60("check_invalid_destination()");
+    SXEE6("check_invalid_destination()");
     connect_count = 0;
     close_count   = 0;
     sxe_pool_tcp_register(10);
@@ -175,7 +175,7 @@ check_invalid_destination(void)
 
     while (getsockopt_count < 2) {
         if (sxe_get_time_in_seconds() > deadline) {
-            SXEL60("Deadline exceeded when waiting for getsockopt() (the connect callback isn't being called)");
+            SXEL6("Deadline exceeded when waiting for getsockopt() (the connect callback isn't being called)");
             break;
         }
 
@@ -202,7 +202,7 @@ check_invalid_destination(void)
     sxe_pool_tcp_delete(NULL, pool);
     sxe_fini();
 
-    SXER60("return");
+    SXER6("return");
 }
 
 static void
@@ -211,7 +211,7 @@ check_getsockopt_failure(void)
     SXE_POOL_TCP * pool;
     double         deadline = 0.0;
 
-    SXEE60("check_getsockopt_failure()");
+    SXEE6("check_getsockopt_failure()");
     connect_count   = 0;
     close_count     = 0;
     sxe_pool_tcp_register(10);
@@ -230,7 +230,7 @@ check_getsockopt_failure(void)
 
     while (getsockopt_count < 2) {
         if (sxe_get_time_in_seconds() > deadline) {
-            SXEL60("Deadline exceeded when waiting for getsockopt() (the connect callback isn't being called)");
+            SXEL6("Deadline exceeded when waiting for getsockopt() (the connect callback isn't being called)");
             break;
         }
 
@@ -256,7 +256,7 @@ check_getsockopt_failure(void)
     sxe_pool_tcp_delete(NULL, pool);
     pool = NULL;
     sxe_fini();
-    SXER60("return");
+    SXER6("return");
 }
 
 #endif

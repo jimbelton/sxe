@@ -32,8 +32,6 @@
 
 #define TEST_WAIT 2    /* Maximum seconds to wait for an event */
 
-#define LITERAL_LENGTH(literal) ((unsigned)SXE_LITERAL_LENGTH(literal))
-
 static char my_giant_buffer[] = \
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
@@ -54,25 +52,25 @@ static char my_giant_buffer[] = \
 static void
 test_event_connected(SXE * this)
 {
-    SXEE60I("test_event_connected()");
+    SXEE6I("test_event_connected()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_read(SXE * this, int length)
 {
-    SXEE61I("test_event_read(length=%d)", length);
+    SXEE6I("test_event_read(length=%d)", length);
     tap_ev_push(__func__, 3, "this", this, "length", length, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)));
-    SXER60I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_close(SXE * this)
 {
-    SXEE60I("test_event_close()");
+    SXEE6I("test_event_close()");
     tap_ev_push(__func__, 1, "this", this);
-    SXER60I("return");
+    SXER6I("return");
 }
 
 int
@@ -110,7 +108,7 @@ main(int argc, char *argv[])
      */
     is(result = sxe_write(connector, "HELO", 4), SXE_RETURN_OK,                         "wrote 'HELO' to connector");
     is_eq(tap_ev_identifier(event = test_tap_ev_shift_wait(2)), "test_event_read",      "got a read event");
-    connectee = (SXE *)(unsigned long)tap_ev_arg(event, "this");
+    connectee = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
     is(tap_ev_arg(event, "length"), 4,                                                  "read a four byte value");
     is(SXE_BUF_USED(connectee),     4,                                                  "four bytes in buffer");
     is_strncmp(SXE_BUF(connectee), "HELO", 4,                                           "'HELO' in buffer");
@@ -171,9 +169,8 @@ main(int argc, char *argv[])
     is_strncmp(tap_ev_arg(event, "buf"), "thi", 3,                                      "Got 'thi'");
     is(sxe_write(connector, "s test gets", SXE_LITERAL_LENGTH("s test gets")), SXE_RETURN_OK, "Sent 's test gets'");
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &event), "test_event_read",            "Got a read event");
-    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("s test gets"),                  "Got %u characters",
-                                                                                        LITERAL_LENGTH("s test gets"));
-    connectee = (SXE *)(long)tap_ev_arg(event, "this");
+    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("s test gets"),                  "Got %u characters", (unsigned)SXE_LITERAL_LENGTH("s test gets"));
+    connectee = SXE_CAST_NOCONST(SXE *, tap_ev_arg(event, "this"));
     buf       = tap_ev_arg(event, "buf");
     is(sxe_strnchr(buf, ' ', SXE_BUF_USED(connectee)), &buf[4],                         "Found a ' ' at offset 4");
     sxe_buf_consume(connectee, 5);
@@ -183,29 +180,32 @@ main(int argc, char *argv[])
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &event), "test_event_read",            "Got a read event");
     is(tap_ev_arg(event, "this"), connector,                                            "Read event was on the connector");
     sxe_buf_resume(connectee, SXE_BUF_RESUME_IMMEDIATE);
-    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &event), "test_event_read",            "Got another read event");
+    sxe_buf_resume(connectee, SXE_BUF_RESUME_IMMEDIATE);    /* test back-to-back resumes -- happens in sxe-httpd when unwinding call stacks */
+    test_process_all_libev_events();
+    is_eq(tap_ev_identifier((event = tap_ev_shift())), "test_event_read",               "Got another read event");
     is(tap_ev_arg(event, "this"), connectee,                                            "Read event was on the connectee");
-    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("test gets one word at a time"), "Length read is '%u'", LITERAL_LENGTH("test gets one word at a time"));
+    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("test gets one word at a time"), "Length read is '%u'", (unsigned)SXE_LITERAL_LENGTH("test gets one word at a time"));
     is_strncmp(tap_ev_arg(event, "buf"), "test ", 5,                                    "Second word is in the buffer");
-    is(SXE_BUF_USED(connectee), SXE_LITERAL_LENGTH("test gets one word at a time"),     "Length unconsumed is '%u'", LITERAL_LENGTH("test gets one word at a time"));
+    is(SXE_BUF_USED(connectee), SXE_LITERAL_LENGTH("test gets one word at a time"),     "Length unconsumed is '%u'", (unsigned)SXE_LITERAL_LENGTH("test gets one word at a time"));
     sxe_buf_consume(connectee, 5);
 
     sxe_buf_resume(connectee, SXE_BUF_RESUME_IMMEDIATE);
-    is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &event), "test_event_read",            "Got another read event");
+    test_process_all_libev_events();
+    is_eq(tap_ev_identifier((event = tap_ev_shift())), "test_event_read",               "Got another read event");
     is(tap_ev_arg(event, "this"), connectee,                                            "Read event was on the connectee");
-    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("gets one word at a time"),      "Length read is '%u'", LITERAL_LENGTH("gets one word at a time"));
+    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("gets one word at a time"),      "Length read is '%u'", (unsigned)SXE_LITERAL_LENGTH("gets one word at a time"));
     is(sxe_write(connector, my_giant_buffer, SXE_BUF_SIZE - SXE_LITERAL_LENGTH("this test gets one word at a time")), SXE_RETURN_OK,
                                                                                         "Filled the buffer");
     sxe_buf_consume(connectee, 5);
     sxe_buf_resume(connectee, SXE_BUF_RESUME_IMMEDIATE);
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &event), "test_event_read",            "Got another read event");
     is(tap_ev_arg(event, "this"), connectee,                                            "Read event was on the connectee");
-    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("one word at a time"),           "Length read is '%u'", LITERAL_LENGTH("one word at a time"));
+    is(tap_ev_arg(event, "length"), SXE_LITERAL_LENGTH("one word at a time"),           "Length read is '%u'", (unsigned)SXE_LITERAL_LENGTH("one word at a time"));
 
     is_eq(test_tap_ev_identifier_wait(TEST_WAIT, &event), "test_event_read",            "Got another read event");
     is(tap_ev_arg(event, "this"), connectee,                                            "Read event was on the connectee");
-    is(tap_ev_arg(event, "length"), SXE_BUF_SIZE - LITERAL_LENGTH("this test gets one word at a time"), "Length read is '%u'",
-                  SXE_BUF_SIZE - LITERAL_LENGTH("this test gets one word at a time"));
+    is(tap_ev_arg(event, "length"), SXE_BUF_SIZE - SXE_LITERAL_LENGTH("this test gets one word at a time"), "Length read is '%u'",
+                  (unsigned)(SXE_BUF_SIZE - SXE_LITERAL_LENGTH("this test gets one word at a time")));
     sxe_buf_consume(connectee, SXE_BUF_USED(connectee));    /* Cover the case of consuming the whole buffer */
     sxe_buf_resume(connectee, SXE_BUF_RESUME_WHEN_MORE_DATA);
 

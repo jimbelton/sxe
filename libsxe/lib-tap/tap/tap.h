@@ -32,16 +32,9 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#ifndef _WIN32
-#include <stdint.h>
-#else
-#define __func__ __FUNCTION__
-typedef long intptr_t;
+#if !defined(_WIN32) || defined(MAKE_MINGW)
+#   include <stdint.h>    /* For uintptr_t, which Windows puts in <stddef.h>; Windows doesn't have <stdint.h> */
 #endif
-
-#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L) && !defined(__GNUC__) && !defined(_WIN32)
-# error "Needs gcc or C99 compiler for variadic macros."
-#else
 
 /**
  * plan_tests - announce the number of tests you plan to run
@@ -54,23 +47,41 @@ typedef long intptr_t;
  * and use skip() if you don't actually run some tests.
  *
  * Example:
- *  plan_tests(13);
+ *	plan_tests(13);
  */
 void plan_tests(unsigned int tests);
 
-#define is(g, e, ...)                  _gen_result(1, (const void *)(intptr_t)(g), (const void *)(intptr_t)(e), (void *)0, \
-                                                   (void *)0, __func__, __FILE__, __LINE__, __VA_ARGS__)
+#ifdef _WIN32
+#define __func__ __FUNCTION__
+#endif
 
-#define is_eq(g, e, ...)               _gen_result(2, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
+#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L) && !defined(__GNUC__) && !defined(_WIN32)
+# error "Needs gcc or C99 compiler for variadic macros."
+#else
+
+#define TAP_CMP_CAST    int (*)(const void *, const void *)
+#define TAP_TO_STR_CAST const char *(*)(const void *)
+
+#define is(g, e, ...)                  _gen_result(1, (const void *)(uintptr_t)(g), (const void *)(uintptr_t)(e), (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define is_cmp(g, e, cmp, to_str, ...) _gen_result(3, (const void *)(g), (const void *)(e), (cmp), (to_str), \
+#define isnt(g, e, ...)                _gen_result(2, (const void *)(uintptr_t)(g), (const void *)(uintptr_t)(e), (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define is_strncmp(g, e, len, ...)     _gen_result(4, (const void *)(g), (const void *)(e), (void *)(long)(len), (void *)0, \
+#define is_eq(g, e, ...)               _gen_result(3, (const void *)(g), (const void *)(e), (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define is_strstr(g, e, ...)           _gen_result(5, (const void *)(g), (const void *)(e), (void *)0, (void *)0, \
+#define isnt_eq(g, e, ...)             _gen_result(4, (const void *)(g), (const void *)(e), (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
+                                                   __func__, __FILE__, __LINE__, __VA_ARGS__)
+
+#define is_cmp(g, e, cmp, to_str, ...) _gen_result(5, (const void *)(g), (const void *)(e), (cmp), (to_str), \
+                                                   __func__, __FILE__, __LINE__, __VA_ARGS__)
+
+/* Careful - 'cmp' is being abused as a size_t in _gen_result(6, ...) */
+#define is_strncmp(g, e, len, ...)     _gen_result(6, (const void *)(g), (const void *)(e), (TAP_CMP_CAST)(uintptr_t)(len), (TAP_TO_STR_CAST)0, \
+                                                   __func__, __FILE__, __LINE__, __VA_ARGS__)
+
+#define is_strstr(g, e, ...)           _gen_result(7, (const void *)(g), (const void *)(e), (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
                                                    __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 /**
@@ -82,12 +93,12 @@ void plan_tests(unsigned int tests);
  * file name, line number, and the expression itself.
  *
  * Example:
- *  ok1(init_subsystem() == 1);
+ *	ok1(init_subsystem() == 1);
  */
-# define ok1(e) ((e) ?                                                                          \
-                 _gen_result(0, (const void *)1, (const void *)0, (void *)0, (void *)0,         \
-                             __func__, __FILE__, __LINE__, "%s", #e) :                          \
-                 _gen_result(0, (const void *)0, (const void *)0, (void *)0, (void *)0,         \
+# define ok1(e) ((e) ?                                                                                 \
+                 _gen_result(0, (const void *)1, (const void *)0, (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
+                             __func__, __FILE__, __LINE__, "%s", #e) :                                 \
+                 _gen_result(0, (const void *)0, (const void *)0, (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
                              __func__, __FILE__, __LINE__, "%s", #e))
 
 /**
@@ -100,13 +111,13 @@ void plan_tests(unsigned int tests);
  * than simply the expression itself.
  *
  * Example:
- *  ok1(init_subsystem() == 1);
- *  ok(init_subsystem() == 0, "Second initialization should fail");
+ *	ok1(init_subsystem() == 1);
+ *	ok(init_subsystem() == 0, "Second initialization should fail");
  */
-# define ok(e, ...) ((e) ?                                                                      \
-             _gen_result(0, (const void *)1, (const void *)0, (void *)0, (void *)0,     \
-                                 __func__, __FILE__, __LINE__, __VA_ARGS__) :                   \
-             _gen_result(0, (const void *)0, (const void *)0, (void *)0, (void *)0,     \
+# define ok(e, ...) ((e) ?                                                                                 \
+		     _gen_result(0, (const void *)1, (const void *)0, (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
+                                 __func__, __FILE__, __LINE__, __VA_ARGS__) :                              \
+		     _gen_result(0, (const void *)0, (const void *)0, (TAP_CMP_CAST)0, (TAP_TO_STR_CAST)0, \
                                  __func__, __FILE__, __LINE__, __VA_ARGS__))
 
 /**
@@ -117,11 +128,11 @@ void plan_tests(unsigned int tests);
  * branch and fail() in another.
  *
  * Example:
- *  x = do_something();
- *  if (!checkable(x) || check_value(x))
- *      pass("do_something() returned a valid value");
- *  else
- *      fail("do_something() returned an invalid value");
+ *	x = do_something();
+ *	if (!checkable(x) || check_value(x))
+ *		pass("do_something() returned a valid value");
+ *	else
+ *		fail("do_something() returned an invalid value");
  */
 # define pass(...) ok(1, __VA_ARGS__)
 
@@ -135,16 +146,16 @@ void plan_tests(unsigned int tests);
 # define fail(...) ok(0, __VA_ARGS__)
 
 /* I don't find these to be useful. */
-# define skip_if(cond, n, ...)              \
-    if (cond) skip((n), __VA_ARGS__);       \
-    else
+# define skip_if(cond, n, ...)				\
+	if (cond) skip((n), __VA_ARGS__);		\
+	else
 
-# define skip_start(test, n, ...)           \
-    do {                        \
-        if((test)) {                \
-            skip(n,  __VA_ARGS__);      \
-            continue;           \
-        }
+# define skip_start(test, n, ...)			\
+	do {						\
+		if((test)) {				\
+			skip(n,  __VA_ARGS__);		\
+			continue;			\
+		}
 
 # define skip_end } while(0)
 
@@ -157,8 +168,7 @@ void plan_tests(unsigned int tests);
 #endif
 
 unsigned int _gen_result(int, const void *, const void *,
-            int (*cmp)(const void *, const void *),
-            const char * (*to_str)(const void *), const char *,
+            TAP_CMP_CAST, TAP_TO_STR_CAST, const char *,
             const char *, unsigned int, const char *, ...) PRINTF_ATTRIBUTE(9, 10);
 
 /**
@@ -169,7 +179,7 @@ unsigned int _gen_result(int, const void *, const void *,
  * result by the TAP test harness.  It will append '\n' for you.
  *
  * Example:
- *  diag("Now running complex tests");
+ *	diag("Now running complex tests");
  */
 int diag(const char *fmt, ...) PRINTF_ATTRIBUTE(1, 2);
 
@@ -188,11 +198,11 @@ int diag(const char *fmt, ...) PRINTF_ATTRIBUTE(1, 2);
  *   Internet connection and one isn't available.
  *
  * Example:
- *  #ifdef HAVE_SOME_FEATURE
- *  ok1(test_some_feature());
- *  #else
- *  skip(1, "Don't have SOME_FEATURE");
- *  #endif
+ *	#ifdef HAVE_SOME_FEATURE
+ *	ok1(test_some_feature());
+ *	#else
+ *	skip(1, "Don't have SOME_FEATURE");
+ *	#endif
  */
 void skip(unsigned int n, const char *fmt, ...) PRINTF_ATTRIBUTE(2, 3);
 
@@ -215,9 +225,9 @@ void skip(unsigned int n, const char *fmt, ...) PRINTF_ATTRIBUTE(2, 3);
  *   put tests in your testing script (always a good idea).
  *
  * Example:
- *  todo_start("dwim() not returning true yet");
- *  ok(dwim(), "Did what the user wanted");
- *  todo_end();
+ *	todo_start("dwim() not returning true yet");
+ *	ok(dwim(), "Did what the user wanted");
+ *	todo_end();
  */
 void todo_start(const char *fmt, ...) PRINTF_ATTRIBUTE(1, 2);
 
@@ -236,7 +246,7 @@ void todo_end(void);
  * succeed succeeded).
  *
  * Example:
- *  exit(exit_status());
+ *	exit(exit_status());
  */
 int exit_status(void);
 
@@ -252,10 +262,10 @@ int exit_status(void);
  * Remember, if you fail to plan, you plan to fail.
  *
  * Example:
- *  plan_no_plan();
- *  while (random() % 2)
- *      ok1(some_test());
- *  exit(exit_status());
+ *	plan_no_plan();
+ *	while (random() % 2)
+ *		ok1(some_test());
+ *	exit(exit_status());
  */
 void plan_no_plan(void);
 
@@ -269,11 +279,11 @@ void plan_no_plan(void);
  * in the running kernel) use plan_skip_all() instead of plan_tests().
  *
  * Example:
- *  if (!have_some_feature) {
- *      plan_skip_all("Need some_feature support");
- *      exit(exit_status());
- *  }
- *  plan_tests(13);
+ *	if (!have_some_feature) {
+ *		plan_skip_all("Need some_feature support");
+ *		exit(exit_status());
+ *	}
+ *	plan_tests(13);
  */
 void plan_skip_all(const char *reason);
 
@@ -282,14 +292,15 @@ void plan_skip_all(const char *reason);
 #define TAP_FLAG_ON_FAILURE_EXIT 0x00000001
 #define TAP_FLAG_DEBUG           0x00000002
 
-typedef struct tap_ev       * tap_ev;
-typedef struct tap_ev_queue * tap_ev_queue;
+typedef struct TAP_EV       * tap_ev;
+typedef struct TAP_EV_QUEUE * tap_ev_queue;
 
 extern const char TAP_EV_NO_EVENT[];
 
 void         tap_init(                FILE * out);
 void         tap_plan(                unsigned tests, unsigned flags, FILE * output);
-void         tap_test_case_name(      const char * name);
+const char * tap_get_test_case_name(  void);
+void         tap_set_test_case_name(  const char * name);
 void *       tap_dup(                 const void * mem, size_t size);
 
 unsigned     tap_ev_arg_count(        tap_ev ev);
@@ -300,6 +311,7 @@ const void * tap_ev_identifier(       tap_ev ev);
 void         tap_ev_push(             const char * identifier, unsigned argc, ...);
 unsigned     tap_ev_length(           void);
 tap_ev       tap_ev_shift(            void);
+tap_ev       tap_ev_shift_next(       const char * identifier);
 void         tap_ev_flush(            void);
 
 unsigned     tap_ev_queue_count(      tap_ev_queue queue, const char * identifier);
@@ -309,6 +321,9 @@ unsigned     tap_ev_queue_length(     tap_ev_queue queue);
 tap_ev_queue tap_ev_queue_new(        void);
 void         tap_ev_queue_push(       tap_ev_queue queue, const char * identifier, unsigned argc, ...);
 tap_ev       tap_ev_queue_shift(      tap_ev_queue queue);
+tap_ev       tap_ev_queue_shift_next( tap_ev_queue queue, const char * identifier);
+
+#define tap_test_case_name(name) tap_set_test_case_name(name)
 
 #endif /* C99 or gcc */
 #endif /* __TAP_H__  */

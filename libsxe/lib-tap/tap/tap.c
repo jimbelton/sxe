@@ -46,6 +46,15 @@
 #include <signal.h>
 #endif
 
+#if defined(__APPLE__) || defined(__FreeBSD__)
+#define sighandler_t sig_t
+#endif
+#if defined(__APPLE__)
+#define _NSIG        __DARWIN_NSIG
+#elif defined(__FreeBSD__)
+#define _NSIG        NSIG
+#endif
+
 #include "tap.h"
 
 static int          no_plan        = 0;
@@ -55,7 +64,7 @@ static unsigned int test_count     = 0; /* Number of tests that have been run */
 static unsigned int e_tests        = 0; /* Expected number of tests to run */
 static unsigned int failures       = 0; /* Number of tests that failed */
 static char *       todo_msg       = NULL;
-static const char * todo_msg_fixed = "libtap malloc issue";
+static const char * malloc_failed  = "libtap: malloc failed";
 static int          todo           = 0;
 static int          test_died      = 0;
 static FILE *       tap_out        = NULL;
@@ -117,13 +126,14 @@ my_vasprintf(char **strp, const char *fmt, va_list ap)
     char buffer[1024];
     int  ret;
 
-    ret = vsnprintf(buffer, sizeof(buffer), fmt, ap);
-
-    if ((*strp = malloc(ret + 1)) == NULL) {
+    if ((ret = vsnprintf(buffer, sizeof(buffer), fmt, ap)) < 0 || (*strp = malloc(ret + 1)) == NULL)
         return -1;
-    }
 
-    strncpy(*strp, buffer, ret + 1);
+    if (ret >= (int)sizeof(buffer))
+        ret = snprintf(*strp, ret + 1, fmt, ap);
+    else
+        strncpy(*strp, buffer, ret + 1);
+
     return ret;
 }
 
@@ -144,11 +154,11 @@ _gen_result(int type, const void * got, const void * expected,
             const char * (*to_str)(const void * object), const char *func,
             const char *file, unsigned int line, const char *test_name, ...)
 {
-    va_list ap;
-    char  * local_test_name = NULL;
-    char  * c;
-    int     name_is_digits;
-    int     ok;
+    va_list     ap;
+    char       *local_test_name = NULL;
+    const char *c;
+    int         name_is_digits;
+    int         ok;
 
     switch (type) {
     case 1:
@@ -156,19 +166,27 @@ _gen_result(int type, const void * got, const void * expected,
         break;
 
     case 2:
-        ok = (int)(got != NULL && strcmp(got, expected) == 0);
+        ok = (int)(got != expected);
         break;
 
     case 3:
-        ok = (int)(got != NULL && (*cmp)(got, expected) == 0);
+        ok = (int)(strcmp(got, expected) == 0);
         break;
 
     case 4:
-        ok = (int)(got != NULL && strncmp(got, expected, (size_t)cmp) == 0);
+        ok = (int)(strcmp(got, expected) != 0);
         break;
 
     case 5:
-        ok = (int)(got != NULL && strstr(got, expected) != NULL);
+        ok = (int)((*cmp)(got, expected) == 0);
+        break;
+
+    case 6:
+        ok = (int)(strncmp(got, expected, (size_t)cmp) == 0);
+        break;
+
+    case 7:
+        ok = (int)(strstr(got, expected) != NULL);
         break;
 
     default:
@@ -180,18 +198,23 @@ _gen_result(int type, const void * got, const void * expected,
 
     test_count++;
 
-    /* Start by taking the test name and performing any printf()
-       expansions on it */
+    /* Start by taking the test name and performing any printf() expansions on it
+     */
     if (test_name != NULL) {
-        va_start(ap, test_name);
-        if (my_vasprintf(&local_test_name, test_name, ap) < 0)
-            local_test_name = NULL;
-        va_end(ap);
+        /* Only use my_vasprintf if there is a format character, to avoid calling malloc if not needed
+         */
+        if (strchr(test_name, '%')) {
+            va_start(ap, test_name);
 
-        /* Make sure the test name contains more than digits
-           and spaces.  Emit an error message and exit if it
-           does */
-        if(local_test_name) {
+            if (my_vasprintf(&local_test_name, test_name, ap) < 0)
+                test_name = malloc_failed;
+
+            va_end(ap);
+        }
+
+        /* Make sure the test name contains more than digits and spaces.  Emit an error message and exit if it does
+         */
+        if (local_test_name) {
             name_is_digits = 1;
             for(c = local_test_name; *c != '\0'; c++) {
                 if(!isdigit(*c) && !isspace(*c)) {
@@ -222,24 +245,23 @@ _gen_result(int type, const void * got, const void * expected,
         fputs(test_case_name, tap_out);
     }
 
-    if(test_name != NULL) {
+    if (test_name != NULL) {
         if (test_case_name != NULL) {
             fprintf(tap_out, ": ");
         }
 
-        /* Print the test name, escaping any '#' characters it
-           might contain */
-        if(local_test_name != NULL) {
-            flockfile(tap_out);
-            for(c = local_test_name; *c != '\0'; c++) {
-                if(*c == '#')
-                    fputc('\\', tap_out);
-                fputc((int)*c, tap_out);
-            }
-            funlockfile(tap_out);
-        } else {    /* my_vasprintf() failed, use a fixed message */
-            fprintf(tap_out, "%s", todo_msg_fixed);
+        /* Print the test name, escaping any '#' characters it might contain
+         */
+        flockfile(tap_out);
+
+        for (c = local_test_name ?: test_name; *c != '\0'; c++) {
+            if (*c == '#')
+                fputc('\\', tap_out);
+
+            fputc((int)*c, tap_out);
         }
+
+        funlockfile(tap_out);
     }
 
     /* If we're in a todo_start() block then flag the test as being
@@ -250,7 +272,8 @@ _gen_result(int type, const void * got, const void * expected,
        This is not counted as a failure, so decrement the counter if
        the test failed. */
     if (todo) {
-        fprintf(tap_out, " # TODO %s", todo_msg ? todo_msg : todo_msg_fixed);
+        fprintf(tap_out, " # TODO %s", todo_msg ? todo_msg : malloc_failed);
+
         if(!ok)
             failures--;
     }
@@ -268,21 +291,31 @@ _gen_result(int type, const void * got, const void * expected,
             break;
 
         case 2:
+            _diag("         got: %ld", (long)got);
+            _diag("    expected: anything else");
+            break;
+
+        case 3:
             _diag("         got: \"%s\"", (const char *)got);
             _diag("    expected: \"%s\"", (const char *)expected);
             break;
 
-        case 3:
+        case 4:
+            _diag("         got: \"%s\"", (const char *)got);
+            _diag("    expected: anything else");
+            break;
+
+        case 5:
             _diag("         got: %s", (*to_str)(got));
             _diag("    expected: %s", (*to_str)(expected));
             break;
 
-        case 4:
+        case 6:
             _diag("         got: %.*s", (long)cmp, (const char *)got);
             _diag("    expected: %.*s", (long)cmp, (const char *)expected);
             break;
 
-        case 5:
+        case 7:
             _diag("                    got: \"%s\"", (const char *)got);
             _diag("    expected to contain: \"%s\"", (const char *)expected);
             break;
@@ -497,7 +530,7 @@ tap_plan(unsigned tests, unsigned flags, FILE * output)
 void
 plan_tests(unsigned int tests)
 {
-    tap_plan(tests, 0, NULL);
+	tap_plan(tests, 0, NULL);
 }
 
 int
@@ -609,8 +642,14 @@ exit_status(void)
     return r;
 }
 
+const char *
+tap_get_test_case_name(void)
+{
+    return test_case_name;
+}
+
 void
-tap_test_case_name(const char * name)
+tap_set_test_case_name(const char * name)
 {
     test_case_name = name;
 }

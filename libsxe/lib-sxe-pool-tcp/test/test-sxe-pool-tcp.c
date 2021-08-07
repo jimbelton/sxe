@@ -47,47 +47,46 @@ static inline tap_ev test_next_server_event(void) { return test_tap_ev_queue_shi
 static void
 test_event_timeout(SXE_POOL_TCP * pool, void * info)
 {
-    SXEE63("%s(pool=%s, info=%p)", __func__, SXE_POOL_TCP_GET_NAME(pool), info);
-    SXE_UNUSED_ARGUMENT(pool);
-    SXE_UNUSED_ARGUMENT(info);
-    SXEA10(0, "test_event_timeout should never be called in this test");
-    SXER60("return");
+    SXEE6("%s(pool=%s, info=%p)", __func__, SXE_POOL_TCP_GET_NAME(pool), info);
+    SXE_UNUSED_PARAMETER(pool);
+    SXE_UNUSED_PARAMETER(info);
+    SXEA1(0, "test_event_timeout should never be called in this test");
+    SXER6("return");
 }
 
 static void
 test_event_client_write(SXE_POOL_TCP * pool, void * info)
 {
-    SXEE82("test_event_client_write(pool=%s, info=%p)", SXE_POOL_TCP_GET_NAME(pool), info);
+    SXEE6("test_event_client_write(pool=%s, info=%p)", SXE_POOL_TCP_GET_NAME(pool), info);
     tap_ev_push(__func__, 1, "pool", pool, "info", info);
-    SXER80("return");
+    SXER6("return");
 }
 
 static void
 test_event_client_connect(SXE * this)
 {
-    SXEE81I("%s()", __func__);
+    SXEE6I("%s()", __func__);
     tap_ev_push(__func__, 1, "this", this);
-    SXER80I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_client_read(SXE * this, int length)
 {
-    SXEE81I("test_event_client_read(length=%d)", length);
-    SXEA10I(length != 0, "test_event_client_read called with length == 0");
-    tap_ev_push(__func__, 4, "this", this, "user_data", SXE_USER_DATA(this), "length", length, "buf",
-                tap_dup(SXE_BUF(this), SXE_BUF_USED(this)));
+    SXEE6I("test_event_client_read(length=%d)", length);
+    SXEA1I(length != 0, "test_event_client_read called with length == 0");
+    tap_ev_push(__func__, 4, "this", this, "user_data", SXE_USER_DATA(this), "length", length, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)));
     SXE_BUF_CLEAR(this);
-    SXER80I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_client_close(SXE * this)
 {
-    SXEE80I("test_event_client_close()");
-    SXE_UNUSED_ARGUMENT(this);
+    SXEE6I("test_event_client_close()");
+    SXE_UNUSED_PARAMETER(this);
     tap_ev_push(__func__, 1, "this", this);
-    SXER80I("return");
+    SXER6I("return");
 }
 
 /* TODO: Send data on connection indication and make sure we handle it gracefully. */
@@ -95,26 +94,26 @@ test_event_client_close(SXE * this)
 static void
 test_event_server_connect(SXE * this)
 {
-    SXEE81I("test_event_server_connect(this=%p)", this);
+    SXEE6I("test_event_server_connect(this=%p)", this);
     tap_ev_queue_push(server_queue, __func__, 2, "this", this);
-    SXER80I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_server_read(SXE * this, int length)
 {
-    SXEE81I("test_event_server_read(length=%d)", length);
+    SXEE6I("test_event_server_read(length=%d)", length);
     tap_ev_queue_push(server_queue, __func__, 3, "this", this, "length", length, "buf", tap_dup(SXE_BUF(this), SXE_BUF_USED(this)));
     SXE_BUF_CLEAR(this);
-    SXER80I("return");
+    SXER6I("return");
 }
 
 static void
 test_event_server_close(SXE * this)
 {
-    SXEE80I("test_event_server_close()");
+    SXEE6I("test_event_server_close()");
     tap_ev_queue_push(server_queue, __func__, 1, "this", this);
-    SXER80I("return");
+    SXER6I("return");
 }
 
 static void
@@ -128,8 +127,8 @@ test_case_cleanup(void)
     tap_ev ev;
 
     test_process_all_libev_events();               /* Don't block, but queue any events that happen to be ready */
-    SXEA11((ev = tap_ev_shift())                   == NULL, "No unprocessed events in the client queue (%s)", tap_ev_identifier(ev));
-    SXEA11((ev = tap_ev_queue_shift(server_queue)) == NULL, "No unprocessed events in the server queue (%s)", tap_ev_identifier(ev));
+    SXEA1((ev = tap_ev_shift())                   == NULL, "No unprocessed events in the client queue (%s)", (const char *) tap_ev_identifier(ev));
+    SXEA1((ev = tap_ev_queue_shift(server_queue)) == NULL, "No unprocessed events in the server queue (%s)", (const char *) tap_ev_identifier(ev));
     sxe_fini();
 }
 
@@ -139,12 +138,12 @@ test_expect_server_read(const char * expected_buf, unsigned expected_length)
     tap_ev ev;
     SXE *  this;
 
-    SXEE63("%s(expected_buf=%p, expected_length=%d)", __func__, expected_buf, expected_length);
+    SXEE6("%s(expected_buf=%p, expected_length=%d)", __func__, expected_buf, expected_length);
 
-    ok((ev = test_next_server_event()) != NULL,             "Event occurred");
-    is_eq(tap_ev_identifier(ev), "test_event_server_read",  "Got a server read event");
-    is((uintptr_t)tap_ev_arg(ev, "length"), expected_length, "Server received %u characters", expected_length);
-    this = (SXE *)(long)tap_ev_arg(ev, "this");
+    ok((ev = test_next_server_event()) != NULL,                      "Event occurred");
+    is_eq(tap_ev_identifier(ev), "test_event_server_read",           "Got a server read event");
+    is(SXE_CAST(int, tap_ev_arg(ev, "length")), expected_length,     "Server received %u characters", expected_length);
+    this = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
 
     /* If the expected buffer contains a string that is shorter than the expected length, just make sure the received buffer
      * starts with the string.
@@ -157,7 +156,7 @@ test_expect_server_read(const char * expected_buf, unsigned expected_length)
         is_strncmp(tap_ev_arg(ev, "buf"), expected_buf, strlen(expected_buf), "Server received '%s'", expected_buf);
     }
 
-    SXER61("return // this=%p", this);
+    SXER6("return // this=%p", this);
     return this;
 }
 
@@ -212,15 +211,15 @@ test_case_happy_path(void)
     this = test_expect_server_read("Hello", 5);
     sxe_write(this, "There", 5);
     is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_read", "1st client read");
-    is((unsigned)(uintptr_t)tap_ev_arg(ev, "length"), 5,    "Five bytes of data received on the tcp pool object");
+    is(SXE_CAST(int, tap_ev_arg(ev, "length")), 5,          "Five bytes of data received on the tcp pool object");
     is_strncmp(tap_ev_arg(ev, "buf"), "There", 5,           "Received 'There' on the tcp pool object");
 
     /* Two sends at a time */
 
     test_check_ready_to_write(pool, 1, __func__, __LINE__);
-    is(sxe_pool_tcp_write(pool, "Hello2", 6, buf), SXE_RETURN_OK, "Successfully wrote 'Hello2' to the tcp pool object");
+    is(sxe_pool_tcp_write(pool, "Hello2", 6, buf), SXE_RETURN_OK,    "Successfully wrote 'Hello2' to the tcp pool object");
     test_check_ready_to_write(pool, 1, __func__, __LINE__);
-    is(sxe_pool_tcp_write(pool, "Hello3", 6, buf), SXE_RETURN_OK, "Successfully wrote 'Hello3' to the tcp pool object");
+    is(sxe_pool_tcp_write(pool, "Hello3", 6, buf), SXE_RETURN_OK,    "Successfully wrote 'Hello3' to the tcp pool object");
 
     /* Two responses at a time */
 
@@ -231,7 +230,7 @@ test_case_happy_path(void)
 
     for (i = 0; i < 2; i++) {
         is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_read", "2nd or 3rd client read");
-        is((unsigned)(uintptr_t)tap_ev_arg(ev, "length"), 3,    "3 bytes of data received on the tcp pool object");
+        is(SXE_CAST(int, tap_ev_arg(ev, "length")), 3,          "3 bytes of data received on the tcp pool object");
         is_strncmp(tap_ev_arg(ev, "buf"), "xxx", 3,             "Received 'xxx' on the tcp pool object");
     }
 
@@ -315,21 +314,21 @@ test_case_pool_too_big_to_service(void)
 
     /* Start the server */
 
-    SXEA11((listener = socket(AF_INET, SOCK_STREAM, 0)) != SXE_SOCKET_INVALID, "Failed to allocate server listener socket: %s",
+    SXEA1((listener = socket(AF_INET, SOCK_STREAM, 0)) != SXE_SOCKET_INVALID, "Failed to allocate server listener socket: %s",
            sxe_socket_get_last_error_as_str());
 
     address.sin_family      = AF_INET;
     address.sin_port        = 0;
     address.sin_addr.s_addr = htonl(INADDR_ANY);
-    SXEA11(bind(listener, (struct sockaddr *)&address, sizeof(address)) >= 0,  "Failed to bind server listener socket: %s",
+    SXEA1(bind(listener, (struct sockaddr *)&address, sizeof(address)) >= 0,  "Failed to bind server listener socket: %s",
            sxe_socket_get_last_error_as_str());
 
     addr_len = sizeof(address);
-    SXEA11(getsockname(listener, (struct sockaddr *)&address, &addr_len) >= 0, "Failed to get server listener address: %s",
+    SXEA1(getsockname(listener, (struct sockaddr *)&address, &addr_len) >= 0, "Failed to get server listener address: %s",
            sxe_socket_get_last_error_as_str());
     test_port = ntohs(address.sin_port);
 
-    SXEA11(listen(listener, SOMAXCONN) >= 0,                                   "Failed to listen on server listener socket: %s",
+    SXEA1(listen(listener, SOMAXCONN) >= 0,                                   "Failed to listen on server listener socket: %s",
            sxe_socket_get_last_error_as_str());
 
     sxe_pool_tcp_register(5);
@@ -385,12 +384,12 @@ test_case_max_capacity(void)
     test_check_ready_to_write(pool, 1, __func__, __LINE__);
     is(sxe_pool_tcp_write(pool, "max one", 7, buf),         SXE_RETURN_OK,               "Wrote 'max one'");
     is_eq(tap_ev_identifier(ev = test_next_server_event()), "test_event_server_read",    "1st request read by server");
-    sxe_first = (SXE *)(long)tap_ev_arg(ev, "this");
+    sxe_first = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
 
     test_check_ready_to_write(pool, 1, __func__, __LINE__);
     is(sxe_pool_tcp_write(pool, "max two", 7, buf),         SXE_RETURN_OK,               "Wrote 'max two'");
     is_eq(tap_ev_identifier(ev = test_next_server_event()), "test_event_server_read",    "2nd request read by server");
-    sxe_second = (SXE *)(long)tap_ev_arg(ev, "this");
+    sxe_second = SXE_CAST_NOCONST(SXE *, tap_ev_arg(ev, "this"));
 
     /* Make sure that the connections are different */
 
