@@ -22,11 +22,23 @@
 #ifndef __SXE_DIRWATCH_H__
 #define __SXE_DIRWATCH_H__
 
+#include "ev.h"
+#include "sxe-list.h"
+
 /* TODO: implement sxe_dirwatch on windows */
 
 #define SXE_DIRWATCH_CREATED      1        /* file was created (or moved into directory via rename) */
 #define SXE_DIRWATCH_MODIFIED     2        /* file was modified */
 #define SXE_DIRWATCH_DELETED      4        /* file was deleted (or moved out of diretory via rename) */
+
+/* A watched directory object
+ */
+typedef struct SXE_DIRWATCH {
+    int           fd;
+    void       (* notify)(EV_P_ const char * file, int revents, void * user_data);
+    void        * user_data;
+    SXE_LIST_NODE node;
+} SXE_DIRWATCH;
 
 #include "sxe-dirwatch-proto.h"
 
