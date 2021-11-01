@@ -7,6 +7,7 @@
 #include "mockfail.h"
 #include "sxe-jitson.h"
 #include "sxe-log.h"
+#include "sxe-unicode.h"
 
 #define JITSON_STACK_INIT_SIZE 1       // The initial numer of tokens in a per thread stack
 #define JITSON_STACK_MAX_INCR  4096    // The maximum the stack will grow by
@@ -19,6 +20,9 @@ static struct sxe_jitson_stack *
 sxe_jitson_stack_new(unsigned init_size)
 {
     struct sxe_jitson_stack *stack;
+
+    SXEA1(sizeof(struct sxe_jitson) == SXE_JITSON_TOKEN_SIZE, "Expected token size %u, got %zu",
+          SXE_JITSON_TOKEN_SIZE, sizeof(struct sxe_jitson));
 
     if (!(stack = MOCKFAIL(MOCK_FAIL_STACK_NEW_OBJECT, NULL, calloc(1, sizeof(*stack)))))
         return NULL;
@@ -108,24 +112,121 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, char *json)
         return NULL;
     }
 
-    unsigned index = sxe_jitson_stack_next(stack);
+    unsigned index   = sxe_jitson_stack_next(stack);
 
     if (index == SXE_JITSON_STACK_ERROR)
         return NULL;
 
-    char *end = strchr(++json, '"');
+    char               utf8[4];
+    unsigned           i;
+    unsigned           unicode = 0;
+    struct sxe_jitson *jitson  = &stack->jitsons[index];
+    jitson->type               = SXE_JITSON_TYPE_STRING;
+    jitson->size               = 0;
 
-    if (!end) {   // No terminating "
-        errno = EINVAL;
-        return NULL;
+    while (*++json != '"') {
+        if (*json == '\0') {   // No terminating "
+            errno = EINVAL;
+            return NULL;
+        }
+
+        i = 1;
+
+        if (*json == '\\')
+            switch (*++json) {
+            case '"':
+            case '\\':
+            case '/':
+                jitson->string[jitson->size++] = *json;
+                break;
+
+            case 'b':
+                jitson->string[jitson->size++] = '\b';
+                break;
+
+            case 'f':
+                jitson->string[jitson->size++] = '\f';
+                break;
+
+            case 'n':
+                jitson->string[jitson->size++] = '\n';
+                break;
+
+            case 'r':
+                jitson->string[jitson->size++] = '\r';
+                break;
+
+            case 't':
+                jitson->string[jitson->size++] = '\t';
+                break;
+
+            case 'u':
+                for (i = 0; i < 4; i++)
+                    switch (*++json) {
+                    case '0':
+                    case '1':
+                    case '2':
+                    case '3':
+                    case '4':
+                    case '5':
+                    case '6':
+                    case '7':
+                    case '8':
+                    case '9':
+                        unicode = (unicode << 4) + *json - '0';
+                        break;
+
+                    case 'a':
+                    case 'b':
+                    case 'c':
+                    case 'd':
+                    case 'e':
+                    case 'f':
+                        unicode = (unicode << 4) + *json - 'a' + 10;
+                        break;
+
+                    case 'A':
+                    case 'B':
+                    case 'C':
+                    case 'D':
+                    case 'E':
+                    case 'F':
+                        unicode = (unicode << 4) + *json - 'A' + 10;
+                        break;
+
+                    default:
+                        errno = EILSEQ;
+                        return NULL;
+                    }
+
+                i = sxe_unicode_to_utf8(unicode, utf8);
+                jitson->string[jitson->size++] = utf8[0];
+                break;
+
+            default:
+                errno = EILSEQ;
+                return NULL;
+            }
+        else
+            jitson->string[jitson->size++] = *json;
+
+        unsigned edge = jitson->size % SXE_JITSON_TOKEN_SIZE;
+
+        if (edge >= SXE_JITSON_TOKEN_SIZE / 2 && edge < SXE_JITSON_TOKEN_SIZE / 2 + i) {
+            if (sxe_jitson_stack_next(stack) == SXE_JITSON_STACK_ERROR)
+                return NULL;
+
+            jitson = &stack->jitsons[index];    // In case the jitsons were moved by realloc
+        }
+
+        if (i > 1) {    // For UTF8 strings > 1 character, copy the rest of the string
+            memcpy(&jitson->string[jitson->size], &utf8[1], i - 1);
+            jitson->size += i - 1;
+        }
     }
 
-    struct sxe_jitson *jitson = &stack->jitsons[index];
-    jitson->type              = SXE_JITSON_TYPE_STRING;
-    jitson->size              = end - json;
-    jitson->pointer           = json;
-    *end                      = '\0';
-    return end + 1;
+    jitson->string[jitson->size] = '\0';
+    return json + 1;
 }
 
 static uint64_t identifier_chars[4] = {0x03FF400000000000, 0x07FFFFFE87FFFFFE, 0x0000000000000000, 0x00000000000000};
@@ -394,7 +495,7 @@ sxe_jitson_get_string(struct sxe_jitson *jitson, unsigned *size)
     if (size)
         *size = jitson->size;
 
-    return jitson->pointer;
+    return jitson->string;
 }
 
 /**

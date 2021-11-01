@@ -38,7 +38,7 @@ main(void)
     struct sxe_jitson *jitson;
     unsigned           len;
 
-    plan_tests(64);
+    plan_tests(73);
 
     diag("Memory allocation failure tests");
     {
@@ -56,6 +56,10 @@ main(void)
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
         is(test_jitson_new("{\"one\":1}", 0), NULL, "Failed to realloc the thread stack's jitsons on a string");
+        MOCKFAIL_END_TESTS();
+
+        MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
+        is(test_jitson_new("\"01234567\"", 0), NULL, "Failed to realloc the thread stack's jitsons on a long string");
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
@@ -94,6 +98,17 @@ main(void)
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "' \"x\"\\n' is a string");
         is_eq(sxe_jitson_get_string(jitson, &len), "x",                    "Correct value");
         is(len,                                    1,                      "Correct length");
+        sxe_jitson_free(jitson);
+
+        ok(jitson = test_jitson_new("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"", 0),  "Parsed '\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' (error %s)",
+           strerror(errno));
+        is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' is a string");
+        is_eq(sxe_jitson_get_string(jitson, NULL), "\"\\/\b\f\n\r\t",      "Correct value");
+        sxe_jitson_free(jitson);
+
+        ok(jitson = test_jitson_new("\"\\u20aC\"", 0),                     "Parsed '\"\\u20aC\"' (error %s)", strerror(errno));
+        is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\\u20aC\"' is a string");
+        is_eq(sxe_jitson_get_string(jitson, NULL), "\xE2\x82\xAC",         "Correct UTF-8 value");
         sxe_jitson_free(jitson);
 
         ok(jitson = test_jitson_new(" {\t} ", 0),               "Parsed ' {\\t} ' (error %s)", strerror(errno));
@@ -153,18 +168,20 @@ main(void)
 
     diag("Cover edge cases of paraing");
     {
-        ok(!test_jitson_new("{0:1}", 0),    "Failed to parse non-string key '{0:1}' (error %s)",          strerror(errno));
-        ok(!test_jitson_new("\"", 0),       "Failed to parse unterminated string '\"' (error %s)",        strerror(errno));
-        ok(!test_jitson_new("", 0),         "Failed to parse empty string '' (error %s)",                 strerror(errno));
-        ok(!test_jitson_new("{\"k\"0}", 0), "Failed to parse object missing colon '{\"k\"0}' (error %s)", strerror(errno));
-        ok(!test_jitson_new("{\"k\":}", 0), "Failed to parse object missing value '{\"k\":}' (error %s)", strerror(errno));
-        ok(!test_jitson_new("{\"k\":0", 0), "Failed to parse object missing close '{\"k\":0' (error %s)", strerror(errno));
-        ok(!test_jitson_new("[0", 0),       "Failed to parse array missing close '[0' (error %s)",        strerror(errno));
-        ok(!test_jitson_new("0.", 0),       "Failed to parse invalid fraction '0.' (error %s)",           strerror(errno));
-        ok(!test_jitson_new("1.0E", 0),     "Failed to parse invalid exponent '1.0E' (error %s)",         strerror(errno));
-        ok(!test_jitson_new("fathead", 0),  "Failed to parse invalid token 'fathead' (error %s)",         strerror(errno));
-        ok(!test_jitson_new("n", 0),        "Failed to parse invalid token 'n' (error %s)",               strerror(errno));
-        ok(!test_jitson_new("twit", 0),     "Failed to parse invalid token 'twit' (error %s)",            strerror(errno));
+        ok(!test_jitson_new("{0:1}", 0),    "Failed to parse non-string key '{0:1}' (error %s)",           strerror(errno));
+        ok(!test_jitson_new("\"", 0),       "Failed to parse unterminated string '\"' (error %s)",         strerror(errno));
+        ok(!test_jitson_new("\"\\", 0),     "Failed to parse unterminated escape '\"\\' (error %s)",       strerror(errno));
+        ok(!test_jitson_new("\"\\u", 0),    "Failed to parse truncated unicode escape '\"\\u' (error %s)", strerror(errno));
+        ok(!test_jitson_new("", 0),         "Failed to parse empty string '' (error %s)",                  strerror(errno));
+        ok(!test_jitson_new("{\"k\"0}", 0), "Failed to parse object missing colon '{\"k\"0}' (error %s)",  strerror(errno));
+        ok(!test_jitson_new("{\"k\":}", 0), "Failed to parse object missing value '{\"k\":}' (error %s)",  strerror(errno));
+        ok(!test_jitson_new("{\"k\":0", 0), "Failed to parse object missing close '{\"k\":0' (error %s)",  strerror(errno));
+        ok(!test_jitson_new("[0", 0),       "Failed to parse array missing close '[0' (error %s)",         strerror(errno));
+        ok(!test_jitson_new("0.", 0),       "Failed to parse invalid fraction '0.' (error %s)",            strerror(errno));
+        ok(!test_jitson_new("1.0E", 0),     "Failed to parse invalid exponent '1.0E' (error %s)",          strerror(errno));
+        ok(!test_jitson_new("fathead", 0),  "Failed to parse invalid token 'fathead' (error %s)",          strerror(errno));
+        ok(!test_jitson_new("n", 0),        "Failed to parse invalid token 'n' (error %s)",                strerror(errno));
+        ok(!test_jitson_new("twit", 0),     "Failed to parse invalid token 'twit' (error %s)",             strerror(errno));
     }
 
     diag("Cover type to string");

@@ -12,15 +12,19 @@
 #define SXE_JITSON_TYPE_NULL    6
 
 #define SXE_JITSON_STACK_ERROR  (~0U)
+#define SXE_JITSON_TOKEN_SIZE   16
 
+/* A jitson token. Copied strings of > 7 bytes length continue into the next token.
+ */
 struct sxe_jitson {
-    unsigned type;
-    unsigned size;
+    uint32_t type;
+    uint32_t size;
     union {
-        void    *pointer;
-        intptr_t integer;
-        double   number;
-        bool     boolean;
+        void   *pointer;
+        int64_t integer;
+        double  number;
+        bool    boolean;
+        char    string[8];
     };
 };
 
