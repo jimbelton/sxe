@@ -294,8 +294,10 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, char *json)
             json = sxe_jitson_skip_whitespace(json);
         } while (*json++ == ',');
 
-        if (*(json - 1) == '}')
+        if (*(json - 1) == '}') {
+            stack->jitsons[index].integer = stack->count - index;    // Store the offset past the object
             return json;
+        }
 
         goto INVALID;
 
@@ -304,8 +306,10 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, char *json)
         stack->jitsons[index].size = 0;
         json = sxe_jitson_skip_whitespace(json + 1);
 
-        if (*json == ']')    // If it's an empty array, return it
+        if (*json == ']') {   // If it's an empty array, return it
+            stack->jitsons[index].integer = 1;    // Offset past the empty array
             return json + 1;
+        }
 
         do {
             if (!(json = sxe_jitson_stack_parse_json(stack, json)))    // Value can be any JSON value
@@ -315,8 +319,10 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, char *json)
             json = sxe_jitson_skip_whitespace(json);
         } while (*json++ == ',');
 
-        if (*(json - 1) == ']')
+        if (*(json - 1) == ']') {
+            stack->jitsons[index].integer = stack->count - index;    // Store the offset past the object
             return json;
+        }
 
         goto INVALID;
 
@@ -508,4 +514,81 @@ sxe_jitson_get_bool(struct sxe_jitson *jitson)
 {
     SXEA6(jitson->type == SXE_JITSON_TYPE_BOOL, "Can't get the boolean value of a %s", sxe_jitson_type_to_str(jitson->type));
     return jitson->boolean;
+}
+
+unsigned
+sxe_jitson_get_size(struct sxe_jitson *jitson)
+{
+    switch (jitson->type) {
+    case SXE_JITSON_TYPE_STRING:
+    case SXE_JITSON_TYPE_OBJECT:
+    case SXE_JITSON_TYPE_ARRAY:
+        return jitson->size;
+    }
+
+    SXEL2("JSON type %s has no size", sxe_jitson_type_to_str(jitson->type));
+    return 0;
+}
+
+static struct sxe_jitson *
+sxe_jitson_skip(struct sxe_jitson *jitson)
+{
+    switch (jitson->type) {
+    case SXE_JITSON_TYPE_NUMBER:
+    case SXE_JITSON_TYPE_BOOL:
+    case SXE_JITSON_TYPE_NULL:
+        return jitson + 1;
+
+    case SXE_JITSON_TYPE_STRING:
+        return jitson + 1 + (jitson->size + SXE_JITSON_TOKEN_SIZE / 2) / SXE_JITSON_TOKEN_SIZE;
+
+    case SXE_JITSON_TYPE_OBJECT:
+    case SXE_JITSON_TYPE_ARRAY:
+        return jitson + jitson->integer;    // Add the offset of the next stack frame
+    }
+
+    SXEA1(false, "Unexpected JSON type %s", sxe_jitson_type_to_str(jitson->type));    /* COVERAGE EXCLUSION: Can't happen */
+    return NULL;                                                                      /* COVERAGE EXCLUSION: Can't happen */
+}
+
+struct sxe_jitson *
+sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsigned len)
+{
+    struct sxe_jitson *member;
+    unsigned           i;
+
+    SXEA1(jitson->type == SXE_JITSON_TYPE_OBJECT, "Can't get a member value from a %s", sxe_jitson_type_to_str(jitson->type));
+    member = jitson + 1;
+    len    = len ?: strlen(name);    // Determine the length of the member name if not provided
+
+    for (i = 0; i < jitson->size; i++) {
+        if (member->size == len && memcmp(member->string, name, len) == 0)
+            return sxe_jitson_skip(member);    // Skip the member name, returning the value
+
+        member = sxe_jitson_skip(member);    // Skip the member name
+        member = sxe_jitson_skip(member);    // Skip the member value
+    }
+
+    return NULL;
+}
+
+struct sxe_jitson *
+sxe_jitson_array_get_element(struct sxe_jitson *jitson, unsigned idx)
+{
+    struct sxe_jitson *element;
+    unsigned           i;
+
+    SXEA1(jitson->type == SXE_JITSON_TYPE_ARRAY, "Can't get an element value from a %s", sxe_jitson_type_to_str(jitson->type));
+
+    if (idx >= jitson->size) {
+        SXEL2("Array element %u is not less than size %u", idx, jitson->size);
+        return NULL;
+    }
+
+    element = jitson + 1;
+
+    for (i = 0; i < idx; i++)
+        element = sxe_jitson_skip(element);    // Skip the elemeent
+
+    return element;
 }

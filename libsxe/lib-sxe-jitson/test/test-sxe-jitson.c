@@ -38,7 +38,7 @@ main(void)
     struct sxe_jitson *jitson;
     unsigned           len;
 
-    plan_tests(73);
+    plan_tests(96);
 
     diag("Memory allocation failure tests");
     {
@@ -193,6 +193,45 @@ main(void)
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_ARRAY),   "ARRAY",   "ARRAY");
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_BOOL),    "BOOL",    "BOOL");
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_NULL),    "NULL",    "NULL");
+    }
+
+    diag("Test membership function");
+    {
+        struct sxe_jitson *member;
+
+        ok(jitson = test_jitson_new("{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}", 0),
+           "Parsed complex object (error %s)", strerror(errno));
+        ok(member = sxe_jitson_object_get_member(jitson, "a", 0),           "Object has a member 'a'");
+        is(sxe_jitson_get_number(member), 1,                                "Member is the number 1");
+        ok(!sxe_jitson_object_get_member(jitson, "biglongname", 1),         "Object has no member 'b'");
+        ok(member = sxe_jitson_object_get_member(jitson, "biglongname", 0), "Object has a member 'biglongname'");
+        is_eq(sxe_jitson_get_string(member, NULL), "B",                     "Member is the string 'B'");
+        ok(member = sxe_jitson_object_get_member(jitson, "c", 0),           "Object has a member 'c'");
+        is(sxe_jitson_get_size(member), 2,                                  "Member is an array of 2 elements");
+        ok(member = sxe_jitson_object_get_member(jitson, "d", 1),           "Object has a member 'd'");
+        is(sxe_jitson_get_size(member), 1,                                  "Member is an object with 1 member");
+        ok(member = sxe_jitson_object_get_member(jitson, "f", 0),           "Object has a member 'f'");
+        ok(sxe_jitson_get_bool(member),                                     "Member is 'true'");
+        is(sxe_jitson_get_size(member), 0,                                  "Can't take the size of a number, bool, or null");
+        sxe_jitson_free(jitson);
+    }
+
+    diag("Test array element function");
+    {
+        struct sxe_jitson *element;
+
+        ok(jitson = test_jitson_new("[0, \"anotherlongstring\", {\"member\": null}, true]", 0),
+           "Parsed complex array (error %s)", strerror(errno));
+        ok(element = sxe_jitson_array_get_element(jitson, 0),            "Array has a element 0");
+        is(sxe_jitson_get_number(element), 0,                            "Element is the number 0");
+        ok(element = sxe_jitson_array_get_element(jitson, 1),            "Array has a element 1");
+        is_eq(sxe_jitson_get_string(element, NULL), "anotherlongstring", "Element is the string 'anotherlongstring'");
+        ok(element = sxe_jitson_array_get_element(jitson, 2),            "Array has a element 2");
+        is(sxe_jitson_get_type(element), SXE_JITSON_TYPE_OBJECT,         "Elememt is an object");
+        ok(element = sxe_jitson_array_get_element(jitson, 3),            "Array has a element 3");
+        ok(sxe_jitson_get_bool(element),                                  "Element is 'true'");
+        ok(!sxe_jitson_array_get_element(jitson, 4),                     "Object has no element 4");;
+        sxe_jitson_free(jitson);
     }
 
     sxe_jitson_stack_free_thread();    // Currently, just for coverage
