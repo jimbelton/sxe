@@ -16,7 +16,7 @@
 static unsigned                          jitson_stack_init_size = JITSON_STACK_INIT_SIZE;
 static __thread struct sxe_jitson_stack *jitson_stack           = NULL;
 
-static struct sxe_jitson_stack *
+struct sxe_jitson_stack *
 sxe_jitson_stack_new(unsigned init_size)
 {
     struct sxe_jitson_stack *stack;
@@ -36,9 +36,10 @@ sxe_jitson_stack_new(unsigned init_size)
     return stack;
 }
 
-/* Clear the content of a stack
+/**
+ * Clear the content of a parse stack
  */
-static void
+void
 sxe_jitson_stack_clear(struct sxe_jitson_stack *stack)
 {
     stack->count = 0;
@@ -54,16 +55,22 @@ sxe_jitson_stack_get_thread(void)
 }
 
 void
+sxe_jitson_stack_free(struct sxe_jitson_stack *stack)
+{
+    free(stack->jitsons);
+    free(stack);
+}
+
+void
 sxe_jitson_stack_free_thread(void)
 {
     if (jitson_stack) {
-        free(jitson_stack->jitsons);
-        free(jitson_stack);
+        sxe_jitson_stack_free(jitson_stack);
         jitson_stack = NULL;
     }
 }
 
-static struct sxe_jitson *
+struct sxe_jitson *
 sxe_jitson_stack_dup(struct sxe_jitson_stack *stack)
 {
     struct sxe_jitson *dup = MOCKFAIL(MOCK_FAIL_STACK_DUP, NULL, malloc(stack->count * sizeof(*stack->jitsons)));
@@ -249,7 +256,7 @@ sxe_jitson_parse_identifier(char *json)
     return json;
 }
 
-static char *
+char *
 sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, char *json)
 {
     double   sign  = 1.0;

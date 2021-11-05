@@ -2,6 +2,7 @@
 #define SXE_JITSON_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #define SXE_JITSON_TYPE_INVALID 0
 #define SXE_JITSON_TYPE_NUMBER  1
