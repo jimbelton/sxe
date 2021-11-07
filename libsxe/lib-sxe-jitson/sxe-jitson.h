@@ -39,7 +39,8 @@ struct sxe_jitson_stack {
 
 #define MOCK_FAIL_STACK_NEW_OBJECT  ((char *)sxe_jitson_new + 0)
 #define MOCK_FAIL_STACK_NEW_JITSONS ((char *)sxe_jitson_new + 1)
-#define MOCK_FAIL_STACK_DUP         ((char *)sxe_jitson_new + 2)
-#define MOCK_FAIL_STACK_NEXT        ((char *)sxe_jitson_new + 3)
+#define MOCK_FAIL_STACK_GET_JITSON  ((char *)sxe_jitson_new + 2)
+#define MOCK_FAIL_STACK_DUP         ((char *)sxe_jitson_new + 3)
+#define MOCK_FAIL_STACK_NEXT        ((char *)sxe_jitson_new + 4)
 
 #endif

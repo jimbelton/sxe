@@ -27,13 +27,31 @@ sxe_jitson_stack_new(unsigned init_size)
     if (!(stack = MOCKFAIL(MOCK_FAIL_STACK_NEW_OBJECT, NULL, calloc(1, sizeof(*stack)))))
         return NULL;
 
-    if (!(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_NEW_JITSONS, NULL, malloc(init_size * sizeof(*stack->jitsons))))) {
+    if (!(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_NEW_JITSONS, NULL, malloc((size_t)init_size * sizeof(*stack->jitsons))))) {
         free(stack);
         return NULL;
     }
 
     stack->maximum = init_size;
     return stack;
+}
+
+struct sxe_jitson *
+sxe_jitson_stack_get_jitson(struct sxe_jitson_stack *stack)
+{
+    struct sxe_jitson *ret = stack->jitsons;
+
+    if (stack->maximum > stack->count)
+        ret = realloc(ret, stack->count * sizeof(*stack->jitsons)) ?: stack->jitsons;
+
+    if (!(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_GET_JITSON, NULL,
+                                    malloc(((size_t)stack->maximum * sizeof(*stack->jitsons)))))) {
+        stack->jitsons = ret;
+        return NULL;
+    }
+
+    stack->count = 0;
+    return ret;
 }
 
 /**
@@ -70,17 +88,6 @@ sxe_jitson_stack_free_thread(void)
     }
 }
 
-struct sxe_jitson *
-sxe_jitson_stack_dup(struct sxe_jitson_stack *stack)
-{
-    struct sxe_jitson *dup = MOCKFAIL(MOCK_FAIL_STACK_DUP, NULL, malloc(stack->count * sizeof(*stack->jitsons)));
-
-    if (!dup)
-        return NULL;
-
-    return (struct sxe_jitson *)memcpy(dup, stack->jitsons, stack->count * sizeof(*stack->jitsons));
-}
-
 /* Return the index of the first free slot on the stack, expanding it if needed.
  */
 static unsigned
@@ -90,7 +97,7 @@ sxe_jitson_stack_next(struct sxe_jitson_stack *stack)
         unsigned new_maximum = stack->maximum + (stack->maximum < JITSON_STACK_MAX_INCR ? stack->maximum : JITSON_STACK_MAX_INCR);
 
         struct sxe_jitson *new_jitsons = MOCKFAIL(MOCK_FAIL_STACK_NEXT, NULL,
-                                                  realloc(stack->jitsons, new_maximum * sizeof(*stack->jitsons)));
+                                                  realloc(stack->jitsons, (size_t)new_maximum * sizeof(*stack->jitsons)));
 
         if (!new_jitsons)
             return SXE_JITSON_STACK_ERROR;
@@ -119,7 +126,7 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, char *json)
         return NULL;
     }
 
-    unsigned index   = sxe_jitson_stack_next(stack);
+    unsigned index = sxe_jitson_stack_next(stack);
 
     if (index == SXE_JITSON_STACK_ERROR)
         return NULL;
@@ -440,9 +447,7 @@ sxe_jitson_new(char *json)
         return NULL;
     }
 
-    struct sxe_jitson *jitson = sxe_jitson_stack_dup(jitson_stack);
-    sxe_jitson_stack_clear(jitson_stack);
-    return jitson;
+    return sxe_jitson_stack_get_jitson(jitson_stack);
 }
 
 void

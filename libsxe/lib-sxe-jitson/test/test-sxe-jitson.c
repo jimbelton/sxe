@@ -38,7 +38,7 @@ main(void)
     struct sxe_jitson *jitson;
     unsigned           len;
 
-    plan_tests(96);
+    plan_tests(97);
 
     diag("Memory allocation failure tests");
     {
@@ -50,8 +50,8 @@ main(void)
         is(test_jitson_new("0", 0), NULL, "Failed to allocate the thread stack's initial jitsons");
         MOCKFAIL_END_TESTS();
 
-        MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_DUP);
-        is(test_jitson_new("0", 0), NULL, "Failed to dup the parsed object from the thread stack");
+        MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_GET_JITSON);
+        is(test_jitson_new("0", 0), NULL, "Failed to allocate a new stack after getting the parsed object");
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
@@ -64,6 +64,11 @@ main(void)
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
         is(test_jitson_new("[0,1]", 0), NULL, "Failed to realloc the thread stack's jitsons");
+        MOCKFAIL_END_TESTS();
+
+        test_jitson_new("0", 0);
+        MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
+        is(test_jitson_new("{\"x\": 0}", 0), NULL, "Failed to realloc the thread stack's jitsons on string inside an object");
         MOCKFAIL_END_TESTS();
     }
 
