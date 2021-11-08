@@ -21,8 +21,7 @@ sxe_jitson_stack_new(unsigned init_size)
 {
     struct sxe_jitson_stack *stack;
 
-    SXEA1(sizeof(struct sxe_jitson) == SXE_JITSON_TOKEN_SIZE, "Expected token size %u, got %zu",
-          SXE_JITSON_TOKEN_SIZE, sizeof(struct sxe_jitson));
+    SXEA1(SXE_JITSON_TOKEN_SIZE == 16, "Expected token size 16, got %zu", SXE_JITSON_TOKEN_SIZE);
 
     if (!(stack = MOCKFAIL(MOCK_FAIL_STACK_NEW_OBJECT, NULL, calloc(1, sizeof(*stack)))))
         return NULL;
@@ -119,7 +118,7 @@ sxe_jitson_skip_whitespace(char *json)
 }
 
 static char *
-sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, char *json)
+sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, char *json, bool is_member_name)
 {
     if (*(json = sxe_jitson_skip_whitespace(json)) != '"') {
         errno = ENOMSG;
@@ -135,8 +134,8 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, char *json)
     unsigned           i;
     unsigned           unicode = 0;
     struct sxe_jitson *jitson  = &stack->jitsons[index];
-    jitson->type               = SXE_JITSON_TYPE_STRING;
-    jitson->size               = 0;
+    jitson->type               = is_member_name ? SXE_JITSON_TYPE_MEMBER     : SXE_JITSON_TYPE_STRING;
+    jitson->size               = is_member_name ? SXE_JITSON_MEMBER_LEN_SIZE : 0;
 
     while (*++json != '"') {
         if (*json == '\0') {   // No terminating "
@@ -240,6 +239,17 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, char *json)
     }
 
     jitson->string[jitson->size] = '\0';
+
+    if (is_member_name) {
+        if ((uint16_t)jitson->size != jitson->size) {
+            errno = ENAMETOOLONG;
+            return NULL;
+        }
+
+        jitson->member.len = jitson->size - SXE_JITSON_MEMBER_LEN_SIZE;
+        jitson->size       = 1 + (SXE_JITSON_TOKEN_SIZE - SXE_JITSON_MEMBER_NAME_SIZE + jitson->member.len) / SXE_JITSON_TOKEN_SIZE;
+    }
+
     return json + 1;
 }
 
@@ -282,7 +292,7 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, char *json)
     switch (*json) {
     case '"':    // It's a string
         stack->count--;    // Return the jitson just allocated. The parse_string function will get it back.
-        return (json = sxe_jitson_stack_parse_string(stack, json));
+        return (json = sxe_jitson_stack_parse_string(stack, json, false));
 
     case '{':    // It's an object
         stack->jitsons[index].type = SXE_JITSON_TYPE_OBJECT;
@@ -293,7 +303,7 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, char *json)
             return json + 1;
 
         do {
-            if (!(json = sxe_jitson_stack_parse_string(stack, json)))    // Key must be a string
+            if (!(json = sxe_jitson_stack_parse_string(stack, json, true)))    // Member name must be a string
                 return NULL;
 
             json = sxe_jitson_skip_whitespace(json);
@@ -481,6 +491,8 @@ sxe_jitson_type_to_str(unsigned type)
         return "BOOL";
     case SXE_JITSON_TYPE_NULL:
         return "NULL";
+    case SXE_JITSON_TYPE_MEMBER:
+        return "MEMBER";
     default:
         SXEA6(type, "Unrecognized JITSON type %u", type);
     }
@@ -552,7 +564,10 @@ sxe_jitson_skip(struct sxe_jitson *jitson)
         return jitson + 1;
 
     case SXE_JITSON_TYPE_STRING:
-        return jitson + 1 + (jitson->size + SXE_JITSON_TOKEN_SIZE / 2) / SXE_JITSON_TOKEN_SIZE;
+        return jitson + 1 + (jitson->size + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_STRING_SIZE) / SXE_JITSON_TOKEN_SIZE;
+
+    case SXE_JITSON_TYPE_MEMBER:
+        return jitson + jitson->size;
 
     case SXE_JITSON_TYPE_OBJECT:
     case SXE_JITSON_TYPE_ARRAY:
@@ -574,7 +589,7 @@ sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsign
     len    = len ?: strlen(name);    // Determine the length of the member name if not provided
 
     for (i = 0; i < jitson->size; i++) {
-        if (member->size == len && memcmp(member->string, name, len) == 0)
+        if (member->member.len == len && memcmp(member->member.name, name, len) == 0)
             return sxe_jitson_skip(member);    // Skip the member name, returning the value
 
         member = sxe_jitson_skip(member);    // Skip the member name

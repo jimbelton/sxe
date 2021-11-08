@@ -11,9 +11,13 @@
 #define SXE_JITSON_TYPE_ARRAY   4
 #define SXE_JITSON_TYPE_BOOL    5
 #define SXE_JITSON_TYPE_NULL    6
+#define SXE_JITSON_TYPE_MEMBER  7    // Internal type for member names
 
-#define SXE_JITSON_STACK_ERROR  (~0U)
-#define SXE_JITSON_TOKEN_SIZE   16
+#define SXE_JITSON_STACK_ERROR      (~0U)
+#define SXE_JITSON_TOKEN_SIZE       sizeof(struct sxe_jitson)
+#define SXE_JITSON_STRING_SIZE      sizeof(((struct sxe_jitson *)0)->string)
+#define SXE_JITSON_MEMBER_LEN_SIZE  sizeof(((struct sxe_jitson *)0)->member.len)
+#define SXE_JITSON_MEMBER_NAME_SIZE sizeof(((struct sxe_jitson *)0)->member.name)
 
 /* A jitson token. Copied strings of > 7 bytes length continue into the next token.
  */
@@ -26,6 +30,10 @@ struct sxe_jitson {
         double  number;
         bool    boolean;
         char    string[8];
+        struct {
+            uint16_t len;
+            char     name[6];
+        } member;
     };
 };
 

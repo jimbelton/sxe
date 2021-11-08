@@ -36,9 +36,10 @@ int
 main(void)
 {
     struct sxe_jitson *jitson;
+    struct sxe_jitson *member;
     unsigned           len;
 
-    plan_tests(97);
+    plan_tests(102);
 
     diag("Memory allocation failure tests");
     {
@@ -187,6 +188,17 @@ main(void)
         ok(!test_jitson_new("fathead", 0),  "Failed to parse invalid token 'fathead' (error %s)",          strerror(errno));
         ok(!test_jitson_new("n", 0),        "Failed to parse invalid token 'n' (error %s)",                strerror(errno));
         ok(!test_jitson_new("twit", 0),     "Failed to parse invalid token 'twit' (error %s)",             strerror(errno));
+
+        char json[65562];    // Big enough for an object with a > 64K member name
+        json[len = 0] = '{';
+        json[++len]   = '"';
+
+        while (len < 65538)
+            json[++len] = 'm';
+
+        json[++len] = '"';
+        ok(!test_jitson_new(json, 0), "Failed to parse member name of 64K chanracters (error %s)", strerror(errno));
+        errno = 0;
     }
 
     diag("Cover type to string");
@@ -198,12 +210,11 @@ main(void)
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_ARRAY),   "ARRAY",   "ARRAY");
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_BOOL),    "BOOL",    "BOOL");
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_NULL),    "NULL",    "NULL");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_MEMBER),  "MEMBER",  "MEMBER internal type");
     }
 
     diag("Test membership function");
     {
-        struct sxe_jitson *member;
-
         ok(jitson = test_jitson_new("{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}", 0),
            "Parsed complex object (error %s)", strerror(errno));
         ok(member = sxe_jitson_object_get_member(jitson, "a", 0),           "Object has a member 'a'");
@@ -237,6 +248,13 @@ main(void)
         ok(sxe_jitson_get_bool(element),                                  "Element is 'true'");
         ok(!sxe_jitson_array_get_element(jitson, 4),                     "Object has no element 4");;
         sxe_jitson_free(jitson);
+    }
+
+    diag("Test bug fixes against regressions");
+    {
+         ok(jitson = test_jitson_new("{\"A.D.\": 1, \"x\": 0}", 0),   "Parsed problem member name (error %s)", strerror(errno));
+         ok(member = sxe_jitson_object_get_member(jitson, "A.D.", 0), "Object has a member 'A.D.'");
+         is(sxe_jitson_get_type(member), SXE_JITSON_TYPE_NUMBER,      "A.D.'s value is a number");
     }
 
     sxe_jitson_stack_free_thread();    // Currently, just for coverage
