@@ -21,7 +21,6 @@
 
 #include <string.h>
 
-#include "lookup3.h"
 #include "sxe-hash-private.h"
 
 #define SXE_HASH_UNUSED_BUCKET    0
@@ -53,8 +52,8 @@ sxe_prehashed_key_hash(const void * key, unsigned size)
  * @param element_size  = Size of each element in the hash in bytes
  * @param key_offset    = Offset of start of key from start of element in bytes
  * @param key_size      = Size of the key in bytes
- * @param options       = SXE_HASH_OPTION_UNLOCKED  | SXE_HASH_OPTION_LOCKED       (single threaded  or use locking)
- *                      + SXE_HASH_OPTION_PREHASHED | SXE_HASH_OPTION_LOOKUP3_HASH (key is prehashed or use lookup3)
+ * @param options       = SXE_HASH_OPTION_UNLOCKED  | SXE_HASH_OPTION_LOCKED        (single threaded  or use locking)
+ *                      + SXE_HASH_OPTION_PREHASHED | SXE_HASH_OPTION_COMPUTED_HASH (key is prehashed or use lookup3)
  *
  * @return A pointer to an array of hash elements
  */
@@ -79,7 +78,7 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
     hash->key_offset = key_offset;
     hash->key_size   = key_size;
     hash->options    = options;
-    hash->hash_key   = options & SXE_HASH_OPTION_LOOKUP3_HASH ? lookup3_hash : sxe_prehashed_key_hash;
+    hash->hash_key   = options & SXE_HASH_OPTION_COMPUTED_HASH ? sxe_hash_sum : sxe_prehashed_key_hash;
 
     SXER6("return array=%p", hash->pool);
     return hash->pool;

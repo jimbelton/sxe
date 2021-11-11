@@ -35,7 +35,11 @@
 #define SXE_HASH_OPTION_UNLOCKED      0
 #define SXE_HASH_OPTION_LOCKED        SXE_BIT_OPTION(0)
 #define SXE_HASH_OPTION_PREHASHED     0
-#define SXE_HASH_OPTION_LOOKUP3_HASH  SXE_BIT_OPTION(1)
+#define SXE_HASH_OPTION_COMPUTED_HASH SXE_BIT_OPTION(1)
+
+/* For backward compatibility. Lookup3 (the default algorithm) can now be overridden.
+ */
+#define SXE_HASH_OPTION_LOOKUP3_HASH SXE_HASH_OPTION_COMPUTED_HASH
 
 /* Classic hash: prehashed SHA1 key to unsigned value
  */
@@ -53,6 +57,8 @@ typedef struct SXE_HASH {
     unsigned    options;
     unsigned (* hash_key)(const void * key, unsigned size);
 } SXE_HASH;
+
+extern uint32_t (*sxe_hash_sum)(const void *key, unsigned length);
 
 #include "lib-sxe-hash-proto.h"
 #endif
