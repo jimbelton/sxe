@@ -39,7 +39,7 @@ main(void)
     struct sxe_jitson *member;
     unsigned           len;
 
-    plan_tests(102);
+    plan_tests(104);
 
     diag("Memory allocation failure tests");
     {
@@ -217,6 +217,11 @@ main(void)
     {
         ok(jitson = test_jitson_new("{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}", 0),
            "Parsed complex object (error %s)", strerror(errno));
+
+        MOCKFAIL_START_TESTS(1, MOCK_FAIL_OBJECT_GET_MEMBER);
+        ok(!sxe_jitson_object_get_member(jitson, "a", 0),                   "Can't access object on failure to calloc index");
+        MOCKFAIL_END_TESTS();
+
         ok(member = sxe_jitson_object_get_member(jitson, "a", 0),           "Object has a member 'a'");
         is(sxe_jitson_get_number(member), 1,                                "Member is the number 1");
         ok(!sxe_jitson_object_get_member(jitson, "biglongname", 1),         "Object has no member 'b'");
@@ -238,6 +243,11 @@ main(void)
 
         ok(jitson = test_jitson_new("[0, \"anotherlongstring\", {\"member\": null}, true]", 0),
            "Parsed complex array (error %s)", strerror(errno));
+
+        MOCKFAIL_START_TESTS(1, MOCK_FAIL_ARRAY_GET_ELEMENT);
+        ok(!sxe_jitson_array_get_element(jitson, 0),                     "Can't access array on failure to malloc index");
+        MOCKFAIL_END_TESTS();
+
         ok(element = sxe_jitson_array_get_element(jitson, 0),            "Array has a element 0");
         is(sxe_jitson_get_number(element), 0,                            "Element is the number 0");
         ok(element = sxe_jitson_array_get_element(jitson, 1),            "Array has a element 1");

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "mockfail.h"
+#include "sxe-hash.h"
 #include "sxe-jitson.h"
 #include "sxe-log.h"
 #include "sxe-unicode.h"
@@ -470,13 +471,13 @@ sxe_jitson_free(struct sxe_jitson *jitson)
 unsigned
 sxe_jitson_get_type(struct sxe_jitson *jitson)
 {
-    return jitson ? jitson->type : SXE_JITSON_TYPE_INVALID;
+    return jitson->type & SXE_JITSON_TYPE_MASK;
 }
 
 const char *
 sxe_jitson_type_to_str(unsigned type)
 {
-    switch (type) {
+    switch (type & SXE_JITSON_TYPE_MASK) {
     case SXE_JITSON_TYPE_INVALID:
         break;
     case SXE_JITSON_TYPE_NUMBER:
@@ -508,7 +509,8 @@ sxe_jitson_type_to_str(unsigned type)
 double
 sxe_jitson_get_number(struct sxe_jitson *jitson)
 {
-    SXEA6(jitson->type == SXE_JITSON_TYPE_NUMBER, "Can't get the numeric value of a %s", sxe_jitson_type_to_str(jitson->type));
+    SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_NUMBER,
+          "Can't get the numeric value of a %s", sxe_jitson_type_to_str(jitson->type));
     return jitson->number;
 }
 
@@ -520,7 +522,8 @@ sxe_jitson_get_number(struct sxe_jitson *jitson)
 const char *
 sxe_jitson_get_string(struct sxe_jitson *jitson, unsigned *size)
 {
-    SXEA6(jitson->type == SXE_JITSON_TYPE_STRING, "Can't get the string value of a %s", sxe_jitson_type_to_str(jitson->type));
+    SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_STRING,
+          "Can't get the string value of a %s", sxe_jitson_type_to_str(jitson->type));
 
     if (size)
         *size = jitson->size;
@@ -536,14 +539,15 @@ sxe_jitson_get_string(struct sxe_jitson *jitson, unsigned *size)
 bool
 sxe_jitson_get_bool(struct sxe_jitson *jitson)
 {
-    SXEA6(jitson->type == SXE_JITSON_TYPE_BOOL, "Can't get the boolean value of a %s", sxe_jitson_type_to_str(jitson->type));
+    SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_BOOL,
+          "Can't get the boolean value of a %s", sxe_jitson_type_to_str(jitson->type));
     return jitson->boolean;
 }
 
 unsigned
 sxe_jitson_get_size(struct sxe_jitson *jitson)
 {
-    switch (jitson->type) {
+    switch (sxe_jitson_get_type(jitson)) {
     case SXE_JITSON_TYPE_STRING:
     case SXE_JITSON_TYPE_OBJECT:
     case SXE_JITSON_TYPE_ARRAY:
@@ -554,6 +558,8 @@ sxe_jitson_get_size(struct sxe_jitson *jitson)
     return 0;
 }
 
+/* This function is only usable when and array/object has not yet been indexed.
+ */
 static struct sxe_jitson *
 sxe_jitson_skip(struct sxe_jitson *jitson)
 {
@@ -567,7 +573,7 @@ sxe_jitson_skip(struct sxe_jitson *jitson)
         return jitson + 1 + (jitson->size + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_STRING_SIZE) / SXE_JITSON_TOKEN_SIZE;
 
     case SXE_JITSON_TYPE_MEMBER:
-        return jitson + jitson->size;
+        return jitson + 1 + (jitson->member.len + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_MEMBER_NAME_SIZE) / SXE_JITSON_TOKEN_SIZE;
 
     case SXE_JITSON_TYPE_OBJECT:
     case SXE_JITSON_TYPE_ARRAY:
@@ -583,17 +589,34 @@ sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsign
 {
     struct sxe_jitson *member;
     unsigned           i;
+    uint32_t          *bucket;
 
-    SXEA1(jitson->type == SXE_JITSON_TYPE_OBJECT, "Can't get a member value from a %s", sxe_jitson_type_to_str(jitson->type));
-    member = jitson + 1;
-    len    = len ?: strlen(name);    // Determine the length of the member name if not provided
+    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_OBJECT,
+          "Can't get a member value from a %s", sxe_jitson_type_to_str(jitson->type));
+    len = len ?: strlen(name);                       // Determine the length of the member name if not provided
 
-    for (i = 0; i < jitson->size; i++) {
+    if (!(jitson->type & SXE_JITSON_TYPE_INDEXED)) {
+        if (!(jitson->index = MOCKFAIL(MOCK_FAIL_OBJECT_GET_MEMBER, NULL, calloc(1, jitson->size * sizeof(uint32_t)))))
+            return NULL;
+
+        for (member = jitson + 1, i = 0; i < jitson->size; i++) {
+            bucket       = &jitson->index[sxe_hash_sum(member->member.name, member->member.len) % jitson->size];
+            member->link = *bucket;
+            *bucket      = member - jitson;
+            member       = sxe_jitson_skip(member);    // Skip the member name
+            member       = sxe_jitson_skip(member);    // Skip the member value
+        }
+    }
+
+    jitson->type |= SXE_JITSON_TYPE_INDEXED;
+
+    for (bucket = &jitson->index[sxe_hash_sum(name, len) % jitson->size]; *bucket != 0;  bucket = &member->link)
+    {
+        member = &jitson[*bucket];
+        SXEA6(member->type == SXE_JITSON_TYPE_MEMBER, "Object buckets contain members, not %s", sxe_jitson_type_to_str(member->type));
+
         if (member->member.len == len && memcmp(member->member.name, name, len) == 0)
             return sxe_jitson_skip(member);    // Skip the member name, returning the value
-
-        member = sxe_jitson_skip(member);    // Skip the member name
-        member = sxe_jitson_skip(member);    // Skip the member value
     }
 
     return NULL;
@@ -605,17 +628,23 @@ sxe_jitson_array_get_element(struct sxe_jitson *jitson, unsigned idx)
     struct sxe_jitson *element;
     unsigned           i;
 
-    SXEA1(jitson->type == SXE_JITSON_TYPE_ARRAY, "Can't get an element value from a %s", sxe_jitson_type_to_str(jitson->type));
+    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_ARRAY,
+          "Can't get an element value from a %s", sxe_jitson_type_to_str(jitson->type));
 
     if (idx >= jitson->size) {
         SXEL2("Array element %u is not less than size %u", idx, jitson->size);
+        errno = ERANGE;
         return NULL;
     }
 
-    element = jitson + 1;
+    if (!(jitson->type & SXE_JITSON_TYPE_INDEXED)) {
+        if (!(jitson->index = MOCKFAIL(MOCK_FAIL_ARRAY_GET_ELEMENT, NULL, malloc(jitson->size * sizeof(uint32_t)))))
+            return NULL;
 
-    for (i = 0; i < idx; i++)
-        element = sxe_jitson_skip(element);    // Skip the elemeent
+        for (element = jitson + 1, i = 0; i < jitson->size; i++, element = sxe_jitson_skip(element))
+            jitson->index[i] = element - jitson;
+    }
 
-    return element;
+    jitson->type |= SXE_JITSON_TYPE_INDEXED;
+    return &jitson[jitson->index[idx]];
 }

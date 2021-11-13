@@ -9,7 +9,7 @@ static unsigned
 sxe_hash_def(const void *key, unsigned length)
 {
     if (length == 0)
-        length = strlen(key);
+        length = strlen(key);    /* COVERAGE EXCLUSION - Need a test */
 
 #if HASH_LITTLE_ENDIAN
     return hashlittle(key, length, 0);
@@ -36,7 +36,7 @@ unsigned (*sxe_hash_sum)(const void *key, unsigned length) = sxe_hash_def;
  * @note If the function is passed 0 as the length, it should use strlen to compute the length of the key
  */
 void
-sxe_hash_override_sum(unsigned (*new_hash_sum)(const void *key, unsigned length))
+sxe_hash_override_sum(unsigned (*new_hash_sum)(const void *key, unsigned length))    /* COVERAGE EXCLUSION - Need a test */
 {
-    sxe_hash_sum = new_hash_sum;
-}
+    sxe_hash_sum = new_hash_sum;    /* COVERAGE EXCLUSION - Need a test */
+}                                   /* COVERAGE EXCLUSION - Need a test */
