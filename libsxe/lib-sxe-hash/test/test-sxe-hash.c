@@ -232,6 +232,7 @@ int
 main(void)
 {
     plan_tests(56);
+    sxe_hash_use_xxh32();
     test_hash_sha1();
     test_hash_sha1_variable_data();
     test_hash_sha1_reconstruct();

@@ -1,3 +1,3 @@
 #!/bin/sh
 
-apt-get install xxhash
+apt-get install libxxhash0 libxxhash-dev
