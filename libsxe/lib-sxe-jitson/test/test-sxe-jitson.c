@@ -15,7 +15,7 @@ main(void)
     char              *json_out;
     unsigned           len;
 
-    plan_tests(108);
+    plan_tests(111);
 
     diag("Memory allocation failure tests");
     {
@@ -43,10 +43,15 @@ main(void)
         is(sxe_jitson_new("[0,1]"), NULL, "Failed to realloc the thread stack's jitsons");
         MOCKFAIL_END_TESTS();
 
-        sxe_jitson_new("0");
+        jitson = sxe_jitson_new("999999999");
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
         is(sxe_jitson_new("{\"x\": 0}"), NULL, "Failed to realloc the thread stack's jitsons on string inside an object");
         MOCKFAIL_END_TESTS();
+
+        MOCKFAIL_START_TESTS(1, sxe_factory_reserve);
+        is(sxe_jitson_to_json(jitson, NULL), NULL,              "Failed to encode large to JSON on realloc failure");
+        MOCKFAIL_END_TESTS();
+        sxe_jitson_free(jitson);
     }
 
     diag("Happy path parsing");
@@ -98,9 +103,10 @@ main(void)
         sxe_jitson_free(jitson);
         free(json_out);
 
-        ok(jitson = sxe_jitson_new(" {\t} "),               "Parsed ' {\\t} ' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_OBJECT, "' {\\t} ' is an object" );
-        is(jitson->size,                0,                      "Correct size");
+        ok(jitson = sxe_jitson_new(" {\t} "),                    "Parsed ' {\\t} ' (error %s)", strerror(errno));
+        is(sxe_jitson_get_type(jitson),  SXE_JITSON_TYPE_OBJECT, "' {\\t} ' is an object" );
+        is(jitson->size,                 0,                      "Correct size");
+        is_eq(sxe_jitson_to_json(jitson, NULL), "{}",            "Encoded back to JSON correctly");
         sxe_jitson_free(jitson);
 
         ok(jitson = sxe_jitson_new("{\"key\":\"value\"}"),  "Parsed '{\"key\":\"value\"}' (error %s)", strerror(errno));
@@ -138,18 +144,19 @@ main(void)
 
         is(i, 128, "All identifier characters are correctly classified");
 
-        ok(jitson = sxe_jitson_new("true"),                 "Parsed 'true' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_BOOL,   "'true' is a boolean" );
-        is(sxe_jitson_get_bool(jitson), true,                   "Correct value");
+        ok(jitson = sxe_jitson_new("true"),                   "Parsed 'true' (error %s)", strerror(errno));
+        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_BOOL, "'true' is a boolean" );
+        is(sxe_jitson_get_bool(jitson), true,                 "Correct value");
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new("false"),                "Parsed 'false' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_BOOL,   "'false' is a boolean" );
-        is(sxe_jitson_get_bool(jitson), false,                  "Correct value");
+        ok(jitson = sxe_jitson_new("false"),                          "Parsed 'false' (error %s)", strerror(errno));
+        is(sxe_jitson_get_type(jitson),         SXE_JITSON_TYPE_BOOL, "'false' is a boolean" );
+        is(sxe_jitson_get_bool(jitson),         false,                "Correct value");
+        is_eq(sxe_jitson_to_json(jitson, NULL), "false",              "Encoded back to JSON correctly");
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new("null"),                "Parsed 'null' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_NULL,  "'null' is the null type" );
+        ok(jitson = sxe_jitson_new("null"),                   "Parsed 'null' (error %s)", strerror(errno));
+        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_NULL, "'null' is the null type" );
         sxe_jitson_free(jitson);
     }
 

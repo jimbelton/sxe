@@ -119,6 +119,5 @@ sxe_jitson_to_json(struct sxe_jitson *jitson, size_t *len_out)
     struct sxe_factory factory[1];
 
     sxe_factory_alloc_make(factory, 0, 0);
-    sxe_jitson_build_json(jitson, factory);
-    return sxe_factory_remove(factory, len_out);
+    return sxe_jitson_build_json(jitson, factory) ? sxe_factory_remove(factory, len_out) : NULL;
 }

@@ -228,14 +228,34 @@ test_hash_string(void)
 */
 }
 
+static void
+test_hash_xxh32(void)
+{
+    unsigned lookup3_sum = sxe_hash_sum("Hello, world.", 0);
+
+    sxe_hash_use_xxh32();
+    ok(lookup3_sum != sxe_hash_sum("Hello, world.", 0), "After overriding to xxh32, sum is different");
+}
+
 int
 main(void)
 {
+#ifndef SXE_DISABLE_XXH32
+    plan_tests(57);
+#else
     plan_tests(56);
-    sxe_hash_use_xxh32();
+#endif
+
     test_hash_sha1();
     test_hash_sha1_variable_data();
     test_hash_sha1_reconstruct();
     test_hash_string();    // Stubbed above
+
+#ifndef SXE_DISABLE_XXH32
+    test_hash_xxh32();
+#else
+    skip(1, "Building without XXH32 support");
+#endif
+
     return exit_status();
 }

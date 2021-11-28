@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "mockfail.h"
 #include "sxe-factory.h"
 
 /**
@@ -16,26 +17,6 @@ sxe_factory_alloc_make(struct sxe_factory *factory, size_t minsize, size_t maxin
     factory->size    = minsize ?: 8;
     factory->maxincr = maxincr ?: 4096;
     factory->data    = NULL;
-}
-
-/**
- * Create a new factory that uses allocated memory
- *
- * @param minsize Minimum bytes of space allocated to the factory
- * @param maxincr Once the data space reaches this size, it will be increased by this amount
- *
- * @return The factory or NULL on allocation failure
- */
-struct sxe_factory *
-sxe_factory_alloc_new(size_t minsize, size_t maxincr)
-{
-    struct sxe_factory *factory;
-
-    if (!(factory = malloc(sizeof(struct sxe_factory))))
-        return NULL;
-
-    sxe_factory_alloc_make(factory, minsize, maxincr);
-    return factory;
 }
 
 /**
@@ -57,7 +38,7 @@ sxe_factory_reserve(struct sxe_factory *factory, size_t len)
         while (newsize < needed)
             newsize = newsize >= factory->maxincr ? newsize + factory->maxincr : newsize << 1;
 
-        if ((factory->data = realloc(factory->data, newsize)) == NULL)
+        if ((factory->data = MOCKFAIL(sxe_factory_reserve, NULL, realloc(factory->data, newsize))) == NULL)
             return NULL;
 
         factory->size = newsize;

@@ -51,4 +51,5 @@ else
 endif
 endif
 
+# Add -DSXE_DISABLE_XXH32=1 to remove dependency on xxhash
 CFLAGS += -DSXE_DISABLE_OPENSSL=1

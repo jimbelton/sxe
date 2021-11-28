@@ -2,18 +2,24 @@
 #include <string.h>
 #include <tap.h>
 
+#include "mockfail.h"
 #include "sxe-factory.h"
 
 int
 main(void)
 {
-    struct sxe_factory *factory;
-    size_t              len;
-    char *              data;
+    struct sxe_factory factory[1];
+    size_t             len;
+    char *             data;
 
     plan_tests(8);
 
-    ok(factory = sxe_factory_alloc_new(0, 0),                        "Created a new allocating factory");
+    sxe_factory_alloc_make(factory, 0, 0);
+
+    MOCKFAIL_START_TESTS(1, sxe_factory_reserve);
+    is(sxe_factory_add(factory, "hello,", 0), -1,                    "Failed to add 'hello,' to the factory on realloc failure");
+    MOCKFAIL_END_TESTS();
+
     is(sxe_factory_add(factory, "hello,", 0), 6,                     "Added 'hello,' to the factory");
     is_eq(sxe_factory_look(factory, &len), "hello,",                 "Saw 'hello,' in the factory");
     is(len, 6,                                                       "Look returned correct length");
