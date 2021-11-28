@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "sxe-factory.h"
 #include "sxe-log.h"
@@ -9,9 +10,11 @@
 char *
 sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
 {
-    char    *reservation;
-    unsigned i, len;
-    uint32_t index, type;
+    char       *reservation;
+    const char *string;
+    unsigned    first, i, len;
+    uint32_t    index, type;
+    char        unicode_str[8];
 
     switch (type = sxe_jitson_get_type(jitson)) {
     case SXE_JITSON_TYPE_NUMBER:
@@ -30,9 +33,26 @@ sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
         sxe_factory_add(factory, "\"", 1);
 
         if (type == SXE_JITSON_TYPE_MEMBER)
-            sxe_factory_add(factory, jitson->member.name, len);
+            string = jitson->member.name;
         else
-            sxe_factory_add(factory, sxe_jitson_get_string(jitson, NULL), len);
+            string = sxe_jitson_get_string(jitson, NULL);
+
+        for (first = i = 0; i < len; i++)
+            /* If the character is a control character or " or \, encode it as a unicode escape sequence.
+             * (unsigned char) casts are used to allow any UTF8 encoded string.
+             */
+            if ((unsigned char)string[i] <= 0x1F || string[i] == '"' || string[i] == '\\') {
+                if (first < i)
+                    sxe_factory_add(factory, &string[first], i - first);
+
+                snprintf(unicode_str, sizeof(unicode_str), "\\u00%02x", (unsigned char)string[i]);
+                SXEA6(strlen(unicode_str) == 6, "Unicode escape sequence should always be 6 characters long");
+                sxe_factory_add(factory, unicode_str, 6);
+                first = i + 1;
+            }
+
+        if (first < len)
+            sxe_factory_add(factory, &string[first], len - first);
 
         sxe_factory_add(factory, "\"", 1);
         break;

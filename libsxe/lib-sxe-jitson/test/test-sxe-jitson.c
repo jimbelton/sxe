@@ -15,7 +15,7 @@ main(void)
     char              *json_out;
     unsigned           len;
 
-    plan_tests(105);
+    plan_tests(108);
 
     diag("Memory allocation failure tests");
     {
@@ -52,46 +52,51 @@ main(void)
     diag("Happy path parsing");
     {
         ok(jitson = sxe_jitson_new("0"),                        "Parsed '0' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "'0' is a number");
-        ok(sxe_jitson_get_number(jitson) == 0.0 ,                   "Value %f == 0.0", sxe_jitson_get_number(jitson));
+        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_NUMBER, "'0' is a number");
+        ok(sxe_jitson_get_number(jitson) == 0.0 ,               "Value %f == 0.0", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
         ok(jitson = sxe_jitson_new(" 666\t"),                   "Parsed ' 666\\t' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "'666' is a number");
-        ok(sxe_jitson_get_number(jitson) == 666.0,                  "Value %f == 666.0", sxe_jitson_get_number(jitson));
+        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_NUMBER, "'666' is a number");
+        ok(sxe_jitson_get_number(jitson) == 666.0,              "Value %f == 666.0", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
         ok(jitson = sxe_jitson_new(" -0.1"),                    "Parsed '-0.1' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "'-0.1'' is a number");
-        ok(sxe_jitson_get_number(jitson) == -0.1,                   "Value %f == -0.1", sxe_jitson_get_number(jitson));
+        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_NUMBER, "'-0.1'' is a number");
+        ok(sxe_jitson_get_number(jitson) == -0.1,               "Value %f == -0.1", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
         ok(jitson = sxe_jitson_new("1E-100"),                   "Parsed '1E=100' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "1E100' is a number");
-        ok(sxe_jitson_get_number(jitson) == 1E-100,                 "Value %f == 1E100", sxe_jitson_get_number(jitson));
+        is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_NUMBER, "1E100' is a number");
+        ok(sxe_jitson_get_number(jitson) == 1E-100,             "Value %f == 1E100", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new("\"\""),                            "Parsed '\"\"' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("\"\""),                                "Parsed '\"\"' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\"' is a string");
         is_eq(sxe_jitson_get_string(jitson, NULL), "",                     "Correct value");
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new(" \"x\"\n"),                        "Parsed ' \"x\"\\n' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new(" \"x\"\n"),                            "Parsed ' \"x\"\\n' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "' \"x\"\\n' is a string");
         is_eq(sxe_jitson_get_string(jitson, &len), "x",                    "Correct value");
         is(len,                                    1,                      "Correct length");
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\""),  "Parsed '\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' (error %s)",
+        ok(jitson = sxe_jitson_new("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\""),      "Parsed '\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' (error %s)",
            strerror(errno));
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' is a string");
         is_eq(sxe_jitson_get_string(jitson, NULL), "\"\\/\b\f\n\r\t",      "Correct value");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "\"\\u0022\\u005c/\\u0008\\u000c\\u000a\\u000d\\u0009\"",
+              "Control characters are correctly encoded");
         sxe_jitson_free(jitson);
+        free(json_out);
 
-        ok(jitson = sxe_jitson_new("\"\\u20aC\""),                     "Parsed '\"\\u20aC\"' (error %s)", strerror(errno));
-        is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\\u20aC\"' is a string");
-        is_eq(sxe_jitson_get_string(jitson, NULL), "\xE2\x82\xAC",         "Correct UTF-8 value");
+        ok(jitson = sxe_jitson_new("\"\\u20aC\""),                          "Parsed '\"\\u20aC\"' (error %s)", strerror(errno));
+        is(sxe_jitson_get_type(jitson),             SXE_JITSON_TYPE_STRING, "'\"\\u20aC\"' is a string");
+        is_eq(sxe_jitson_get_string(jitson, NULL),  "\xE2\x82\xAC",         "Correct UTF-8 value");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "\"\xE2\x82\xAC\"", "Valid UTC code points are not escaped");
         sxe_jitson_free(jitson);
+        free(json_out);
 
         ok(jitson = sxe_jitson_new(" {\t} "),               "Parsed ' {\\t} ' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_OBJECT, "' {\\t} ' is an object" );
@@ -189,12 +194,10 @@ main(void)
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_MEMBER),  "MEMBER",  "MEMBER internal type");
     }
 
-    diag("Test membership function");
+    diag("Test object membership function and reencoding");
     {
-        const char *object_json_in  = "{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}";
-        const char *object_json_out = "{\"biglongname\":\"B\",\"a\":1,\"c\":[2,3],\"f\":true,\"d\":{\"e\":4}}";
-
-        ok(jitson = sxe_jitson_new(object_json_in),                         "Parsed complex object (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}"),
+           "Parsed complex object (error %s)", strerror(errno));
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_OBJECT_GET_MEMBER);
         ok(!sxe_jitson_object_get_member(jitson, "a", 0),                   "Can't access object on failure to calloc index");
@@ -212,11 +215,16 @@ main(void)
         ok(member = sxe_jitson_object_get_member(jitson, "f", 0),           "Object has a member 'f'");
         ok(sxe_jitson_get_bool(member),                                     "Member is 'true'");
         is(sxe_jitson_get_size(member), 0,                                  "Can't take the size of a number, bool, or null");
-        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), object_json_out, "Encoder spat out same JSON as we took in");
+
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL),
+              "{\"biglongname\":\"B\",\"a\":1,\"c\":[2,3],\"f\":true,\"d\":{\"e\":4}}",
+              "Encoder spat out same JSON as we took in");
+
         sxe_jitson_free(jitson);
+        free(json_out);
     }
 
-    diag("Test array element function");
+    diag("Test array element function and reencoding");
     {
         struct sxe_jitson *element;
 
@@ -224,19 +232,23 @@ main(void)
            "Parsed complex array (error %s)", strerror(errno));
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_ARRAY_GET_ELEMENT);
-        ok(!sxe_jitson_array_get_element(jitson, 0),                     "Can't access array on failure to malloc index");
+        ok(!sxe_jitson_array_get_element(jitson, 0),                        "Can't access array on failure to malloc index");
         MOCKFAIL_END_TESTS();
 
-        ok(element = sxe_jitson_array_get_element(jitson, 0),            "Array has a element 0");
-        is(sxe_jitson_get_number(element), 0,                            "Element is the number 0");
-        ok(element = sxe_jitson_array_get_element(jitson, 1),            "Array has a element 1");
-        is_eq(sxe_jitson_get_string(element, NULL), "anotherlongstring", "Element is the string 'anotherlongstring'");
-        ok(element = sxe_jitson_array_get_element(jitson, 2),            "Array has a element 2");
-        is(sxe_jitson_get_type(element), SXE_JITSON_TYPE_OBJECT,         "Elememt is an object");
-        ok(element = sxe_jitson_array_get_element(jitson, 3),            "Array has a element 3");
-        ok(sxe_jitson_get_bool(element),                                 "Element is 'true'");
-        ok(!sxe_jitson_array_get_element(jitson, 4),                     "Object has no element 4");;
+        ok(element = sxe_jitson_array_get_element(jitson, 0),               "Array has a element 0");
+        is(sxe_jitson_get_number(element), 0,                               "Element is the number 0");
+        ok(element = sxe_jitson_array_get_element(jitson, 1),               "Array has a element 1");
+        is_eq(sxe_jitson_get_string(element, NULL), "anotherlongstring",    "Element is the string 'anotherlongstring'");
+        ok(element = sxe_jitson_array_get_element(jitson, 2),               "Array has a element 2");
+        is(sxe_jitson_get_type(element), SXE_JITSON_TYPE_OBJECT,            "Elememt is an object");
+        ok(element = sxe_jitson_array_get_element(jitson, 3),               "Array has a element 3");
+        ok(sxe_jitson_get_bool(element),                                    "Element is 'true'");
+        ok(!sxe_jitson_array_get_element(jitson, 4),                        "Object has no element 4");
+
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[0,\"anotherlongstring\",{\"member\":null},true]",
+              "Encoder spat out same JSON as we took in");
         sxe_jitson_free(jitson);
+        free(json_out);
     }
 
     diag("Test bug fixes against regressions");
