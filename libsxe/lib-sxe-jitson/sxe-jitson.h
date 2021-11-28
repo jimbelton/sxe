@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "sxe-factory.h"
+
 #define SXE_JITSON_TYPE_INVALID 0
 #define SXE_JITSON_TYPE_NUMBER  1
 #define SXE_JITSON_TYPE_STRING  2
@@ -49,6 +51,12 @@ struct sxe_jitson_stack {
 };
 
 #include "sxe-jitson-proto.h"
+#include "sxe-jitson-to-json-proto.h"
+
+/* Skip a member; internal macro
+ */
+#define SXE_JITSON_MEMBER_SKIP(jitson) \
+    ((jitson) + 1 + ((jitson)->member.len + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_MEMBER_NAME_SIZE) / SXE_JITSON_TOKEN_SIZE)
 
 #define MOCK_FAIL_STACK_NEW_OBJECT  ((char *)sxe_jitson_new + 0)
 #define MOCK_FAIL_STACK_NEW_JITSONS ((char *)sxe_jitson_new + 1)

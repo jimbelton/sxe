@@ -7,132 +7,108 @@
 #include "mockfail.h"
 #include "sxe-jitson.h"
 
-static char    *json_mutable = NULL;
-static unsigned json_size    = 0;
-
-static struct sxe_jitson *
-test_jitson_new(const char *json, unsigned size)
-{
-    if (!size)
-        size = strlen(json);
-
-    if (json_mutable)
-        if (json_size < size) {
-            free(json_mutable);
-            json_mutable = NULL;
-        }
-
-    if (!json_mutable) {
-        json_mutable = malloc(size + 1);
-        json_size    = size;
-    }
-
-    memcpy(json_mutable, json, size);
-    json_mutable[size] = '\0';
-    return sxe_jitson_new(json_mutable);
-}
-
 int
 main(void)
 {
     struct sxe_jitson *jitson;
     struct sxe_jitson *member;
+    char              *json_out;
     unsigned           len;
 
-    plan_tests(104);
+    plan_tests(105);
 
     diag("Memory allocation failure tests");
     {
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEW_OBJECT);
-        is(test_jitson_new("0", 0), NULL, "Failed to allocate the thread stack object");
+        is(sxe_jitson_new("0"), NULL, "Failed to allocate the thread stack object");
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEW_JITSONS);
-        is(test_jitson_new("0", 0), NULL, "Failed to allocate the thread stack's initial jitsons");
+        is(sxe_jitson_new("0"), NULL, "Failed to allocate the thread stack's initial jitsons");
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_GET_JITSON);
-        is(test_jitson_new("0", 0), NULL, "Failed to allocate a new stack after getting the parsed object");
+        is(sxe_jitson_new("0"), NULL, "Failed to allocate a new stack after getting the parsed object");
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
-        is(test_jitson_new("{\"one\":1}", 0), NULL, "Failed to realloc the thread stack's jitsons on a string");
+        is(sxe_jitson_new("{\"one\":1}"), NULL, "Failed to realloc the thread stack's jitsons on a string");
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
-        is(test_jitson_new("\"01234567\"", 0), NULL, "Failed to realloc the thread stack's jitsons on a long string");
+        is(sxe_jitson_new("\"01234567\""), NULL, "Failed to realloc the thread stack's jitsons on a long string");
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
-        is(test_jitson_new("[0,1]", 0), NULL, "Failed to realloc the thread stack's jitsons");
+        is(sxe_jitson_new("[0,1]"), NULL, "Failed to realloc the thread stack's jitsons");
         MOCKFAIL_END_TESTS();
 
-        test_jitson_new("0", 0);
+        sxe_jitson_new("0");
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
-        is(test_jitson_new("{\"x\": 0}", 0), NULL, "Failed to realloc the thread stack's jitsons on string inside an object");
+        is(sxe_jitson_new("{\"x\": 0}"), NULL, "Failed to realloc the thread stack's jitsons on string inside an object");
         MOCKFAIL_END_TESTS();
     }
 
     diag("Happy path parsing");
     {
-        ok(jitson = test_jitson_new("0", 0),                        "Parsed '0' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("0"),                        "Parsed '0' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "'0' is a number");
         ok(sxe_jitson_get_number(jitson) == 0.0 ,                   "Value %f == 0.0", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new(" 666\t", 0),                   "Parsed ' 666\\t' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new(" 666\t"),                   "Parsed ' 666\\t' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "'666' is a number");
         ok(sxe_jitson_get_number(jitson) == 666.0,                  "Value %f == 666.0", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new(" -0.1", 0),                    "Parsed '-0.1' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new(" -0.1"),                    "Parsed '-0.1' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "'-0.1'' is a number");
         ok(sxe_jitson_get_number(jitson) == -0.1,                   "Value %f == -0.1", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("1E-100", 0),                   "Parsed '1E=100' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("1E-100"),                   "Parsed '1E=100' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),     SXE_JITSON_TYPE_NUMBER, "1E100' is a number");
         ok(sxe_jitson_get_number(jitson) == 1E-100,                 "Value %f == 1E100", sxe_jitson_get_number(jitson));
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("\"\"", 0),                            "Parsed '\"\"' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("\"\""),                            "Parsed '\"\"' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\"' is a string");
         is_eq(sxe_jitson_get_string(jitson, NULL), "",                     "Correct value");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new(" \"x\"\n", 0),                        "Parsed ' \"x\"\\n' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new(" \"x\"\n"),                        "Parsed ' \"x\"\\n' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "' \"x\"\\n' is a string");
         is_eq(sxe_jitson_get_string(jitson, &len), "x",                    "Correct value");
         is(len,                                    1,                      "Correct length");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"", 0),  "Parsed '\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' (error %s)",
+        ok(jitson = sxe_jitson_new("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\""),  "Parsed '\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' (error %s)",
            strerror(errno));
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"' is a string");
         is_eq(sxe_jitson_get_string(jitson, NULL), "\"\\/\b\f\n\r\t",      "Correct value");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("\"\\u20aC\"", 0),                     "Parsed '\"\\u20aC\"' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("\"\\u20aC\""),                     "Parsed '\"\\u20aC\"' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),            SXE_JITSON_TYPE_STRING, "'\"\\u20aC\"' is a string");
         is_eq(sxe_jitson_get_string(jitson, NULL), "\xE2\x82\xAC",         "Correct UTF-8 value");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new(" {\t} ", 0),               "Parsed ' {\\t} ' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new(" {\t} "),               "Parsed ' {\\t} ' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_OBJECT, "' {\\t} ' is an object" );
         is(jitson->size,                0,                      "Correct size");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("{\"key\":\"value\"}", 0),  "Parsed '{\"key\":\"value\"}' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("{\"key\":\"value\"}"),  "Parsed '{\"key\":\"value\"}' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_OBJECT, "'{\"key\":\"value\"}' is an object");
         is(jitson->size,                1,                      "Correct size");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("[1, 2,4]", 0),             "Parsed '[1, 2,4]' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("[1, 2,4]"),             "Parsed '[1, 2,4]' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_ARRAY, "'[1, 2,4]' is an array" );
         is(jitson->size,                3,                      "Correct size");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("[]", 0),                  "Parsed '[]' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("[]"),                  "Parsed '[]' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_ARRAY, "'[]' is an array" );
         is(jitson->size,                0,                     "Correct size");
         sxe_jitson_free(jitson);
@@ -157,37 +133,37 @@ main(void)
 
         is(i, 128, "All identifier characters are correctly classified");
 
-        ok(jitson = test_jitson_new("true", 0),                 "Parsed 'true' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("true"),                 "Parsed 'true' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_BOOL,   "'true' is a boolean" );
         is(sxe_jitson_get_bool(jitson), true,                   "Correct value");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("false", 0),                "Parsed 'false' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("false"),                "Parsed 'false' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_BOOL,   "'false' is a boolean" );
         is(sxe_jitson_get_bool(jitson), false,                  "Correct value");
         sxe_jitson_free(jitson);
 
-        ok(jitson = test_jitson_new("null", 0),                "Parsed 'null' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("null"),                "Parsed 'null' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_NULL,  "'null' is the null type" );
         sxe_jitson_free(jitson);
     }
 
     diag("Cover edge cases of paraing");
     {
-        ok(!test_jitson_new("{0:1}", 0),    "Failed to parse non-string key '{0:1}' (error %s)",           strerror(errno));
-        ok(!test_jitson_new("\"", 0),       "Failed to parse unterminated string '\"' (error %s)",         strerror(errno));
-        ok(!test_jitson_new("\"\\", 0),     "Failed to parse unterminated escape '\"\\' (error %s)",       strerror(errno));
-        ok(!test_jitson_new("\"\\u", 0),    "Failed to parse truncated unicode escape '\"\\u' (error %s)", strerror(errno));
-        ok(!test_jitson_new("", 0),         "Failed to parse empty string '' (error %s)",                  strerror(errno));
-        ok(!test_jitson_new("{\"k\"0}", 0), "Failed to parse object missing colon '{\"k\"0}' (error %s)",  strerror(errno));
-        ok(!test_jitson_new("{\"k\":}", 0), "Failed to parse object missing value '{\"k\":}' (error %s)",  strerror(errno));
-        ok(!test_jitson_new("{\"k\":0", 0), "Failed to parse object missing close '{\"k\":0' (error %s)",  strerror(errno));
-        ok(!test_jitson_new("[0", 0),       "Failed to parse array missing close '[0' (error %s)",         strerror(errno));
-        ok(!test_jitson_new("0.", 0),       "Failed to parse invalid fraction '0.' (error %s)",            strerror(errno));
-        ok(!test_jitson_new("1.0E", 0),     "Failed to parse invalid exponent '1.0E' (error %s)",          strerror(errno));
-        ok(!test_jitson_new("fathead", 0),  "Failed to parse invalid token 'fathead' (error %s)",          strerror(errno));
-        ok(!test_jitson_new("n", 0),        "Failed to parse invalid token 'n' (error %s)",                strerror(errno));
-        ok(!test_jitson_new("twit", 0),     "Failed to parse invalid token 'twit' (error %s)",             strerror(errno));
+        ok(!sxe_jitson_new("{0:1}"),    "Failed to parse non-string key '{0:1}' (error %s)",           strerror(errno));
+        ok(!sxe_jitson_new("\""),       "Failed to parse unterminated string '\"' (error %s)",         strerror(errno));
+        ok(!sxe_jitson_new("\"\\"),     "Failed to parse unterminated escape '\"\\' (error %s)",       strerror(errno));
+        ok(!sxe_jitson_new("\"\\u"),    "Failed to parse truncated unicode escape '\"\\u' (error %s)", strerror(errno));
+        ok(!sxe_jitson_new(""),         "Failed to parse empty string '' (error %s)",                  strerror(errno));
+        ok(!sxe_jitson_new("{\"k\"0}"), "Failed to parse object missing colon '{\"k\"0}' (error %s)",  strerror(errno));
+        ok(!sxe_jitson_new("{\"k\":}"), "Failed to parse object missing value '{\"k\":}' (error %s)",  strerror(errno));
+        ok(!sxe_jitson_new("{\"k\":0"), "Failed to parse object missing close '{\"k\":0' (error %s)",  strerror(errno));
+        ok(!sxe_jitson_new("[0"),       "Failed to parse array missing close '[0' (error %s)",         strerror(errno));
+        ok(!sxe_jitson_new("0."),       "Failed to parse invalid fraction '0.' (error %s)",            strerror(errno));
+        ok(!sxe_jitson_new("1.0E"),     "Failed to parse invalid exponent '1.0E' (error %s)",          strerror(errno));
+        ok(!sxe_jitson_new("fathead"),  "Failed to parse invalid token 'fathead' (error %s)",          strerror(errno));
+        ok(!sxe_jitson_new("n"),        "Failed to parse invalid token 'n' (error %s)",                strerror(errno));
+        ok(!sxe_jitson_new("twit"),     "Failed to parse invalid token 'twit' (error %s)",             strerror(errno));
 
         char json[65562];    // Big enough for an object with a > 64K member name
         json[len = 0] = '{';
@@ -197,7 +173,7 @@ main(void)
             json[++len] = 'm';
 
         json[++len] = '"';
-        ok(!test_jitson_new(json, 0), "Failed to parse member name of 64K chanracters (error %s)", strerror(errno));
+        ok(!sxe_jitson_new(json), "Failed to parse member name of 64K chanracters (error %s)", strerror(errno));
         errno = 0;
     }
 
@@ -215,8 +191,10 @@ main(void)
 
     diag("Test membership function");
     {
-        ok(jitson = test_jitson_new("{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}", 0),
-           "Parsed complex object (error %s)", strerror(errno));
+        const char *object_json_in  = "{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}";
+        const char *object_json_out = "{\"biglongname\":\"B\",\"a\":1,\"c\":[2,3],\"f\":true,\"d\":{\"e\":4}}";
+
+        ok(jitson = sxe_jitson_new(object_json_in),                         "Parsed complex object (error %s)", strerror(errno));
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_OBJECT_GET_MEMBER);
         ok(!sxe_jitson_object_get_member(jitson, "a", 0),                   "Can't access object on failure to calloc index");
@@ -234,6 +212,7 @@ main(void)
         ok(member = sxe_jitson_object_get_member(jitson, "f", 0),           "Object has a member 'f'");
         ok(sxe_jitson_get_bool(member),                                     "Member is 'true'");
         is(sxe_jitson_get_size(member), 0,                                  "Can't take the size of a number, bool, or null");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), object_json_out, "Encoder spat out same JSON as we took in");
         sxe_jitson_free(jitson);
     }
 
@@ -241,7 +220,7 @@ main(void)
     {
         struct sxe_jitson *element;
 
-        ok(jitson = test_jitson_new("[0, \"anotherlongstring\", {\"member\": null}, true]", 0),
+        ok(jitson = sxe_jitson_new("[0, \"anotherlongstring\", {\"member\": null}, true]"),
            "Parsed complex array (error %s)", strerror(errno));
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_ARRAY_GET_ELEMENT);
@@ -255,19 +234,18 @@ main(void)
         ok(element = sxe_jitson_array_get_element(jitson, 2),            "Array has a element 2");
         is(sxe_jitson_get_type(element), SXE_JITSON_TYPE_OBJECT,         "Elememt is an object");
         ok(element = sxe_jitson_array_get_element(jitson, 3),            "Array has a element 3");
-        ok(sxe_jitson_get_bool(element),                                  "Element is 'true'");
+        ok(sxe_jitson_get_bool(element),                                 "Element is 'true'");
         ok(!sxe_jitson_array_get_element(jitson, 4),                     "Object has no element 4");;
         sxe_jitson_free(jitson);
     }
 
     diag("Test bug fixes against regressions");
     {
-         ok(jitson = test_jitson_new("{\"A.D.\": 1, \"x\": 0}", 0),   "Parsed problem member name (error %s)", strerror(errno));
+         ok(jitson = sxe_jitson_new("{\"A.D.\": 1, \"x\": 0}"),   "Parsed problem member name (error %s)", strerror(errno));
          ok(member = sxe_jitson_object_get_member(jitson, "A.D.", 0), "Object has a member 'A.D.'");
          is(sxe_jitson_get_type(member), SXE_JITSON_TYPE_NUMBER,      "A.D.'s value is a number");
     }
 
     sxe_jitson_stack_free_thread();    // Currently, just for coverage
-    free(json_mutable);
     return exit_status();
 }

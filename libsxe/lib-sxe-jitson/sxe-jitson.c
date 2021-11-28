@@ -109,8 +109,8 @@ sxe_jitson_stack_next(struct sxe_jitson_stack *stack)
     return stack->count++;
 }
 
-static char *
-sxe_jitson_skip_whitespace(char *json)
+static const char *
+sxe_jitson_skip_whitespace(const char *json)
 {
     while (isspace(*json))
         json++;
@@ -118,8 +118,8 @@ sxe_jitson_skip_whitespace(char *json)
     return json;
 }
 
-static char *
-sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, char *json, bool is_member_name)
+static const char *
+sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, bool is_member_name)
 {
     if (*(json = sxe_jitson_skip_whitespace(json)) != '"') {
         errno = ENOMSG;
@@ -263,8 +263,8 @@ static uint64_t identifier_chars[4] = {0x03FF400000000000, 0x07FFFFFE87FFFFFE, 0
  *
  * @return Pointer to first non-identifier character in json
  */
-char *
-sxe_jitson_parse_identifier(char *json)
+const char *
+sxe_jitson_parse_identifier(const char *json)
 {
     unsigned c;
 
@@ -274,13 +274,13 @@ sxe_jitson_parse_identifier(char *json)
     return json;
 }
 
-char *
-sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, char *json)
+const char *
+sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, const char *json)
 {
-    double   sign  = 1.0;
-    char    *token = NULL;
-    char    *endptr;
-    unsigned index;
+    double      sign  = 1.0;
+    const char *token = NULL;
+    char       *endptr;
+    unsigned    index;
 
     if (*(json = sxe_jitson_skip_whitespace(json)) == '\0') {    // Nothing but whitespace
         errno = ENODATA;
@@ -446,7 +446,7 @@ INVALID:
  * @return A jitson object or NULL with errno ENOMEM, EINVAL, EILSEQ, EMSGSIZE, ENODATA, ENOTUNIQ, or EOVERFLOW)
  */
 struct sxe_jitson *
-sxe_jitson_new(char *json)
+sxe_jitson_new(const char *json)
 {
     struct sxe_jitson_stack *stack = sxe_jitson_stack_get_thread();
 
@@ -469,7 +469,7 @@ sxe_jitson_free(struct sxe_jitson *jitson)
 }
 
 unsigned
-sxe_jitson_get_type(struct sxe_jitson *jitson)
+sxe_jitson_get_type(const struct sxe_jitson *jitson)
 {
     return jitson->type & SXE_JITSON_TYPE_MASK;
 }
@@ -507,7 +507,7 @@ sxe_jitson_type_to_str(unsigned type)
  * return The numeric value as a double; if the jitson is not an integer, results are undefined
  */
 double
-sxe_jitson_get_number(struct sxe_jitson *jitson)
+sxe_jitson_get_number(const struct sxe_jitson *jitson)
 {
     SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_NUMBER,
           "Can't get the numeric value of a %s", sxe_jitson_type_to_str(jitson->type));
@@ -517,10 +517,10 @@ sxe_jitson_get_number(struct sxe_jitson *jitson)
 /**
  * Get the string value of a jitson whose type is SXE_JITSON_TYPE_STRING
  *
- * return The string value as a double; if the jitson is not an integer, results are undefined
+ * @return The string value as a double; if the jitson is not an integer, results are undefined
  */
 const char *
-sxe_jitson_get_string(struct sxe_jitson *jitson, unsigned *size)
+sxe_jitson_get_string(const struct sxe_jitson *jitson, unsigned *size)
 {
     SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_STRING,
           "Can't get the string value of a %s", sxe_jitson_type_to_str(jitson->type));
@@ -537,7 +537,7 @@ sxe_jitson_get_string(struct sxe_jitson *jitson, unsigned *size)
  * return The bool value; if the jitson is not an boolean, results are undefined
  */
 bool
-sxe_jitson_get_bool(struct sxe_jitson *jitson)
+sxe_jitson_get_bool(const struct sxe_jitson *jitson)
 {
     SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_BOOL,
           "Can't get the boolean value of a %s", sxe_jitson_type_to_str(jitson->type));
@@ -545,13 +545,16 @@ sxe_jitson_get_bool(struct sxe_jitson *jitson)
 }
 
 unsigned
-sxe_jitson_get_size(struct sxe_jitson *jitson)
+sxe_jitson_get_size(const struct sxe_jitson *jitson)
 {
     switch (sxe_jitson_get_type(jitson)) {
     case SXE_JITSON_TYPE_STRING:
     case SXE_JITSON_TYPE_OBJECT:
     case SXE_JITSON_TYPE_ARRAY:
         return jitson->size;
+
+    case SXE_JITSON_TYPE_MEMBER:
+        return jitson->member.len;
     }
 
     SXEL2("JSON type %s has no size", sxe_jitson_type_to_str(jitson->type));
@@ -573,7 +576,7 @@ sxe_jitson_skip(struct sxe_jitson *jitson)
         return jitson + 1 + (jitson->size + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_STRING_SIZE) / SXE_JITSON_TOKEN_SIZE;
 
     case SXE_JITSON_TYPE_MEMBER:
-        return jitson + 1 + (jitson->member.len + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_MEMBER_NAME_SIZE) / SXE_JITSON_TOKEN_SIZE;
+        return SXE_JITSON_MEMBER_SKIP(jitson);
 
     case SXE_JITSON_TYPE_OBJECT:
     case SXE_JITSON_TYPE_ARRAY:
