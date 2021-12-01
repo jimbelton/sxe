@@ -27,10 +27,6 @@ main(void)
         is(sxe_jitson_new("0"), NULL, "Failed to allocate the thread stack's initial jitsons");
         MOCKFAIL_END_TESTS();
 
-        MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_GET_JITSON);
-        is(sxe_jitson_new("0"), NULL, "Failed to allocate a new stack after getting the parsed object");
-        MOCKFAIL_END_TESTS();
-
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
         is(sxe_jitson_new("{\"one\":1}"), NULL, "Failed to realloc the thread stack's jitsons on a string");
         MOCKFAIL_END_TESTS();
@@ -44,6 +40,9 @@ main(void)
         MOCKFAIL_END_TESTS();
 
         jitson = sxe_jitson_new("999999999");
+        MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT_AFTER_GET);
+        is(sxe_jitson_new("0"), NULL, "Failed to allocate a new stack after getting the parsed object");
+        MOCKFAIL_END_TESTS();
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_STACK_NEXT);
         is(sxe_jitson_new("{\"x\": 0}"), NULL, "Failed to realloc the thread stack's jitsons on string inside an object");
         MOCKFAIL_END_TESTS();

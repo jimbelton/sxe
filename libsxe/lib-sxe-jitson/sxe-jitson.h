@@ -58,12 +58,12 @@ struct sxe_jitson_stack {
 #define SXE_JITSON_MEMBER_SKIP(jitson) \
     ((jitson) + 1 + ((jitson)->member.len + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_MEMBER_NAME_SIZE) / SXE_JITSON_TOKEN_SIZE)
 
-#define MOCK_FAIL_STACK_NEW_OBJECT  ((char *)sxe_jitson_new + 0)
-#define MOCK_FAIL_STACK_NEW_JITSONS ((char *)sxe_jitson_new + 1)
-#define MOCK_FAIL_STACK_GET_JITSON  ((char *)sxe_jitson_new + 2)
-#define MOCK_FAIL_STACK_DUP         ((char *)sxe_jitson_new + 3)
-#define MOCK_FAIL_STACK_NEXT        ((char *)sxe_jitson_new + 4)
-#define MOCK_FAIL_OBJECT_GET_MEMBER ((char *)sxe_jitson_new + 5)
-#define MOCK_FAIL_ARRAY_GET_ELEMENT ((char *)sxe_jitson_new + 6)
+#define MOCK_FAIL_STACK_NEW_OBJECT     ((char *)sxe_jitson_new + 0)
+#define MOCK_FAIL_STACK_NEW_JITSONS    ((char *)sxe_jitson_new + 1)
+#define MOCK_FAIL_STACK_NEXT_AFTER_GET ((char *)sxe_jitson_new + 2)
+#define MOCK_FAIL_STACK_DUP            ((char *)sxe_jitson_new + 3)
+#define MOCK_FAIL_STACK_NEXT           ((char *)sxe_jitson_new + 4)
+#define MOCK_FAIL_OBJECT_GET_MEMBER    ((char *)sxe_jitson_new + 5)
+#define MOCK_FAIL_ARRAY_GET_ELEMENT    ((char *)sxe_jitson_new + 6)
 
 #endif

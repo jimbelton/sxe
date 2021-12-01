@@ -88,7 +88,7 @@ sxe_factory_add(struct sxe_factory *factory, const char *data, size_t len)
  *
  * @return The current data or NULL if no data has been allocated
  */
-char *
+void *
 sxe_factory_look(struct sxe_factory *factory, size_t *len_out)
 {
     if (len_out)
@@ -105,7 +105,7 @@ sxe_factory_look(struct sxe_factory *factory, size_t *len_out)
  *
  * @return The data removed from the factory or NULL if no data has been allocated or realloc failed
  */
-char *
+void *
 sxe_factory_remove(struct sxe_factory *factory, size_t *len_out)
 {
     char * data = sxe_factory_look(factory, len_out);

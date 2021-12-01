@@ -44,13 +44,8 @@ sxe_jitson_stack_get_jitson(struct sxe_jitson_stack *stack)
     if (stack->maximum > stack->count)
         ret = realloc(ret, stack->count * sizeof(*stack->jitsons)) ?: stack->jitsons;
 
-    if (!(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_GET_JITSON, NULL,
-                                    malloc(((size_t)stack->maximum * sizeof(*stack->jitsons)))))) {
-        stack->jitsons = ret;
-        return NULL;
-    }
-
-    stack->count = 0;
+    stack->jitsons = NULL;
+    stack->count   = 0;
     return ret;
 }
 
@@ -105,6 +100,9 @@ sxe_jitson_stack_next(struct sxe_jitson_stack *stack)
         stack->maximum = new_maximum;
         stack->jitsons = new_jitsons;    // If the array moved, point current into the new one.
     }
+    else if (!stack->jitsons && !(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_NEXT_AFTER_GET, NULL,
+                                                            malloc(((size_t)stack->maximum * sizeof(*stack->jitsons))))))
+        return SXE_JITSON_STACK_ERROR;
 
     return stack->count++;
 }
