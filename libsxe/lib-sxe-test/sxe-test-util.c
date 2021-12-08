@@ -19,18 +19,27 @@
  * THE SOFTWARE.
  */
 
-#ifndef SXE_FACTORY_H
-#define SXE_FACTORY_H
+#include <assert.h>
+#include <malloc.h>
+#include <sys/time.h>
 
-/* Memory allocating factory
- */
-struct sxe_factory {
-    size_t len;
-    size_t size;
-    size_t maxincr;
-    char  *data;
-};
+#include "sxe-test.h"
 
-#include "sxe-factory-proto.h"
+double
+test_doubletime(void)
+{
+    struct timeval now;
 
-#endif
+    assert(gettimeofday(&now, NULL) == 0);
+    return now.tv_sec + now.tv_usec / 1000000.0;
+}
+
+#pragma GCC diagnostic ignored "-Waggregate-return"    // Shut gcc up about mallinfo returning a struct
+
+size_t
+test_memory(void)
+{
+    struct mallinfo info = mallinfo();
+
+    return info.hblkhd + info.uordblks;
+}

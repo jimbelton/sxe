@@ -6,6 +6,7 @@
 
 #include "mockfail.h"
 #include "sxe-jitson.h"
+#include "sxe-test.h"
 
 int
 main(void)
@@ -14,8 +15,9 @@ main(void)
     struct sxe_jitson *member;
     char              *json_out;
     unsigned           len;
+    size_t             start_memory = test_memory();
 
-    plan_tests(111);
+    plan_tests(124);
 
     diag("Memory allocation failure tests");
     {
@@ -264,6 +266,37 @@ main(void)
          is(sxe_jitson_get_type(member), SXE_JITSON_TYPE_NUMBER,      "A.D.'s value is a number");
     }
 
+    diag("Test construction");
+    {
+        struct sxe_jitson primitive[1];
+
+        sxe_jitson_make_null(primitive);
+        is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_NULL, "null is null");
+        ok(!sxe_jitson_test(primitive),                          "null tests false");
+
+        sxe_jitson_make_bool(primitive, true);
+        is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_BOOL, "true is a bool");
+        ok(sxe_jitson_test(primitive),                           "true tests true");
+
+        sxe_jitson_make_number(primitive, 1.3E100);
+        is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_NUMBER, "1.3E100 is a number");
+        ok(sxe_jitson_test(primitive),                             "1.3E100 tests true");
+
+        sxe_jitson_make_string_ref(primitive, "hello, world");
+        is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_STRING,    "A string_ref is a string");
+        is_eq(sxe_jitson_get_string(primitive, NULL), "hello, world", "String_refs values can be retrieved");
+        is(primitive->size, 0,                                        "String_refs don't know their lengths on creation");
+        ok(sxe_jitson_test(primitive),                                "Non-empty string ref is true");
+        is(sxe_jitson_get_size(primitive), 12,                        "String_ref is 12 characters");
+        is(primitive->size, 12,                                       "String_refs cache their lengths");
+        sxe_jitson_make_string_ref(primitive, "");
+        ok(!sxe_jitson_test(primitive),                               "Empty string_ref tests false");
+    }
+
     sxe_jitson_stack_free_thread();    // Currently, just for coverage
+
+    if (test_memory() != start_memory)
+        diag("Memory in use is %zu, not %zu as it was at the start of the test program", test_memory(), start_memory);
+
     return exit_status();
 }
