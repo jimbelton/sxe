@@ -91,7 +91,11 @@ sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
         break;
 
     case SXE_JITSON_TYPE_ARRAY:
-        len = sxe_jitson_get_size(jitson);
+        if ((len = sxe_jitson_get_size(jitson)) == 0) {
+            sxe_factory_add(factory, "[]", 2);
+            break;
+        }
+
         sxe_factory_add(factory, "[", 1);
 
         for (i = 0; i < len - 1; i++) {
@@ -99,9 +103,7 @@ sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
             sxe_factory_add(factory, ",", 1);
         }
 
-        if (len)
-            sxe_jitson_build_json(sxe_jitson_array_get_element(jitson, len - 1), factory);
-
+        sxe_jitson_build_json(sxe_jitson_array_get_element(jitson, len - 1), factory);
         sxe_factory_add(factory, "]", 1);
         break;
 

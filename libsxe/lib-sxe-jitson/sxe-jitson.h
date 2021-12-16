@@ -36,6 +36,7 @@
 #define SXE_JITSON_TYPE_NULL    6
 #define SXE_JITSON_TYPE_MEMBER  7            // Internal type for member names
 #define SXE_JITSON_TYPE_MASK    0xFFFF       // Bits included in the type enumeration
+#define SXE_JITSON_TYPE_PARTIAL 0x4000000    // Flag set for arrays and object if they are under construction
 #define SXE_JITSON_TYPE_INDEXED 0x8000000    // Flag set for arrays and object if they have been indexed
 #define SXE_JITSON_TYPE_IS_REF  0x8000000    // Flag set strings that are references (size == 0 until cached or if empty)
 
@@ -48,22 +49,27 @@
 /* A jitson token. Copied strings of > 7 bytes length continue into the next token.
  */
 struct sxe_jitson {
-    uint32_t type;               // See definitions above
+    uint32_t type;                 // See definitions above
     union {
-        uint32_t size;           // Length of string, number of elements/members in array/object
-        uint32_t link;           // For a member in an indexed object, this is the offset of the next member in the bucket
+        uint32_t size;             // Length of string, number of elements/members in array/object
+        uint32_t link;             // For a member in an indexed object, this is the offset of the next member in the bucket
     };
     union {
-        uint32_t   *index;         // Points to offsets (size of them) to elements/members, or 0 for empty buckets
-        uint64_t    integer;       // Offset of the first token past an array or object before it is indexed
-        double      number;        // JSON numbers must be capable of being stored in a double wide floating point number
-        bool        boolean;       // True and false
-        char        string[8];     // First 8 bytes of a string, including NUL. Strings > 7 bytes long run into the next token
-        const void *reference;     // Points to an external value
+        uint32_t   *index;          // Points to offsets (size of them) to elements/members, or 0 for empty buckets
+        uint64_t    integer;        // Offset of the first token past an array or object before it is indexed
+        double      number;         // JSON numbers must be capable of being stored in a double wide floating point number
+        bool        boolean;        // True and false
+        char        string[8];      // First 8 bytes of a string, including NUL. Strings > 7 bytes long run into the next token
+        const void *reference;      // Points to an external value
         struct {
-            uint16_t len;        // Length of member name. Member names must be 65535 bytes long or less.
-            char     name[6];    // First 6 bytes of the name, including NUL. Names > 5 bytes long run into the next token
+            uint16_t len;           // Length of member name. Member names must be 65535 bytes long or less.
+            char     name[6];       // First 6 bytes of the name, including NUL. Names > 5 bytes long run into the next token
         } member;
+        struct {
+            uint8_t  no_value;      // Object under construction has a member name with no value
+            uint8_t  nested;        // Object or array under construction contains another array/object under construction
+            uint32_t collection;    // Object or array is contained in the object or array at this index - 1 or 0 if its the root
+        } partial;
     };
 };
 
@@ -71,6 +77,7 @@ struct sxe_jitson_stack {
     unsigned           maximum;
     unsigned           count;
     struct sxe_jitson *jitsons;
+    unsigned           open;        // Index + 1 of the deepest open collection that's under construction or 0 if none
 };
 
 #include "sxe-jitson-proto.h"

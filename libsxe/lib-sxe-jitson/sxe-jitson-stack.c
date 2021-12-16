@@ -65,6 +65,8 @@ sxe_jitson_stack_get_jitson(struct sxe_jitson_stack *stack)
 {
     struct sxe_jitson *ret = stack->jitsons;
 
+    SXEA1(!stack->open, "Can't get a jitson that's an open collection");
+
     if (stack->maximum > stack->count)
         ret = realloc(ret, stack->count * sizeof(*stack->jitsons)) ?: stack->jitsons;
 
@@ -438,4 +440,52 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, const char *json)
 INVALID:
     errno = EINVAL;
     return NULL;
+}
+
+/**
+ * Begin construction of an object on a stack
+ *
+ * @param type SXE_JITSON_TYPE_OBJECT or SXE_JITSON_TYPE_ARRAY
+ *
+ * @return true on success, false on allocation failure
+ */
+bool
+sxe_jitson_stack_open_collection(struct sxe_jitson_stack *stack, uint32_t type)
+{
+    unsigned index;
+
+    SXEA6(type == SXE_JITSON_TYPE_ARRAY || type == SXE_JITSON_TYPE_OBJECT, "Only arrays and objects can be constructed");
+
+    if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
+        return false;
+
+    stack->jitsons[index].type               = type | SXE_JITSON_TYPE_PARTIAL;
+    stack->jitsons[index].size               = 0;
+    stack->jitsons[index].partial.no_value   = false;
+    stack->jitsons[index].partial.nested     = false;
+    stack->jitsons[index].partial.collection = stack->open;
+    stack->open                              = index + 1;
+    return true;
+}
+
+/**
+ * Finish construction of an object or array on a stack
+ *
+ * @note Aborts if the object is not a collection under construction, has an incomplete nested object, or is an object and has a
+ *       member name without a matching value.
+ */
+void
+sxe_jitson_stack_close_collection(struct sxe_jitson_stack *stack)
+{
+    unsigned index;
+
+    SXEA1(stack->open, "There must be an open collection on the stack");
+    index = stack->open - 1;
+    SXEA1(stack->jitsons[index].type & SXE_JITSON_TYPE_PARTIAL, "Index %u is not an open collection", index);
+    SXEA1(!stack->jitsons[index].partial.no_value, "Index %u is an object with a member name with no value", index);
+    SXEA1(!stack->jitsons[index].partial.nested,   "Index %u is a collection with a nested open collection", index);
+
+    stack->open                   = stack->jitsons[index].partial.collection;
+    stack->jitsons[index].type    = stack->jitsons[index].type & ~SXE_JITSON_TYPE_PARTIAL;
+    stack->jitsons[index].integer = stack->count - index;    // Store the offset past the object or array
 }

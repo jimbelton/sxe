@@ -251,8 +251,9 @@ sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsign
     unsigned           i;
     uint32_t          *bucket;
 
-    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_OBJECT,
-          "Can't get a member value from a %s", sxe_jitson_type_to_str(jitson->type));
+    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_OBJECT || (jitson->type & SXE_JITSON_TYPE_PARTIAL),
+          "Can't get a member value from a %s%s", (jitson->type & SXE_JITSON_TYPE_PARTIAL) ? "partial " : "",
+          sxe_jitson_type_to_str(jitson->type));
     len = len ?: strlen(name);                       // Determine the length of the member name if not provided
 
     if (!(jitson->type & SXE_JITSON_TYPE_INDEXED)) {
@@ -288,8 +289,9 @@ sxe_jitson_array_get_element(struct sxe_jitson *jitson, unsigned idx)
     struct sxe_jitson *element;
     unsigned           i;
 
-    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_ARRAY,
-          "Can't get an element value from a %s", sxe_jitson_type_to_str(jitson->type));
+    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_ARRAY|| (jitson->type & SXE_JITSON_TYPE_PARTIAL),
+          "Can't get an element value from a %s%s", (jitson->type & SXE_JITSON_TYPE_PARTIAL) ? "partial " : "",
+          sxe_jitson_type_to_str(jitson->type));
 
     if (idx >= jitson->size) {
         SXEL2("Array element %u is not less than size %u", idx, jitson->size);

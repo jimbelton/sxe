@@ -17,7 +17,7 @@ main(void)
     unsigned           len;
     size_t             start_memory = test_memory();
 
-    plan_tests(124);
+    plan_tests(130);
 
     diag("Memory allocation failure tests");
     {
@@ -266,7 +266,7 @@ main(void)
          is(sxe_jitson_get_type(member), SXE_JITSON_TYPE_NUMBER,      "A.D.'s value is a number");
     }
 
-    diag("Test construction");
+    diag("Test simple construction");
     {
         struct sxe_jitson primitive[1];
 
@@ -291,6 +291,23 @@ main(void)
         is(primitive->size, 12,                                       "String_refs cache their lengths");
         sxe_jitson_make_string_ref(primitive, "");
         ok(!sxe_jitson_test(primitive),                               "Empty string_ref tests false");
+    }
+
+    diag("Test complex construction");
+    {
+        struct sxe_jitson_stack *stack = sxe_jitson_stack_get_thread();
+
+        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_OBJECT), "Opened an object on the stack");
+        sxe_jitson_stack_close_collection(stack);
+        ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the object from the stack");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "{}",            "Look, it's an empty object");
+        free(json_out);
+
+        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_ARRAY),  "Opened an array on the stack");
+        sxe_jitson_stack_close_collection(stack);
+        ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the array from the stack");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[]",            "Look, it's an empty array");
+        free(json_out);
     }
 
     sxe_jitson_stack_free_thread();    // Currently, just for coverage
