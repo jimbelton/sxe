@@ -17,7 +17,7 @@ main(void)
     unsigned           len;
     size_t             start_memory = test_memory();
 
-    plan_tests(130);
+    plan_tests(137);
 
     diag("Memory allocation failure tests");
     {
@@ -50,7 +50,7 @@ main(void)
         MOCKFAIL_END_TESTS();
 
         MOCKFAIL_START_TESTS(1, sxe_factory_reserve);
-        is(sxe_jitson_to_json(jitson, NULL), NULL,              "Failed to encode large to JSON on realloc failure");
+        is(sxe_jitson_to_json(jitson, NULL), NULL, "Failed to encode large to JSON on realloc failure");
         MOCKFAIL_END_TESTS();
         sxe_jitson_free(jitson);
     }
@@ -307,6 +307,26 @@ main(void)
         sxe_jitson_stack_close_collection(stack);
         ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the array from the stack");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[]",            "Look, it's an empty array");
+        free(json_out);
+
+        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_OBJECT),          "Opened an object on the stack");
+        ok(sxe_jitson_stack_add_member_name(stack, "null", SXE_JITSON_TYPE_IS_REF),  "Added a member name reference");
+        ok(sxe_jitson_stack_add_null(stack),                                         "Added a null value");
+        ok(sxe_jitson_stack_add_member_name(stack, "bool", SXE_JITSON_TYPE_IS_COPY), "Added a member name by copy");
+        ok(sxe_jitson_stack_add_bool(stack, true),                                   "Added boolean true");
+       // sxe_jitson_make_bool(primitive, true);
+       // is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_BOOL, "true is a bool");
+       // ok(sxe_jitson_test(primitive),                           "true tests true");
+       //
+       // sxe_jitson_make_number(primitive, 1.3E100);
+       // is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_NUMBER, "1.3E100 is a number");
+       // ok(sxe_jitson_test(primitive),                             "1.3E100 tests true");
+       //
+       // sxe_jitson_make_string_ref(primitive, "hello, world");
+        sxe_jitson_stack_close_collection(stack);
+        ok(jitson = sxe_jitson_stack_get_jitson(stack), "Got the object from the stack");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "{\"bool\":true,\"null\":null}",
+              "Got the expected object");
         free(json_out);
     }
 

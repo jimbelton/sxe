@@ -31,32 +31,30 @@
 char *
 sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
 {
-    char       *reservation;
+    char       *ret;
     const char *string;
     unsigned    first, i, len;
     uint32_t    index, type;
     char        unicode_str[8];
 
+    SXEE6("(jitson=%p,factory=%p); // jitson->type=%s", jitson, factory, sxe_jitson_type_to_str(sxe_jitson_get_type(jitson)));
+
     switch (type = sxe_jitson_get_type(jitson)) {
     case SXE_JITSON_TYPE_NUMBER:
-        if ((reservation = sxe_factory_reserve(factory, DOUBLE_MAX_LEN)) == NULL)
-            return NULL;
+        if ((ret = sxe_factory_reserve(factory, DOUBLE_MAX_LEN)) == NULL)
+            goto OUT;
 
-        len = snprintf(reservation, DOUBLE_MAX_LEN + 1, "%G", sxe_jitson_get_number(jitson));
+        len = snprintf(ret, DOUBLE_MAX_LEN + 1, "%G", sxe_jitson_get_number(jitson));
         SXEA6(len <= DOUBLE_MAX_LEN, "As a string, numeric value %G is more than %u characters long",
               sxe_jitson_get_number(jitson), DOUBLE_MAX_LEN);
         sxe_factory_commit(factory, len);
-        return reservation;
+        goto OUT;
 
     case SXE_JITSON_TYPE_MEMBER:
     case SXE_JITSON_TYPE_STRING:
-        len = sxe_jitson_get_size(jitson);
+        len    = sxe_jitson_get_size(jitson);
+        string = sxe_jitson_get_string(jitson, NULL);
         sxe_factory_add(factory, "\"", 1);
-
-        if (type == SXE_JITSON_TYPE_MEMBER)
-            string = jitson->member.name;
-        else
-            string = sxe_jitson_get_string(jitson, NULL);
 
         for (first = i = 0; i < len; i++)
             /* If the character is a control character or " or \, encode it as a unicode escape sequence.
@@ -123,7 +121,7 @@ sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
                 sxe_factory_commit(factory, 1);                                    // Commit the '{' or ','
                 sxe_jitson_build_json(&jitson[index], factory);                    // Output the member name
                 sxe_factory_add(factory, ":", 1);
-                sxe_jitson_build_json(SXE_JITSON_MEMBER_SKIP(&jitson[index]), factory);    // Output the value
+                sxe_jitson_build_json(sxe_jitson_string_skip(&jitson[index]), factory);    // Output the value
                 *sxe_factory_reserve(factory, 1) = ',';
             }
         }
@@ -131,9 +129,16 @@ sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
         *sxe_factory_reserve(factory, 1) = '}';    // Repeating a reservation is safe, allowing the last ',' to be overwritten
         sxe_factory_commit(factory, 1);
         break;
+
+    default:
+        SXEL2(": Can't build a JSON string for type %s", sxe_jitson_type_to_str(sxe_jitson_get_type(jitson)));
     }
 
-    return sxe_factory_look(factory, NULL);
+    ret = sxe_factory_look(factory, NULL);
+
+OUT:
+    SXER6("return '%s'", ret);
+    return ret;
 }
 
 char *

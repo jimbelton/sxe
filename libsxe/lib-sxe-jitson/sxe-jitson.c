@@ -95,7 +95,7 @@ sxe_jitson_free_indeces(struct sxe_jitson *jitson)
     case SXE_JITSON_TYPE_OBJECT:
         for (i = 0; i < len; i++)                                                   // For each bucket
             for (index = jitson->index[i]; index; index = jitson[index].link)       // For each member in the bucket
-                sxe_jitson_free_indeces(SXE_JITSON_MEMBER_SKIP(&jitson[index]));    // Free any indeces used by the value
+                sxe_jitson_free_indeces(sxe_jitson_string_skip(&jitson[index]));    // Free any indeces used by the value
 
         break;
     }
@@ -159,7 +159,7 @@ sxe_jitson_get_number(const struct sxe_jitson *jitson)
 }
 
 /**
- * Get the string value of a jitson whose type is SXE_JITSON_TYPE_STRING
+ * Get the string value of a jitson whose type is SXE_JITSON_TYPE_STRING or SXE_JITSON_TYPE_MEMBER_NAME
  *
  * @param jitson Pointer to the jitson
  * @param size_out NULL or a pointer to a variable of type size_t to return the length of the string in
@@ -169,7 +169,7 @@ sxe_jitson_get_number(const struct sxe_jitson *jitson)
 const char *
 sxe_jitson_get_string(struct sxe_jitson *jitson, unsigned *size_out)
 {
-    SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_STRING,
+    SXEA6(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_STRING || sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_MEMBER,
           "Can't get the string value of a %s", sxe_jitson_type_to_str(jitson->type));
 
     if (size_out)
@@ -211,32 +211,41 @@ sxe_jitson_get_size(struct sxe_jitson *jitson)
         return jitson->size;
 
     case SXE_JITSON_TYPE_MEMBER:
-        return jitson->member.len;
+        return jitson->type & SXE_JITSON_TYPE_IS_REF ? strlen(jitson->reference) : strlen(jitson->string);
     }
 
     SXEL2("JSON type %s has no size", sxe_jitson_type_to_str(jitson->type));
     return 0;
 }
 
-/* This function is only usable when and array/object has not yet been indexed.
+struct sxe_jitson *
+sxe_jitson_string_skip(struct sxe_jitson *jitson)
+{
+    return jitson + 1 + (jitson->type & SXE_JITSON_TYPE_IS_REF
+                         ? 0
+                         : (sxe_jitson_get_size(jitson) + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_STRING_SIZE)
+                           / SXE_JITSON_TOKEN_SIZE);
+}
+
+/* This function is only usable when an array/object has not yet been indexed.
  */
 static struct sxe_jitson *
 sxe_jitson_skip(struct sxe_jitson *jitson)
 {
-    switch (jitson->type) {
+    switch (sxe_jitson_get_type(jitson)) {
     case SXE_JITSON_TYPE_NUMBER:
     case SXE_JITSON_TYPE_BOOL:
     case SXE_JITSON_TYPE_NULL:
         return jitson + 1;
 
-    case SXE_JITSON_TYPE_STRING:
-        return jitson + 1 + (jitson->size + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_STRING_SIZE) / SXE_JITSON_TOKEN_SIZE;
-
     case SXE_JITSON_TYPE_MEMBER:
-        return SXE_JITSON_MEMBER_SKIP(jitson);
+    case SXE_JITSON_TYPE_STRING:
+        return sxe_jitson_string_skip(jitson);
 
     case SXE_JITSON_TYPE_OBJECT:
     case SXE_JITSON_TYPE_ARRAY:
+        SXEA6((jitson->type & SXE_JITSON_TYPE_INDEXED) == 0, "Once an %s is indexed, it can't be skipped",
+              sxe_jitson_type_to_str(jitson->type));
         return jitson + jitson->integer;    // Add the offset of the next stack frame
     }
 
@@ -244,15 +253,24 @@ sxe_jitson_skip(struct sxe_jitson *jitson)
     return NULL;                                                                      /* COVERAGE EXCLUSION: Can't happen */
 }
 
+/**
+ * Get a member's value from an object
+ *
+ * @param jitson An object
+ * @param name   The member name
+ * @param len    Length of the member name or 0 if not known
+ *
+ * @return Thw mwmber's value or NULL on error (ENOMEM) or if the member name was not found (ENOKEY).
+ */
 struct sxe_jitson *
 sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsigned len)
 {
     struct sxe_jitson *member;
+    size_t             size;
     unsigned           i;
     uint32_t          *bucket;
 
-    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_OBJECT || (jitson->type & SXE_JITSON_TYPE_PARTIAL),
-          "Can't get a member value from a %s%s", (jitson->type & SXE_JITSON_TYPE_PARTIAL) ? "partial " : "",
+    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_OBJECT, "Can't get a member value from a %s",
           sxe_jitson_type_to_str(jitson->type));
     len = len ?: strlen(name);                       // Determine the length of the member name if not provided
 
@@ -261,7 +279,9 @@ sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsign
             return NULL;
 
         for (member = jitson + 1, i = 0; i < jitson->size; i++) {
-            bucket       = &jitson->index[sxe_hash_sum(member->member.name, member->member.len) % jitson->size];
+            // Only time it's safe to use member->size to get the length of the member name (if it's not a reference)
+            size         = member->type & SXE_JITSON_TYPE_IS_REF ? strlen(member->reference) : member->size;
+            bucket       = &jitson->index[sxe_hash_sum(sxe_jitson_get_string(member, NULL), size) % jitson->size];
             member->link = *bucket;
             *bucket      = member - jitson;
             member       = sxe_jitson_skip(member);    // Skip the member name
@@ -274,12 +294,14 @@ sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsign
     for (bucket = &jitson->index[sxe_hash_sum(name, len) % jitson->size]; *bucket != 0;  bucket = &member->link)
     {
         member = &jitson[*bucket];
-        SXEA6(member->type == SXE_JITSON_TYPE_MEMBER, "Object buckets contain members, not %s", sxe_jitson_type_to_str(member->type));
+        SXEA6(sxe_jitson_get_type(member) == SXE_JITSON_TYPE_MEMBER, "Object buckets contain members, not %s",
+              sxe_jitson_type_to_str(member->type));
 
-        if (member->member.len == len && memcmp(member->member.name, name, len) == 0)
+        if (strcmp(sxe_jitson_get_string(member, NULL), name) == 0)
             return sxe_jitson_skip(member);    // Skip the member name, returning the value
     }
 
+    errno = ENOKEY;
     return NULL;
 }
 
@@ -289,8 +311,7 @@ sxe_jitson_array_get_element(struct sxe_jitson *jitson, unsigned idx)
     struct sxe_jitson *element;
     unsigned           i;
 
-    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_ARRAY|| (jitson->type & SXE_JITSON_TYPE_PARTIAL),
-          "Can't get an element value from a %s%s", (jitson->type & SXE_JITSON_TYPE_PARTIAL) ? "partial " : "",
+    SXEA1(sxe_jitson_get_type(jitson) == SXE_JITSON_TYPE_ARRAY, "Can't get an element value from a %s",
           sxe_jitson_type_to_str(jitson->type));
 
     if (idx >= jitson->size) {

@@ -36,22 +36,21 @@
 #define SXE_JITSON_TYPE_NULL    6
 #define SXE_JITSON_TYPE_MEMBER  7            // Internal type for member names
 #define SXE_JITSON_TYPE_MASK    0xFFFF       // Bits included in the type enumeration
-#define SXE_JITSON_TYPE_PARTIAL 0x4000000    // Flag set for arrays and object if they are under construction
-#define SXE_JITSON_TYPE_INDEXED 0x8000000    // Flag set for arrays and object if they have been indexed
-#define SXE_JITSON_TYPE_IS_REF  0x8000000    // Flag set strings that are references (size == 0 until cached or if empty)
+#define SXE_JITSON_TYPE_IS_COPY 0            // Flag passed to API to indicate that strings/member names are to be copied
+#define SXE_JITSON_TYPE_IS_REF  0x40000000    // Flag set for strings that are references (size == 0 until cached or if empty)
+#define SXE_JITSON_TYPE_IS_OWN  0x80000000    // Flag set for strings that are references owned by the object (to be freed)
+#define SXE_JITSON_TYPE_INDEXED 0x80000000    // Flag set for arrays and object if they have been indexed
 
 #define SXE_JITSON_STACK_ERROR      (~0U)
 #define SXE_JITSON_TOKEN_SIZE       sizeof(struct sxe_jitson)
 #define SXE_JITSON_STRING_SIZE      sizeof(((struct sxe_jitson *)0)->string)
-#define SXE_JITSON_MEMBER_LEN_SIZE  sizeof(((struct sxe_jitson *)0)->member.len)
-#define SXE_JITSON_MEMBER_NAME_SIZE sizeof(((struct sxe_jitson *)0)->member.name)
 
 /* A jitson token. Copied strings of > 7 bytes length continue into the next token.
  */
 struct sxe_jitson {
     uint32_t type;                 // See definitions above
     union {
-        uint32_t size;             // Length of string, number of elements/members in array/object
+        uint32_t size;             // Length of string or member name, number of elements/members in array/object
         uint32_t link;             // For a member in an indexed object, this is the offset of the next member in the bucket
     };
     union {
@@ -61,10 +60,6 @@ struct sxe_jitson {
         bool        boolean;        // True and false
         char        string[8];      // First 8 bytes of a string, including NUL. Strings > 7 bytes long run into the next token
         const void *reference;      // Points to an external value
-        struct {
-            uint16_t len;           // Length of member name. Member names must be 65535 bytes long or less.
-            char     name[6];       // First 6 bytes of the name, including NUL. Names > 5 bytes long run into the next token
-        } member;
         struct {
             uint8_t  no_value;      // Object under construction has a member name with no value
             uint8_t  nested;        // Object or array under construction contains another array/object under construction
@@ -83,11 +78,6 @@ struct sxe_jitson_stack {
 #include "sxe-jitson-proto.h"
 #include "sxe-jitson-stack-proto.h"
 #include "sxe-jitson-to-json-proto.h"
-
-/* Skip a member; internal macro
- */
-#define SXE_JITSON_MEMBER_SKIP(jitson) \
-    ((jitson) + 1 + ((jitson)->member.len + SXE_JITSON_TOKEN_SIZE - SXE_JITSON_MEMBER_NAME_SIZE) / SXE_JITSON_TOKEN_SIZE)
 
 #define MOCK_FAIL_STACK_NEW_OBJECT     ((char *)sxe_jitson_new + 0)
 #define MOCK_FAIL_STACK_NEW_JITSONS    ((char *)sxe_jitson_new + 1)

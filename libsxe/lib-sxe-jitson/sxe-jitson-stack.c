@@ -60,18 +60,27 @@ sxe_jitson_stack_new(unsigned init_size)
     return stack;
 }
 
+/**
+ * Extract the jitson parsed or constructed on a stack
+ *
+ * @note Aborts if there is no jitson on the stack or if there is a partially constructed one
+ */
 struct sxe_jitson *
 sxe_jitson_stack_get_jitson(struct sxe_jitson_stack *stack)
 {
     struct sxe_jitson *ret = stack->jitsons;
 
-    SXEA1(!stack->open, "Can't get a jitson that's an open collection");
+    SXEA1(stack->jitsons, "Can't get a jitson from an empty stack");
+    SXEA1(!stack->open,   "Can't get a jitson there's an open collection");
+    SXEE6("(stack=%p)", stack);
 
     if (stack->maximum > stack->count)
         ret = realloc(ret, stack->count * sizeof(*stack->jitsons)) ?: stack->jitsons;
 
     stack->jitsons = NULL;
     stack->count   = 0;
+
+    SXER6("return %p; // type=%s", ret, ret ? sxe_jitson_type_to_str(sxe_jitson_get_type(ret)) : "NONE");
     return ret;
 }
 
@@ -159,8 +168,8 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, 
     unsigned           i;
     unsigned           unicode = 0;
     struct sxe_jitson *jitson  = &stack->jitsons[index];
-    jitson->type               = is_member_name ? SXE_JITSON_TYPE_MEMBER     : SXE_JITSON_TYPE_STRING;
-    jitson->size               = is_member_name ? SXE_JITSON_MEMBER_LEN_SIZE : 0;
+    jitson->type               = is_member_name ? SXE_JITSON_TYPE_MEMBER : SXE_JITSON_TYPE_STRING;
+    jitson->size               = 0;
 
     while (*++json != '"') {
         if (*json == '\0') {   // No terminating "
@@ -264,17 +273,6 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, 
     }
 
     jitson->string[jitson->size] = '\0';
-
-    if (is_member_name) {
-        if ((uint16_t)jitson->size != jitson->size) {
-            errno = ENAMETOOLONG;
-            return NULL;
-        }
-
-        jitson->member.len = jitson->size - SXE_JITSON_MEMBER_LEN_SIZE;
-        jitson->size       = 1 + (SXE_JITSON_TOKEN_SIZE - SXE_JITSON_MEMBER_NAME_SIZE + jitson->member.len) / SXE_JITSON_TOKEN_SIZE;
-    }
-
     return json + 1;
 }
 
@@ -459,12 +457,133 @@ sxe_jitson_stack_open_collection(struct sxe_jitson_stack *stack, uint32_t type)
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
         return false;
 
-    stack->jitsons[index].type               = type | SXE_JITSON_TYPE_PARTIAL;
+    stack->jitsons[index].type               = type;
     stack->jitsons[index].size               = 0;
     stack->jitsons[index].partial.no_value   = false;
     stack->jitsons[index].partial.nested     = false;
     stack->jitsons[index].partial.collection = stack->open;
     stack->open                              = index + 1;
+    return true;
+}
+
+/**
+ * Add a member name to the object being constructed on the stack
+ *
+ * @param stack The jitson stack
+ * @param name  The member name
+ * @param type  SXE_JITSON_TYPE_IS_COPY, SXE_JITSON_TYPE_IS_REF, or SXE_JITSON_TYPE_IS_OWN
+ *
+ * @return true on success, false if memory allocation failed
+ */
+bool
+sxe_jitson_stack_add_member_name(struct sxe_jitson_stack *stack, const char *name, uint32_t type)
+{
+    unsigned index, object;
+
+    SXEA1(stack->open,                                    "Can't add a member name when there is no object under construction");
+    SXEA1(stack->jitsons[object = stack->open - 1].type == SXE_JITSON_TYPE_OBJECT, "Member names can only be added to objects");
+    SXEA1(!stack->jitsons[object].partial.no_value,                                "Member name already added without a value");
+    SXEA1(!(type & ~(SXE_JITSON_TYPE_IS_REF | SXE_JITSON_TYPE_IS_OWN)),            "Unexected type flags 0x%x", (unsigned)type);
+
+    if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
+        return false;
+
+    stack->jitsons[object].partial.no_value = true;
+    stack->jitsons[index].type              = SXE_JITSON_TYPE_MEMBER | type;
+
+    if (type) {
+        stack->jitsons[index].reference = name;
+        stack->jitsons[index].type     |= SXE_JITSON_TYPE_IS_REF;
+        return true;
+    }
+
+    size_t len = strlen(name);
+
+    if ((uint32_t)len != len) {
+        errno = ENAMETOOLONG;
+        return false;
+    }
+
+    stack->jitsons[index].size = len;
+
+    if (len < SXE_JITSON_STRING_SIZE) {
+        memcpy(stack->jitsons[index].string, name, len + 1);
+        return true;
+    }
+
+    memcpy(stack->jitsons[index].string, name, SXE_JITSON_STRING_SIZE);
+
+    for (name += SXE_JITSON_STRING_SIZE, len -= SXE_JITSON_STRING_SIZE; len; len -= SXE_JITSON_TOKEN_SIZE) {
+        if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
+            return false;
+
+        if (len < SXE_JITSON_STRING_SIZE) {
+            memcpy(&stack->jitsons[index], name, len);
+            return true;
+        }
+
+        memcpy(&stack->jitsons[index], name, SXE_JITSON_TOKEN_SIZE);
+        name += SXE_JITSON_TOKEN_SIZE;
+    }
+
+    return true;
+}
+
+static unsigned
+sxe_jitson_stack_add_value(struct sxe_jitson_stack *stack)
+{
+    unsigned index, object;
+
+    SXEA1(stack->open, "Can't add a value when there is no array or object under construction");
+    SXEA1(stack->jitsons[object = stack->open - 1].type == SXE_JITSON_TYPE_ARRAY || stack->jitsons[object].partial.no_value,
+          "Member name must be added added to an object before adding a value");
+    SXEA1(stack->jitsons[object].type == SXE_JITSON_TYPE_OBJECT || stack->jitsons[object].type == SXE_JITSON_TYPE_ARRAY,
+          "Values can only be added to arrays or objects");
+
+    if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
+        return SXE_JITSON_STACK_ERROR;
+
+    stack->jitsons[object].size++;
+    stack->jitsons[object].partial.no_value = false;
+    return index;
+}
+
+/**
+ * Add a null value to the array or object being constructed on the stack
+ *
+ * @param stack The jitson stack
+ *
+ * @return true on success, false if memory allocation failed
+ */
+bool
+sxe_jitson_stack_add_null(struct sxe_jitson_stack *stack)
+{
+    unsigned index;
+
+    if ((index = sxe_jitson_stack_add_value(stack)) == SXE_JITSON_STACK_ERROR)
+        return false;
+
+    sxe_jitson_make_null(&stack->jitsons[index]);
+    return true;
+}
+
+/**
+ * Add a boolean value to the array or object being constructed on the stack
+ *
+ * @param stack   The jitson stack
+ * @param boolean The boolean value
+ *
+ * @return true on success, false if memory allocation failed
+ */
+bool
+sxe_jitson_stack_add_bool(struct sxe_jitson_stack *stack, bool boolean)
+{
+    unsigned index;
+
+    if ((index = sxe_jitson_stack_add_value(stack)) == SXE_JITSON_STACK_ERROR)
+        return false;
+
+    sxe_jitson_make_bool(&stack->jitsons[index], boolean);
     return true;
 }
 
@@ -481,11 +600,9 @@ sxe_jitson_stack_close_collection(struct sxe_jitson_stack *stack)
 
     SXEA1(stack->open, "There must be an open collection on the stack");
     index = stack->open - 1;
-    SXEA1(stack->jitsons[index].type & SXE_JITSON_TYPE_PARTIAL, "Index %u is not an open collection", index);
     SXEA1(!stack->jitsons[index].partial.no_value, "Index %u is an object with a member name with no value", index);
     SXEA1(!stack->jitsons[index].partial.nested,   "Index %u is a collection with a nested open collection", index);
 
     stack->open                   = stack->jitsons[index].partial.collection;
-    stack->jitsons[index].type    = stack->jitsons[index].type & ~SXE_JITSON_TYPE_PARTIAL;
     stack->jitsons[index].integer = stack->count - index;    // Store the offset past the object or array
 }
