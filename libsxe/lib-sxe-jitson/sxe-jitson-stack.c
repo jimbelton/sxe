@@ -466,32 +466,20 @@ sxe_jitson_stack_open_collection(struct sxe_jitson_stack *stack, uint32_t type)
     return true;
 }
 
-/**
- * Add a member name to the object being constructed on the stack
- *
- * @param stack The jitson stack
- * @param name  The member name
- * @param type  SXE_JITSON_TYPE_IS_COPY, SXE_JITSON_TYPE_IS_REF, or SXE_JITSON_TYPE_IS_OWN
- *
- * @return true on success, false if memory allocation failed
+/* Internal function that is use to add either a string to an oprm object or array or a member name to an open object
  */
-bool
-sxe_jitson_stack_add_member_name(struct sxe_jitson_stack *stack, const char *name, uint32_t type)
+static bool
+sxe_jitson_stack_add_string_or_member_name(struct sxe_jitson_stack *stack, const char *name, uint32_t type)
 {
-    unsigned index, object;
-
-    SXEA1(stack->open,                                    "Can't add a member name when there is no object under construction");
-    SXEA1(stack->jitsons[object = stack->open - 1].type == SXE_JITSON_TYPE_OBJECT, "Member names can only be added to objects");
-    SXEA1(!stack->jitsons[object].partial.no_value,                                "Member name already added without a value");
-    SXEA1(!(type & ~(SXE_JITSON_TYPE_IS_REF | SXE_JITSON_TYPE_IS_OWN)),            "Unexected type flags 0x%x", (unsigned)type);
+    unsigned index;
 
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
         return false;
 
-    stack->jitsons[object].partial.no_value = true;
-    stack->jitsons[index].type              = SXE_JITSON_TYPE_MEMBER | type;
+    stack->jitsons[stack->open - 1].partial.no_value = (type & SXE_JITSON_TYPE_MASK) == SXE_JITSON_TYPE_MEMBER ? true : false;
+    stack->jitsons[index].type                       = type;
 
-    if (type) {
+    if (type & ~SXE_JITSON_TYPE_MASK) {    // Not a copy (a reference, possibly giving ownership to the object)
         stack->jitsons[index].reference = name;
         stack->jitsons[index].type     |= SXE_JITSON_TYPE_IS_REF;
         return true;
@@ -529,22 +517,73 @@ sxe_jitson_stack_add_member_name(struct sxe_jitson_stack *stack, const char *nam
     return true;
 }
 
+/**
+ * Add a member name to the object being constructed on the stack
+ *
+ * @param stack The jitson stack
+ * @param name  The member name
+ * @param type  SXE_JITSON_TYPE_IS_COPY, SXE_JITSON_TYPE_IS_REF, or SXE_JITSON_TYPE_IS_OWN
+ *
+ * @return true on success, false if memory allocation failed
+ */
+bool
+sxe_jitson_stack_add_member_name(struct sxe_jitson_stack *stack, const char *name, uint32_t type)
+{
+    unsigned object;
+
+    SXEA1(stack->open,                                    "Can't add a member name when there is no object under construction");
+    SXEA1(stack->jitsons[object = stack->open - 1].type == SXE_JITSON_TYPE_OBJECT, "Member names can only be added to objects");
+    SXEA1(!stack->jitsons[object].partial.no_value,                                "Member name already added without a value");
+    SXEA1(!(type & ~(SXE_JITSON_TYPE_IS_REF | SXE_JITSON_TYPE_IS_OWN)),            "Unexected type flags 0x%x", (unsigned)type);
+
+    return sxe_jitson_stack_add_string_or_member_name(stack, name, SXE_JITSON_TYPE_MEMBER | type);
+}
+
+/**
+ * Add a string to the object or array being constructed on the stack
+ *
+ * @param stack The jitson stack
+ * @param name  The member name
+ * @param type  SXE_JITSON_TYPE_IS_COPY, SXE_JITSON_TYPE_IS_REF, or SXE_JITSON_TYPE_IS_OWN
+ *
+ * @return true on success, false if memory allocation failed
+ */
+bool
+sxe_jitson_stack_add_string(struct sxe_jitson_stack *stack, const char *name, uint32_t type)
+{
+    unsigned collection = stack->open - 1;
+    bool     ret;
+
+    SXEA1(stack->open, "Can't add a value when there is no array or object under construction");
+    SXEA1(stack->jitsons[collection].type == SXE_JITSON_TYPE_ARRAY || stack->jitsons[collection].partial.no_value,
+          "Member name must be added added to an object before adding a string value");
+    SXEA1(stack->jitsons[collection].type == SXE_JITSON_TYPE_OBJECT || stack->jitsons[collection].type == SXE_JITSON_TYPE_ARRAY,
+          "Strings can only be added to arrays or objects");
+    SXEA1(!(type & ~(SXE_JITSON_TYPE_IS_REF | SXE_JITSON_TYPE_IS_OWN)), "Unexected type flags 0x%x", (unsigned)type);
+
+    if ((ret = sxe_jitson_stack_add_string_or_member_name(stack, name, SXE_JITSON_TYPE_STRING | type)))
+        stack->jitsons[collection].size++;
+
+    return ret;
+}
+
 static unsigned
 sxe_jitson_stack_add_value(struct sxe_jitson_stack *stack)
 {
-    unsigned index, object;
+    unsigned collection = stack->open - 1;
+    unsigned index;
 
     SXEA1(stack->open, "Can't add a value when there is no array or object under construction");
-    SXEA1(stack->jitsons[object = stack->open - 1].type == SXE_JITSON_TYPE_ARRAY || stack->jitsons[object].partial.no_value,
+    SXEA1(stack->jitsons[collection].type == SXE_JITSON_TYPE_ARRAY || stack->jitsons[collection].partial.no_value,
           "Member name must be added added to an object before adding a value");
-    SXEA1(stack->jitsons[object].type == SXE_JITSON_TYPE_OBJECT || stack->jitsons[object].type == SXE_JITSON_TYPE_ARRAY,
+    SXEA1(stack->jitsons[collection].type == SXE_JITSON_TYPE_OBJECT || stack->jitsons[collection].type == SXE_JITSON_TYPE_ARRAY,
           "Values can only be added to arrays or objects");
 
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
         return SXE_JITSON_STACK_ERROR;
 
-    stack->jitsons[object].size++;
-    stack->jitsons[object].partial.no_value = false;
+    stack->jitsons[collection].size++;
+    stack->jitsons[collection].partial.no_value = false;
     return index;
 }
 
@@ -587,6 +626,25 @@ sxe_jitson_stack_add_bool(struct sxe_jitson_stack *stack, bool boolean)
     return true;
 }
 
+/**
+ * Add a number to the array or object being constructed on the stack
+ *
+ * @param stack  The jitson stack
+ * @param number The numeric value
+ *
+ * @return true on success, false if memory allocation failed
+ */
+bool
+sxe_jitson_stack_add_number(struct sxe_jitson_stack *stack, double number)
+{
+    unsigned index;
+
+    if ((index = sxe_jitson_stack_add_value(stack)) == SXE_JITSON_STACK_ERROR)
+        return false;
+
+    sxe_jitson_make_number(&stack->jitsons[index], number);
+    return true;
+}
 /**
  * Finish construction of an object or array on a stack
  *
