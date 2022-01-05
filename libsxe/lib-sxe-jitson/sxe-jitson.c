@@ -78,14 +78,14 @@ void
 sxe_jitson_free_indeces(struct sxe_jitson *jitson)
 {
     unsigned i, len;
-    uint32_t index, type;
+    uint32_t index;
 
-    if (((type = sxe_jitson_get_type(jitson)) & SXE_JITSON_TYPE_INDEXED) == 0)
+    if ((jitson->type & SXE_JITSON_TYPE_INDEXED) == 0)
         return;
 
     len = sxe_jitson_get_size(jitson);
 
-    switch (type) {
+    switch (sxe_jitson_get_type(jitson)) {
     case SXE_JITSON_TYPE_ARRAY:
         for (i = 0; i < len - 1; i++)
             sxe_jitson_free_indeces(sxe_jitson_array_get_element(jitson, i));
@@ -344,6 +344,7 @@ sxe_jitson_test(const struct sxe_jitson *jitson)
     }
 
     SXEA6(false, "SXE jitson type %u is not valid", sxe_jitson_get_type(jitson));
+    errno = EINVAL;
     return false;
 }
 

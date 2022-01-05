@@ -17,7 +17,7 @@ main(void)
     unsigned           len;
     size_t             start_memory = test_memory();
 
-    plan_tests(141);
+    plan_tests(143);
 
     diag("Memory allocation failure tests");
     {
@@ -270,6 +270,11 @@ main(void)
     {
         struct sxe_jitson primitive[1];
 
+        primitive->type = SXE_JITSON_TYPE_INVALID;
+        ok(!sxe_jitson_test(primitive), "invalid tests false");
+        is(errno, EINVAL,               "errno is EINVAL");
+        errno = 0;
+
         sxe_jitson_make_null(primitive);
         is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_NULL, "null is null");
         ok(!sxe_jitson_test(primitive),                          "null tests false");
@@ -302,12 +307,14 @@ main(void)
         ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the object from the stack");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "{}",            "Look, it's an empty object");
         free(json_out);
+        sxe_jitson_free(jitson);
 
         ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_ARRAY),  "Opened an array on the stack");
         sxe_jitson_stack_close_collection(stack);
         ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the array from the stack");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[]",            "Look, it's an empty array");
         free(json_out);
+        sxe_jitson_free(jitson);
 
         ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_OBJECT),                "Opened an object on the stack");
         ok(sxe_jitson_stack_add_member_name(stack, "null", SXE_JITSON_TYPE_IS_REF),        "Added a member name reference");
