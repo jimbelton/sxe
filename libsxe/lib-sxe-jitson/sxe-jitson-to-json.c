@@ -19,6 +19,7 @@
  * THE SOFTWARE.
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -131,7 +132,10 @@ sxe_jitson_build_json(struct sxe_jitson *jitson, struct sxe_factory *factory)
         break;
 
     default:
-        SXEL2(": Can't build a JSON string for type %s", sxe_jitson_type_to_str(sxe_jitson_get_type(jitson)));
+        SXEL2("%s: Can't build a JSON string for type %s", __FUNCTION__, sxe_jitson_type_to_str(sxe_jitson_get_type(jitson)));
+        errno = EINVAL;
+        ret   = NULL;
+        goto OUT;
     }
 
     ret = sxe_factory_look(factory, NULL);

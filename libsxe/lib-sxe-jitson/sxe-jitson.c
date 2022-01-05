@@ -343,7 +343,7 @@ sxe_jitson_test(const struct sxe_jitson *jitson)
         return jitson->type & SXE_JITSON_TYPE_IS_REF ? *(const uint8_t *)jitson->reference : jitson->size;
     }
 
-    SXEA6(false, "SXE jitson type %u is not valid", sxe_jitson_get_type(jitson));
+    SXEL2("SXE jitson type %u is not valid", sxe_jitson_get_type(jitson));
     errno = EINVAL;
     return false;
 }

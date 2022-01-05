@@ -455,7 +455,7 @@ sxe_jitson_stack_open_collection(struct sxe_jitson_stack *stack, uint32_t type)
     SXEA6(type == SXE_JITSON_TYPE_ARRAY || type == SXE_JITSON_TYPE_OBJECT, "Only arrays and objects can be constructed");
 
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
-        return false;
+        return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
     stack->jitsons[index].type               = type;
     stack->jitsons[index].size               = 0;
@@ -474,7 +474,7 @@ sxe_jitson_stack_add_string_or_member_name(struct sxe_jitson_stack *stack, const
     unsigned index;
 
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
-        return false;
+        return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
     stack->jitsons[stack->open - 1].partial.no_value = (type & SXE_JITSON_TYPE_MASK) == SXE_JITSON_TYPE_MEMBER ? true : false;
     stack->jitsons[index].type                       = type;
@@ -488,8 +488,8 @@ sxe_jitson_stack_add_string_or_member_name(struct sxe_jitson_stack *stack, const
     size_t len = strlen(name);
 
     if ((uint32_t)len != len) {
-        errno = ENAMETOOLONG;
-        return false;
+        errno = ENAMETOOLONG;    /* COVERAGE EXCLUSION: Member name > 4294967295 characters */
+        return false;            /* COVERAGE EXCLUSION: Member name > 4294967295 characters */
     }
 
     stack->jitsons[index].size = len;
@@ -501,12 +501,12 @@ sxe_jitson_stack_add_string_or_member_name(struct sxe_jitson_stack *stack, const
 
     memcpy(stack->jitsons[index].string, name, SXE_JITSON_STRING_SIZE);
 
-    for (name += SXE_JITSON_STRING_SIZE, len -= SXE_JITSON_STRING_SIZE; len; len -= SXE_JITSON_TOKEN_SIZE) {
+    for (name += SXE_JITSON_STRING_SIZE, len -= SXE_JITSON_STRING_SIZE; ; len -= SXE_JITSON_TOKEN_SIZE) {
         if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
-            return false;
+            return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
-        if (len < SXE_JITSON_STRING_SIZE) {
-            memcpy(&stack->jitsons[index], name, len);
+        if (len < SXE_JITSON_TOKEN_SIZE) {
+            memcpy(&stack->jitsons[index], name, len + 1);
             return true;
         }
 
@@ -580,7 +580,7 @@ sxe_jitson_stack_add_value(struct sxe_jitson_stack *stack)
           "Values can only be added to arrays or objects");
 
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
-        return SXE_JITSON_STACK_ERROR;
+        return SXE_JITSON_STACK_ERROR;    /* COVERAGE EXCLUSION: Out of memory condition */
 
     stack->jitsons[collection].size++;
     stack->jitsons[collection].partial.no_value = false;
@@ -600,7 +600,7 @@ sxe_jitson_stack_add_null(struct sxe_jitson_stack *stack)
     unsigned index;
 
     if ((index = sxe_jitson_stack_add_value(stack)) == SXE_JITSON_STACK_ERROR)
-        return false;
+        return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
     sxe_jitson_make_null(&stack->jitsons[index]);
     return true;
@@ -620,7 +620,7 @@ sxe_jitson_stack_add_bool(struct sxe_jitson_stack *stack, bool boolean)
     unsigned index;
 
     if ((index = sxe_jitson_stack_add_value(stack)) == SXE_JITSON_STACK_ERROR)
-        return false;
+        return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
     sxe_jitson_make_bool(&stack->jitsons[index], boolean);
     return true;
@@ -640,7 +640,7 @@ sxe_jitson_stack_add_number(struct sxe_jitson_stack *stack, double number)
     unsigned index;
 
     if ((index = sxe_jitson_stack_add_value(stack)) == SXE_JITSON_STACK_ERROR)
-        return false;
+        return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
     sxe_jitson_make_number(&stack->jitsons[index], number);
     return true;

@@ -17,7 +17,7 @@ main(void)
     unsigned           len;
     size_t             start_memory = test_memory();
 
-    plan_tests(143);
+    plan_tests(151);
 
     diag("Memory allocation failure tests");
     {
@@ -274,6 +274,9 @@ main(void)
         ok(!sxe_jitson_test(primitive), "invalid tests false");
         is(errno, EINVAL,               "errno is EINVAL");
         errno = 0;
+        ok(!sxe_jitson_to_json(primitive, NULL), "Can't convert invalid jitson to JSON");
+        is(errno, EINVAL,                        "errno is EINVAL");
+        errno = 0;
 
         sxe_jitson_make_null(primitive);
         is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_NULL, "null is null");
@@ -298,7 +301,7 @@ main(void)
         ok(!sxe_jitson_test(primitive),                               "Empty string_ref tests false");
     }
 
-    diag("Test complex construction");
+    diag("Test object construction");
     {
         struct sxe_jitson_stack *stack = sxe_jitson_stack_get_thread();
 
@@ -306,13 +309,6 @@ main(void)
         sxe_jitson_stack_close_collection(stack);
         ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the object from the stack");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "{}",            "Look, it's an empty object");
-        free(json_out);
-        sxe_jitson_free(jitson);
-
-        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_ARRAY),  "Opened an array on the stack");
-        sxe_jitson_stack_close_collection(stack);
-        ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the array from the stack");
-        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[]",            "Look, it's an empty array");
         free(json_out);
         sxe_jitson_free(jitson);
 
@@ -332,6 +328,31 @@ main(void)
         free(json_out);
         sxe_jitson_free(jitson);
     }
+
+    diag("Test array construction and string edge cases");
+    {
+        struct sxe_jitson_stack *stack = sxe_jitson_stack_get_thread();
+
+        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_ARRAY),  "Opened an array on the stack");
+        sxe_jitson_stack_close_collection(stack);
+        ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the array from the stack");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[]",            "Look, it's an empty array");
+        free(json_out);
+        sxe_jitson_free(jitson);
+
+        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_ARRAY),          "Opened an array on the stack");
+        ok(sxe_jitson_stack_add_string(stack, "shortly",  SXE_JITSON_TYPE_IS_COPY), "Added a copy of a short string");
+        ok(sxe_jitson_stack_add_string(stack, "longerly", SXE_JITSON_TYPE_IS_COPY), "Added a copy of a longer string");
+        ok(sxe_jitson_stack_add_string(stack, "longer than 23 characters", SXE_JITSON_TYPE_IS_COPY),
+           "Added a copy of a long string needing more than 2 tokens");
+        sxe_jitson_stack_close_collection(stack);
+        ok(jitson = sxe_jitson_stack_get_jitson(stack), "Got the array from the stack");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[\"shortly\",\"longerly\",\"longer than 23 characters\"]",
+              "Got the expected JSON");
+        free(json_out);
+        sxe_jitson_free(jitson);
+    }
+
 
     sxe_jitson_stack_free_thread();    // Currently, just for coverage
 
