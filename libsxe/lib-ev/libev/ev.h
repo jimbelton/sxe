@@ -46,6 +46,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 typedef double ev_tstamp;
 
 /* these priorities are inclusive, higher priorities will be called earlier */

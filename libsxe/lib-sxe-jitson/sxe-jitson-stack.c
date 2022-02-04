@@ -482,6 +482,7 @@ sxe_jitson_stack_add_string_or_member_name(struct sxe_jitson_stack *stack, const
     if (type & ~SXE_JITSON_TYPE_MASK) {    // Not a copy (a reference, possibly giving ownership to the object)
         stack->jitsons[index].reference = name;
         stack->jitsons[index].type     |= SXE_JITSON_TYPE_IS_REF;
+        stack->jitsons[index].size      = 0;
         return true;
     }
 
