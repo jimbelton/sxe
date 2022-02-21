@@ -17,7 +17,9 @@ main(void)
     unsigned           len;
     size_t             start_memory = test_memory();
 
-    plan_tests(151);
+    plan_tests(154);
+    
+    sxe_jitson_type_init(0);    // Initialize the JSON types
 
     diag("Memory allocation failure tests");
     {
@@ -106,23 +108,27 @@ main(void)
 
         ok(jitson = sxe_jitson_new(" {\t} "),                    "Parsed ' {\\t} ' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),  SXE_JITSON_TYPE_OBJECT, "' {\\t} ' is an object" );
-        is(jitson->size,                 0,                      "Correct size");
+        is(sxe_jitson_len(jitson),       0,                      "Correct len");
+        ok(!sxe_jitson_test(jitson),                             "Empty objects test false");
         is_eq(sxe_jitson_to_json(jitson, NULL), "{}",            "Encoded back to JSON correctly");
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new("{\"key\":\"value\"}"),  "Parsed '{\"key\":\"value\"}' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("{\"key\":\"value\"}"),      "Parsed '{\"key\":\"value\"}' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_OBJECT, "'{\"key\":\"value\"}' is an object");
-        is(jitson->size,                1,                      "Correct size");
+        is(sxe_jitson_len(jitson),      1,                      "Correct len");
+        ok(sxe_jitson_test(jitson),                             "Nonempty objects test true");
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new("[1, 2,4]"),             "Parsed '[1, 2,4]' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("[1, 2,4]"),                "Parsed '[1, 2,4]' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_ARRAY, "'[1, 2,4]' is an array" );
-        is(jitson->size,                3,                      "Correct size");
+        is(sxe_jitson_len(jitson),      3,                     "Correct len");
+        ok(sxe_jitson_test(jitson),                            "Nonempty arrays test true");
         sxe_jitson_free(jitson);
 
-        ok(jitson = sxe_jitson_new("[]"),                  "Parsed '[]' (error %s)", strerror(errno));
+        ok(jitson = sxe_jitson_new("[]"),                      "Parsed '[]' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_ARRAY, "'[]' is an array" );
-        is(jitson->size,                0,                     "Correct size");
+        is(sxe_jitson_len(jitson),      0,                     "Correct len");
+        ok(!sxe_jitson_test(jitson),                           "Empty arrays test false");
         sxe_jitson_free(jitson);
     }
 
@@ -193,19 +199,22 @@ main(void)
     diag("Cover type to string");
     {
         is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_INVALID), "INVALID", "INVALID type");
-        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_NUMBER),  "NUMBER",  "NUMBER");
-        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_STRING),  "STRING",  "STRING");
-        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_OBJECT),  "OBJECT",  "OBJECT");
-        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_ARRAY),   "ARRAY",   "ARRAY");
-        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_BOOL),    "BOOL",    "BOOL");
-        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_NULL),    "NULL",    "NULL");
-        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_MEMBER),  "MEMBER",  "MEMBER internal type");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_NUMBER),  "number",  "number");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_STRING),  "string",  "string");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_OBJECT),  "object",  "object");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_ARRAY),   "array",   "array");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_BOOL),    "bool",    "bool");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_NULL),    "null",    "null");
+        is_eq(sxe_jitson_type_to_str(SXE_JITSON_TYPE_MASK),    "ERROR",   "out of range type is an ERROR");
+        is(errno,                                              ERANGE,    "Errno is ERANGE");
+        errno = 0;
     }
 
     diag("Test object membership function and reencoding");
     {
         ok(jitson = sxe_jitson_new("{\"a\": 1, \"biglongname\": \"B\", \"c\": [2, 3], \"d\" : {\"e\": 4}, \"f\": true}"),
            "Parsed complex object (error %s)", strerror(errno));
+        is(sxe_jitson_size(jitson), 16, "Object is %zu bytes", sizeof(struct sxe_jitson) * sxe_jitson_size(jitson));
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_OBJECT_GET_MEMBER);
         ok(!sxe_jitson_object_get_member(jitson, "a", 0),                   "Can't access object on failure to calloc index");
@@ -217,17 +226,19 @@ main(void)
         ok(member = sxe_jitson_object_get_member(jitson, "biglongname", 0), "Object has a member 'biglongname'");
         is_eq(sxe_jitson_get_string(member, NULL), "B",                     "Member is the string 'B'");
         ok(member = sxe_jitson_object_get_member(jitson, "c", 0),           "Object has a member 'c'");
-        is(sxe_jitson_get_size(member), 2,                                  "Member is an array of 2 elements");
+        is(sxe_jitson_len(member), 2,                                       "Member is an array of 2 elements");
         ok(member = sxe_jitson_object_get_member(jitson, "d", 1),           "Object has a member 'd'");
-        is(sxe_jitson_get_size(member), 1,                                  "Member is an object with 1 member");
+        is(sxe_jitson_len(member), 1,                                       "Member is an object with 1 member");
         ok(member = sxe_jitson_object_get_member(jitson, "f", 0),           "Object has a member 'f'");
         ok(sxe_jitson_get_bool(member),                                     "Member is 'true'");
-        is(sxe_jitson_get_size(member), 0,                                  "Can't take the size of a number, bool, or null");
 
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL),
               "{\"biglongname\":\"B\",\"a\":1,\"c\":[2,3],\"f\":true,\"d\":{\"e\":4}}",
               "Encoder spat out same JSON as we took in");
 
+		is(sxe_jitson_size(jitson), 0,       "Objects cannot be sized once indexed");
+		is(errno,                   ENOTSUP, "errno is ENOTSUP");
+		errno = 0; 
         sxe_jitson_free(jitson);
         free(json_out);
     }
@@ -270,14 +281,6 @@ main(void)
     {
         struct sxe_jitson primitive[1];
 
-        primitive->type = SXE_JITSON_TYPE_INVALID;
-        ok(!sxe_jitson_test(primitive), "invalid tests false");
-        is(errno, EINVAL,               "errno is EINVAL");
-        errno = 0;
-        ok(!sxe_jitson_to_json(primitive, NULL), "Can't convert invalid jitson to JSON");
-        is(errno, EINVAL,                        "errno is EINVAL");
-        errno = 0;
-
         sxe_jitson_make_null(primitive);
         is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_NULL, "null is null");
         ok(!sxe_jitson_test(primitive),                          "null tests false");
@@ -293,10 +296,10 @@ main(void)
         sxe_jitson_make_string_ref(primitive, "hello, world");
         is(sxe_jitson_get_type(primitive), SXE_JITSON_TYPE_STRING,    "A string_ref is a string");
         is_eq(sxe_jitson_get_string(primitive, NULL), "hello, world", "String_refs values can be retrieved");
-        is(primitive->size, 0,                                        "String_refs don't know their lengths on creation");
+        is(primitive->len, 0,                                         "String_refs don't know their lengths on creation");
         ok(sxe_jitson_test(primitive),                                "Non-empty string ref is true");
-        is(sxe_jitson_get_size(primitive), 12,                        "String_ref is 12 characters");
-        is(primitive->size, 12,                                       "String_refs cache their lengths");
+        is(sxe_jitson_len(primitive), 12,                             "String_ref is 12 characters");
+        is(primitive->len, 12,                                        "String_refs cache their lengths");
         sxe_jitson_make_string_ref(primitive, "");
         ok(!sxe_jitson_test(primitive),                               "Empty string_ref tests false");
     }
@@ -352,7 +355,6 @@ main(void)
         free(json_out);
         sxe_jitson_free(jitson);
     }
-
 
     sxe_jitson_stack_free_thread();    // Currently, just for coverage
 

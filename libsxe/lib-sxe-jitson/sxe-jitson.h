@@ -23,23 +23,28 @@
 #define SXE_JITSON_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "sxe-factory.h"
 
+#define SXE_JITSON_MIN_TYPES 8    // The minimum number of types for JSON
+
 #define SXE_JITSON_TYPE_INVALID 0
-#define SXE_JITSON_TYPE_NUMBER  1
-#define SXE_JITSON_TYPE_STRING  2
-#define SXE_JITSON_TYPE_OBJECT  3
-#define SXE_JITSON_TYPE_ARRAY   4
-#define SXE_JITSON_TYPE_BOOL    5
-#define SXE_JITSON_TYPE_NULL    6
-#define SXE_JITSON_TYPE_MEMBER  7            // Internal type for member names
-#define SXE_JITSON_TYPE_MASK    0xFFFF       // Bits included in the type enumeration
-#define SXE_JITSON_TYPE_IS_COPY 0            // Flag passed to API to indicate that strings/member names are to be copied
-#define SXE_JITSON_TYPE_IS_REF  0x40000000    // Flag set for strings that are references (size == 0 until cached or if empty)
-#define SXE_JITSON_TYPE_IS_OWN  0x80000000    // Flag set for strings that are references owned by the object (to be freed)
-#define SXE_JITSON_TYPE_INDEXED 0x80000000    // Flag set for arrays and object if they have been indexed
+#define SXE_JITSON_TYPE_NULL    1
+#define SXE_JITSON_TYPE_BOOL    2
+#define SXE_JITSON_TYPE_NUMBER  3
+#define SXE_JITSON_TYPE_STRING  4
+#define SXE_JITSON_TYPE_ARRAY   5
+#define SXE_JITSON_TYPE_OBJECT  6
+
+#define SXE_JITSON_TYPE_MASK    0xFFFF        // Bits included in the type enumeration
+#define SXE_JITSON_TYPE_IS_KEY  0x10000000    // Flag set for types (in JSON, strings) when they are used as keys in an object 
+#define SXE_JITSON_TYPE_IS_COPY 0             // Flag passed to API to indicate that strings/member names are to be copied
+#define SXE_JITSON_TYPE_IS_REF  0x20000000    // Flag set for strings that are references (size == 0 until cached or if empty)
+#define SXE_JITSON_TYPE_IS_OWN  0x40000000    // Flag set for values where the references owned by the object (to be freed)
+#define SXE_JITSON_TYPE_INDEXED 0x40000000    // Flag set for arrays and object if they have been indexed
+#define SXE_JITSON_TYPE_ALLOCED 0x80000000    // Flag set for the first jitson token in an allocated jitson
 
 #define SXE_JITSON_STACK_ERROR      (~0U)
 #define SXE_JITSON_TOKEN_SIZE       sizeof(struct sxe_jitson)
@@ -50,11 +55,11 @@
 struct sxe_jitson {
     uint32_t type;                 // See definitions above
     union {
-        uint32_t size;             // Length of string or member name, number of elements/members in array/object
+        uint32_t len;              // Length of string or member name, number of elements/members in array/object
         uint32_t link;             // For a member in an indexed object, this is the offset of the next member in the bucket
     };
     union {
-        uint32_t   *index;          // Points to offsets (size of them) to elements/members, or 0 for empty buckets
+        uint32_t   *index;          // Points to offsets (len of them) to elements/members, or 0 for empty buckets
         uint64_t    integer;        // Offset of the first token past an array or object before it is indexed
         double      number;         // JSON numbers must be capable of being stored in a double wide floating point number
         bool        boolean;        // True and false
@@ -77,7 +82,7 @@ struct sxe_jitson_stack {
 
 #include "sxe-jitson-proto.h"
 #include "sxe-jitson-stack-proto.h"
-#include "sxe-jitson-to-json-proto.h"
+#include "sxe-jitson-type-proto.h"
 
 #define MOCK_FAIL_STACK_NEW_OBJECT     ((char *)sxe_jitson_new + 0)
 #define MOCK_FAIL_STACK_NEW_JITSONS    ((char *)sxe_jitson_new + 1)

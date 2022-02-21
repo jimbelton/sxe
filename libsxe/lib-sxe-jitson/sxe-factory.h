@@ -22,6 +22,8 @@
 #ifndef SXE_FACTORY_H
 #define SXE_FACTORY_H
 
+#include <unistd.h>
+
 /* Memory allocating factory
  */
 struct sxe_factory {

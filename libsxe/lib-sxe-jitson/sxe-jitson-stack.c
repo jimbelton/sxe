@@ -79,6 +79,7 @@ sxe_jitson_stack_get_jitson(struct sxe_jitson_stack *stack)
 
     stack->jitsons = NULL;
     stack->count   = 0;
+    ret->type     |= SXE_JITSON_TYPE_ALLOCED;    // The token at the base of the stack is marked as allocated
 
     SXER6("return %p; // type=%s", ret, ret ? sxe_jitson_type_to_str(sxe_jitson_get_type(ret)) : "NONE");
     return ret;
@@ -168,8 +169,8 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, 
     unsigned           i;
     unsigned           unicode = 0;
     struct sxe_jitson *jitson  = &stack->jitsons[index];
-    jitson->type               = is_member_name ? SXE_JITSON_TYPE_MEMBER : SXE_JITSON_TYPE_STRING;
-    jitson->size               = 0;
+    jitson->type               = SXE_JITSON_TYPE_STRING | (is_member_name ? SXE_JITSON_TYPE_IS_KEY : 0);
+    jitson->len                = 0;
 
     while (*++json != '"') {
         if (*json == '\0') {   // No terminating "
@@ -184,27 +185,27 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, 
             case '"':
             case '\\':
             case '/':
-                jitson->string[jitson->size++] = *json;
+                jitson->string[jitson->len++] = *json;
                 break;
 
             case 'b':
-                jitson->string[jitson->size++] = '\b';
+                jitson->string[jitson->len++] = '\b';
                 break;
 
             case 'f':
-                jitson->string[jitson->size++] = '\f';
+                jitson->string[jitson->len++] = '\f';
                 break;
 
             case 'n':
-                jitson->string[jitson->size++] = '\n';
+                jitson->string[jitson->len++] = '\n';
                 break;
 
             case 'r':
-                jitson->string[jitson->size++] = '\r';
+                jitson->string[jitson->len++] = '\r';
                 break;
 
             case 't':
-                jitson->string[jitson->size++] = '\t';
+                jitson->string[jitson->len++] = '\t';
                 break;
 
             case 'u':
@@ -247,7 +248,7 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, 
                     }
 
                 i = sxe_unicode_to_utf8(unicode, utf8);
-                jitson->string[jitson->size++] = utf8[0];
+                jitson->string[jitson->len++] = utf8[0];
                 break;
 
             default:
@@ -255,9 +256,9 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, 
                 return NULL;
             }
         else
-            jitson->string[jitson->size++] = *json;
+            jitson->string[jitson->len++] = *json;
 
-        unsigned edge = jitson->size % SXE_JITSON_TOKEN_SIZE;
+        unsigned edge = jitson->len % SXE_JITSON_TOKEN_SIZE;
 
         if (edge >= SXE_JITSON_TOKEN_SIZE / 2 && edge < SXE_JITSON_TOKEN_SIZE / 2 + i) {
             if (sxe_jitson_stack_next(stack) == SXE_JITSON_STACK_ERROR)
@@ -267,12 +268,12 @@ sxe_jitson_stack_parse_string(struct sxe_jitson_stack *stack, const char *json, 
         }
 
         if (i > 1) {    // For UTF8 strings > 1 character, copy the rest of the string
-            memcpy(&jitson->string[jitson->size], &utf8[1], i - 1);
-            jitson->size += i - 1;
+            memcpy(&jitson->string[jitson->len], &utf8[1], i - 1);
+            jitson->len += i - 1;
         }
     }
 
-    jitson->string[jitson->size] = '\0';
+    jitson->string[jitson->len] = '\0';
     return json + 1;
 }
 
@@ -299,7 +300,7 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, const char *json)
 
     case '{':    // It's an object
         stack->jitsons[index].type = SXE_JITSON_TYPE_OBJECT;
-        stack->jitsons[index].size = 0;
+        stack->jitsons[index].len  = 0;
         json = sxe_jitson_skip_whitespace(json + 1);
 
         if (*json == '}')    // If it's an empty object, return it
@@ -317,7 +318,7 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, const char *json)
             if (!(json = sxe_jitson_stack_parse_json(stack, json + 1)))    // Value can be any JSON value
                 return NULL;
 
-            stack->jitsons[index].size++;
+            stack->jitsons[index].len++;
             json = sxe_jitson_skip_whitespace(json);
         } while (*json++ == ',');
 
@@ -330,7 +331,7 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, const char *json)
 
     case '[':    // It's an array
         stack->jitsons[index].type = SXE_JITSON_TYPE_ARRAY;
-        stack->jitsons[index].size = 0;
+        stack->jitsons[index].len  = 0;
         json = sxe_jitson_skip_whitespace(json + 1);
 
         if (*json == ']') {   // If it's an empty array, return it
@@ -342,7 +343,7 @@ sxe_jitson_stack_parse_json(struct sxe_jitson_stack *stack, const char *json)
             if (!(json = sxe_jitson_stack_parse_json(stack, json)))    // Value can be any JSON value
                 return NULL;
 
-            stack->jitsons[index].size++;
+            stack->jitsons[index].len++;
             json = sxe_jitson_skip_whitespace(json);
         } while (*json++ == ',');
 
@@ -458,7 +459,7 @@ sxe_jitson_stack_open_collection(struct sxe_jitson_stack *stack, uint32_t type)
         return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
     stack->jitsons[index].type               = type;
-    stack->jitsons[index].size               = 0;
+    stack->jitsons[index].len                = 0;
     stack->jitsons[index].partial.no_value   = false;
     stack->jitsons[index].partial.nested     = false;
     stack->jitsons[index].partial.collection = stack->open;
@@ -476,15 +477,14 @@ sxe_jitson_stack_add_string_or_member_name(struct sxe_jitson_stack *stack, const
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
         return false;    /* COVERAGE EXCLUSION: Out of memory condition */
 
-    stack->jitsons[stack->open - 1].partial.no_value = (type & SXE_JITSON_TYPE_MASK) == SXE_JITSON_TYPE_MEMBER ? true : false;
-    stack->jitsons[index].type                       = type;
+    stack->jitsons[stack->open - 1].partial.no_value = type & SXE_JITSON_TYPE_IS_KEY ? true : false;
+    stack->jitsons[index].type                       = SXE_JITSON_TYPE_STRING | type;
 
-    if (type & ~SXE_JITSON_TYPE_MASK) {    // Not a copy (a reference, possibly giving ownership to the object)
+    if (type & SXE_JITSON_TYPE_IS_REF) {    // Not a copy (a reference, possibly giving ownership to the object)
         stack->jitsons[index].reference = name;
-        stack->jitsons[index].type     |= SXE_JITSON_TYPE_IS_REF;
-        stack->jitsons[index].size      = 0;
+        stack->jitsons[index].len       = 0;
         return true;
-    }
+	}
 
     size_t len = strlen(name);
 
@@ -493,7 +493,7 @@ sxe_jitson_stack_add_string_or_member_name(struct sxe_jitson_stack *stack, const
         return false;            /* COVERAGE EXCLUSION: Member name > 4294967295 characters */
     }
 
-    stack->jitsons[index].size = len;
+    stack->jitsons[index].len = len;
 
     if (len < SXE_JITSON_STRING_SIZE) {
         memcpy(stack->jitsons[index].string, name, len + 1);
@@ -537,7 +537,7 @@ sxe_jitson_stack_add_member_name(struct sxe_jitson_stack *stack, const char *nam
     SXEA1(!stack->jitsons[object].partial.no_value,                                "Member name already added without a value");
     SXEA1(!(type & ~(SXE_JITSON_TYPE_IS_REF | SXE_JITSON_TYPE_IS_OWN)),            "Unexected type flags 0x%x", (unsigned)type);
 
-    return sxe_jitson_stack_add_string_or_member_name(stack, name, SXE_JITSON_TYPE_MEMBER | type);
+    return sxe_jitson_stack_add_string_or_member_name(stack, name, type | SXE_JITSON_TYPE_IS_KEY);
 }
 
 /**
@@ -562,8 +562,8 @@ sxe_jitson_stack_add_string(struct sxe_jitson_stack *stack, const char *name, ui
           "Strings can only be added to arrays or objects");
     SXEA1(!(type & ~(SXE_JITSON_TYPE_IS_REF | SXE_JITSON_TYPE_IS_OWN)), "Unexected type flags 0x%x", (unsigned)type);
 
-    if ((ret = sxe_jitson_stack_add_string_or_member_name(stack, name, SXE_JITSON_TYPE_STRING | type)))
-        stack->jitsons[collection].size++;
+    if ((ret = sxe_jitson_stack_add_string_or_member_name(stack, name, type)))
+        stack->jitsons[collection].len++;
 
     return ret;
 }
@@ -583,7 +583,7 @@ sxe_jitson_stack_add_value(struct sxe_jitson_stack *stack)
     if ((index = sxe_jitson_stack_next(stack)) == SXE_JITSON_STACK_ERROR)
         return SXE_JITSON_STACK_ERROR;    /* COVERAGE EXCLUSION: Out of memory condition */
 
-    stack->jitsons[collection].size++;
+    stack->jitsons[collection].len++;
     stack->jitsons[collection].partial.no_value = false;
     return index;
 }
