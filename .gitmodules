@@ -1,0 +1,3 @@
+[submodule "mak"]
+	path = mak
+	url = git@github.com:jimbelton/mak.git
