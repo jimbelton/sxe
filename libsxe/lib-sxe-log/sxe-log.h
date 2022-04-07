@@ -37,6 +37,9 @@
 #   define SXE_DEBUG 0
 #endif
 
+#define SXE_LOG_BUFFER_SIZE 1024    // Maximum size of a log line
+#define SXE_LOG_NO_ID       ~0U     // Value indicating no identifier for sxe_log_set_id
+
 /*
  * Compiler-dependent macros to declare that functions take printf-like
  * or scanf-like arguments.  They are null except for versions of gcc
@@ -51,7 +54,12 @@
 #   define __noreturn                        __attribute__((__noreturn__))
 #endif
 
-/* The following log levels are based on discussions with Mario
+/* Options that can be set with sxe_log_set_options
+ */
+#define SXE_LOG_OPTION_LEVEL_TEXT 0x00000001    // Three letter log levels instead of numbers
+#define SXE_LOG_OPTION_ID_HEX     0x00000002    // Display ids in hex instead of decimal
+
+/* The following log levels are supported
  */
 typedef enum SXE_LOG_LEVEL {
     SXE_LOG_LEVEL_UNDER_MINIMUM,  /* Guard value: do not use this                            */
@@ -110,11 +118,12 @@ typedef enum SXE_RETURN {
 #define SXE_RETURN_ERROR_BAD_MESSAGE_RECEIVED    SXE_RETURN_ERROR_BAD_MESSAGE
 #define SXE_RETURN_ERROR_CACHE_UNINITIALIZED     SXE_RETURN_ERROR_NOT_INITIALIZED
 
-/* Private type used to allow dynamic modification of log levels
+/* Private type used to allow per file dynamic modification of log levels
  */
 typedef struct SXE_LOG_CONTROL {
     SXE_LOG_LEVEL                     level;
     volatile struct SXE_LOG_CONTROL * next;
+    const char *                      file;
 } SXE_LOG_CONTROL;
 
 /* Private type used to declare space for the log package on the stack of each function that calls SXEE##
@@ -164,9 +173,13 @@ extern SXE_LOG_ASSERT_CB sxe_log_assert_cb; /* NULL or function to call before a
 
 #define SXE_LOG_ASSERT_SET_CALLBACK(cb) sxe_log_assert_cb = cb
 
+#ifndef SXE_FILE
+#   define SXE_FILE __FILE__    /* Normally, the make system defines this as <component>/<package>/<file>.c */
+#endif
+
 /* Per module (file) log control structure
  */
-static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, NULL};
+static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, NULL, SXE_FILE};
 
 /**
  * - Logging macros
@@ -250,7 +263,7 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXE_IF_LEVEL_GE(line_level) if ((line_level) <= sxe_log_control.level)
 #endif
 
-/* Common blocks stuff that we pass to functions; SXE_FILE is the file in the form (e.g.) "libsxe/lib-sxe-log/sxe-log.c"
+/* Common blocks of stuff that we pass to functions
  */
 #ifndef SXE_FILE
 #   define SXE_FILE __FILE__    /* Normally, the make system defines this as <component>/<package>/<file>.c */
@@ -259,7 +272,7 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXE_LOG_FRAME_CREATE(entry_level) SXE_LOG_FRAME frame; frame.level=(entry_level); frame.file=SXE_FILE; \
                                           frame.line=__LINE__; frame.function=__func__; frame.id=~0U;
 #define SXE_LOG_FRAME_SET_ID(this)        frame.id=((this) != NULL ? (this)->id : ~0U)
-#define SXE_LOG_NO                        &sxe_log_control, SXE_FILE, ~0U, __LINE__
+#define SXE_LOG_NO                        &sxe_log_control, __func__, ~0U, __LINE__
 #define SXE_LOG_NO_ASSERT                 &sxe_log_control, __FILE__, ~0U, __LINE__
 #define SXE_LOG_FRAME_NO                  &frame, &sxe_log_control, ~0U
 
@@ -331,7 +344,7 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 
 #endif
 
-#define SXE_LOG_ID                &sxe_log_control, SXE_FILE, ((this) != NULL ? (this)->id : ~0U), __LINE__
+#define SXE_LOG_ID                &sxe_log_control, __func__, ((this) != NULL ? (this)->id : ~0U), __LINE__
 #define SXE_LOG_ID_ASSERT         &sxe_log_control, __FILE__, ((this) != NULL ? (this)->id : ~0U), __LINE__
 #define SXE_LOG_FRAME_ID  &frame, &sxe_log_control,           ((this) != NULL ? (this)->id : ~0U)
 

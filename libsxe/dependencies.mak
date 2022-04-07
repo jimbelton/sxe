@@ -35,6 +35,7 @@ LIB_DEPENDENCIES = $(call remove_to,$(LIBRARIES),$(ALL_LIBRARIES))
 
 # Convention opt-out list
 CONVENTION_OPTOUT_LIST = lib-lookup3 lib-mock lib-port
+MAKE_ALLOW_SPACE_AFTER_ASTERISK = 1    # lib-sxe puts all declarations on separate lines, so it doesn't cuddle asterisks
 
 # Coverage opt-out list
 COVERAGE_OPTOUT_LIST   = lib-lookup3 lib-mock lib-port lib-sha1 lib-tap
