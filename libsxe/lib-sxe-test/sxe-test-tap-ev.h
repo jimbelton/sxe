@@ -19,23 +19,33 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+ 
+/* This file contains includable code and should only be used in test programs.
+ */
 
+#ifndef __SXE_TEST_TAP_EV_H__
+#define __SXE_TEST_TAP_EV_H__ 1
+ 
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
 
 #include "ev.h"
+#include "sxe.h"
 #include "sxe-log.h"
-#include "sxe-test.h"
 #include "sxe-time.h"
 #include "sxe-util.h"
 #include "tap.h"
 
 #ifdef gettimeofday
-#error "gettimeofday should not be mocked here"
+#   define SXE_TEST_TAP_EV_mock_gettimeofday gettimeofday
+#   undef  gettimeofday
 #endif
 
-static SXE_TIME
+static void test_ev_loop_wait(ev_tstamp);
+static void test_process_all_libev_events(void);
+
+static __attribute__ ((unused)) SXE_TIME
 local_get_time(void)
 {
     struct timeval tv;
@@ -44,23 +54,17 @@ local_get_time(void)
     return SXE_TIME_FROM_TIMEVAL(&tv);
 }
 
-unsigned
+static __attribute__ ((unused)) unsigned
 test_tap_ev_length_nowait(void)
 {
     test_process_all_libev_events();
     return tap_ev_length();
 }
 
-/* This callback is a workaround to avoid introducing a circular dependency on
- * lib-sxe, which actually implements the "normal" version of it: get_deferred_count().
- * sxe_init() sets this function pointer.
- */
-unsigned (*test_tap_ev_queue_shift_wait_get_deferred_count)(void);
-
 #define AT_TIMEOUT_THEN_TIMEOUT 0
 #define AT_TIMEOUT_THEN_ASSERT  1
 
-tap_ev
+static __attribute__ ((unused)) tap_ev
 test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int at_timeout)
 {
     tap_ev event;
@@ -78,7 +82,7 @@ test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int 
             return event;
         }
 
-        if (!test_tap_ev_queue_shift_wait_get_deferred_count || (*test_tap_ev_queue_shift_wait_get_deferred_count)() == 0) {
+        if (sxe_get_deferred_count() == 0) {
             test_ev_loop_wait(SXE_TIME_TO_DOUBLE_SECONDS(wait_time));
             event = tap_ev_queue_shift(queue);
             if (event != NULL) {
@@ -99,37 +103,37 @@ test_tap_ev_queue_shift_wait_or_what(tap_ev_queue queue, ev_tstamp seconds, int 
     }
 }
 
-tap_ev
+static __attribute__ ((unused)) tap_ev
 test_tap_ev_queue_shift_wait_or_timeout(tap_ev_queue queue, ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_TIMEOUT);
 }
 
-tap_ev
+static __attribute__ ((unused)) tap_ev
 test_tap_ev_queue_shift_wait_or_assert(tap_ev_queue queue, ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_ASSERT);
 }
 
-tap_ev
+static __attribute__ ((unused)) tap_ev
 test_tap_ev_queue_shift_wait(tap_ev_queue queue, ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_what(queue, seconds, AT_TIMEOUT_THEN_ASSERT);
 }
 
-tap_ev
+static __attribute__ ((unused)) tap_ev
 test_tap_ev_shift_wait(ev_tstamp seconds) /* _or_assert */
 {
     return test_tap_ev_queue_shift_wait(tap_ev_queue_get_default(), seconds);
 }
 
-tap_ev
+static __attribute__ ((unused)) tap_ev
 test_tap_ev_shift_wait_or_timeout(ev_tstamp seconds)
 {
     return test_tap_ev_queue_shift_wait_or_timeout(tap_ev_queue_get_default(), seconds);
 }
 
-const char *
+static __attribute__ ((unused)) const char *
 test_tap_ev_identifier_wait(ev_tstamp seconds, tap_ev * ev_ptr)
 {
     tap_ev event;
@@ -137,7 +141,7 @@ test_tap_ev_identifier_wait(ev_tstamp seconds, tap_ev * ev_ptr)
     return tap_ev_identifier(*(ev_ptr == NULL ? &event : ev_ptr) = test_tap_ev_shift_wait(seconds));
 }
 
-const char *
+static __attribute__ ((unused)) const char *
 test_tap_ev_queue_identifier_wait(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr)
 {
     tap_ev event;
@@ -163,7 +167,7 @@ test_tap_ev_queue_identifier_wait(tap_ev_queue queue, ev_tstamp seconds, tap_ev 
  * @param expected_length Expect amount of data to be read
  * @param who             Textual description of SXE for diagnostics
  */
-void
+static __attribute__ ((unused)) void
 test_ev_queue_wait_read(tap_ev_queue queue, ev_tstamp seconds, tap_ev * ev_ptr, void * this, const char * read_event_name,
                         char * buffer, unsigned expected_length, const char * who)
 {
@@ -219,9 +223,15 @@ SXE_ERROR_OUT:
  * @param expected_length Expect amount of data to be read
  * @param who             Textual description of SXE for diagnostics
  */
-void
+static __attribute__ ((unused)) void
 test_ev_wait_read(ev_tstamp seconds, tap_ev * ev_ptr, void * this, const char * read_event_name, char * buffer,
                   unsigned expected_length, const char * who)
 {
     test_ev_queue_wait_read(tap_ev_queue_get_default(), seconds, ev_ptr, this, read_event_name, buffer, expected_length, who);
 }
+
+#ifdef SXE_TEST_TAP_EV_mock_gettimeofday
+#   define gettimeofday SXE_TEST_TAP_EV_mock_gettimeofday
+#endif
+
+#endif

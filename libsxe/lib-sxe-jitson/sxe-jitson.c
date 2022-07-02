@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "mockfail.h"
+#include "sxe-alloc.h"
 #include "sxe-hash.h"
 #include "sxe-jitson.h"
 #include "sxe-log.h"
@@ -142,7 +143,7 @@ sxe_jitson_object_get_member(struct sxe_jitson *jitson, const char *name, unsign
     len = len ?: strlen(name);                       // Determine the length of the member name if not provided
 
     if (!(jitson->type & SXE_JITSON_TYPE_INDEXED)) {
-        if (!(jitson->index = MOCKFAIL(MOCK_FAIL_OBJECT_GET_MEMBER, NULL, calloc(1, jitson->len * sizeof(uint32_t)))))
+        if (!(jitson->index = MOCKFAIL(MOCK_FAIL_OBJECT_GET_MEMBER, NULL, sxe_calloc(1, jitson->len * sizeof(uint32_t)))))
             return NULL;
 
         for (member = jitson + 1, i = 0; i < jitson->len; i++) {
@@ -188,7 +189,7 @@ sxe_jitson_array_get_element(struct sxe_jitson *jitson, unsigned idx)
     }
 
     if (!(jitson->type & SXE_JITSON_TYPE_INDEXED)) {
-        if (!(jitson->index = MOCKFAIL(MOCK_FAIL_ARRAY_GET_ELEMENT, NULL, malloc(jitson->len * sizeof(uint32_t)))))
+        if (!(jitson->index = MOCKFAIL(MOCK_FAIL_ARRAY_GET_ELEMENT, NULL, sxe_malloc(jitson->len * sizeof(uint32_t)))))
             return NULL;
 
         for (element = jitson + 1, i = 0; i < jitson->len; i++, element = element + sxe_jitson_size(element))

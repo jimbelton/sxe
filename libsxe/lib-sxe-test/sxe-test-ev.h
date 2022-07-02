@@ -19,14 +19,17 @@
  * THE SOFTWARE.
  */
 
+/* This file contains includable code and should only be used in test programs.
+ */
+ 
 #include "ev.h"
 #include "sxe-log.h"
-#include "sxe-test.h"
+#include "sxe-test-tap-ev.h"
 #include "sxe-util.h"
 #include <stdlib.h>
 #include <string.h>
 
-static void
+static __attribute__ ((unused)) void
 test_event_timeout(struct ev_loop * loop, ev_timer * timer, int events)
 {
     SXEE6("test_event_timeout(loop=%p, timer=%p, events=%d) // should never happen in a correctly running test", loop, timer, events);
@@ -38,7 +41,7 @@ test_event_timeout(struct ev_loop * loop, ev_timer * timer, int events)
     SXER6("return");
 }
 
-void
+static __attribute__ ((unused)) void
 test_ev_loop_wait(ev_tstamp seconds)
 {
     ev_timer timeout_watcher;
@@ -55,7 +58,7 @@ test_ev_loop_wait(ev_tstamp seconds)
     //special case: reduce log noise: SXER6("return");
 }
 
-void
+static __attribute__ ((unused)) void
 test_process_all_libev_events(void)
 {
     SXEE6("test_process_all_libev_events()");
@@ -73,7 +76,7 @@ test_process_all_libev_events(void)
  * delivered in.  Pass in a string with space separated event names, and
  * they'll all be consumed, with a 2 second timeout.
  */
-int
+static __attribute__ ((unused)) int
 test_ev_consume_events(const char * expected, int expected_events)
 {
     tap_ev event = NULL;

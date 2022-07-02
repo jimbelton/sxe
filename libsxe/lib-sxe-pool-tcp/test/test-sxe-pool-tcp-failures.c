@@ -96,12 +96,12 @@ test_mock_getsockopt_connection_failed(SXE_SOCKET fd, int level, int optname, SX
     return 0;
 }
 static void
-test_event_timeout(SXE_POOL_TCP * pool, void * info)
+test_pool_event_timeout(SXE_POOL_TCP * pool, void * info)
 {
     SXEE6("%s(pool=%s, info=%p)", __func__, SXE_POOL_TCP_GET_NAME(pool), info);
     SXE_UNUSED_PARAMETER(pool);
     SXE_UNUSED_PARAMETER(info);
-    SXEA1(0, "test_event_timeout should never get called in this test");
+    SXEA1(0, "test_pool_event_timeout should never get called in this test");
     SXER6("return");
 }
 
@@ -170,7 +170,8 @@ check_invalid_destination(void)
     MOCK_SET_HOOK(connect, test_mock_connect);
     getsockopt_count = 0;
     MOCK_SET_HOOK(getsockopt, test_mock_getsockopt_connection_failed);
-    pool = sxe_pool_tcp_new_connect(2, "destpool", "127.0.0.1", test_port, test_event_ready_to_write, NULL, test_event_read, test_event_close, 0.0, response_timeout, test_event_timeout, caller_info);
+    pool = sxe_pool_tcp_new_connect(2, "destpool", "127.0.0.1", test_port, test_event_ready_to_write, NULL, test_event_read,
+                                    test_event_close, 0.0, response_timeout, test_pool_event_timeout, caller_info);
     ok(pool != NULL, "destpool was initialized");
 
     while (getsockopt_count < 2) {
@@ -225,7 +226,8 @@ check_getsockopt_failure(void)
     MOCK_SET_HOOK(connect, test_mock_connect);
     getsockopt_count = 0;
     MOCK_SET_HOOK(getsockopt, test_mock_getsockopt_fails);
-    pool = sxe_pool_tcp_new_connect(2, "sockpool", "127.0.0.1", test_port, test_event_ready_to_write, NULL, test_event_read, test_event_close, 0.0, response_timeout, test_event_timeout, caller_info);
+    pool = sxe_pool_tcp_new_connect(2, "sockpool", "127.0.0.1", test_port, test_event_ready_to_write, NULL, test_event_read,
+                                    test_event_close, 0.0, response_timeout, test_pool_event_timeout, caller_info);
     ok(pool != NULL, "sockpool was initialized");
 
     while (getsockopt_count < 2) {

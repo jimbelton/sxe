@@ -28,13 +28,13 @@ TOP.dir = $(COM.dir)/..
 # This is used by both the package GNUmakefiles and the top level GNUmakefile
 #
 remove_to = $(if $(filter $(1),$(2)),$(call remove_to,$(1),$(wordlist 2,$(words $(2)),$(2))),$(2))
-ALL_LIBRARIES    = sxe-expose sxe-dirwatch sxe-ring-buffer sxe-httpd sxe-http sxe-sync-ev sxe-pool-tcp sxe-jitson\
-                   sxe-hash lookup3 sha1 sxe-spawn sxe sxe-pool sxe-thread sxe-mmap sxe-buffer sxe-list sxe-socket sxe-test \
-                   ev sxe-cstr sxe-util  sxe-log mock port tap
+ALL_LIBRARIES    = sxe-expose sxe-dirwatch sxe-ring-buffer sxe-httpd sxe-http sxe-sync-ev sxe-pool-tcp sxe-jitson  \
+                   sxe-hash lookup3 sha1 sxe-spawn sxe sxe-pool sxe-thread sxe-mmap sxe-buffer sxe-list sxe-socket \
+                   ev sxe-cstr sxe-util sxe-log sxe-test mock port tap
 LIB_DEPENDENCIES = $(call remove_to,$(LIBRARIES),$(ALL_LIBRARIES))
 
 # Convention opt-out list
-CONVENTION_OPTOUT_LIST = lib-lookup3 lib-mock lib-port
+CONVENTION_OPTOUT_LIST = lib-lookup3 lib-mock lib-port lib-sxe-log lib-sxe-test
 MAKE_ALLOW_SPACE_AFTER_ASTERISK = 1    # lib-sxe puts all declarations on separate lines, so it doesn't cuddle asterisks
 
 # Coverage opt-out list

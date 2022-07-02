@@ -19,8 +19,10 @@
  * THE SOFTWARE.
  */
 
+/* This file contains includable code and should only be used in test programs.
+ */
+
 #include "sxe-log.h"
-#include "sxe-test.h"
 
 #include <unistd.h>
 
@@ -30,7 +32,7 @@
 
 static jmp_buf abort_jmpbuf_env;
 
-static void
+static __attribute__ ((unused)) void
 test_signal_handler_sigabrt(int signum)
 {
     /* SIGNAL HANDLER -- DO NOT USE SXEExx/SXERxx macros */
@@ -41,7 +43,7 @@ test_signal_handler_sigabrt(int signum)
     return;
 }
 
-int
+static __attribute__ ((unused)) int
 test_expect_abort_in_function(void (*func)(void *), void * user_data)
 {
     volatile int result   = 1;

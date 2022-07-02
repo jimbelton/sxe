@@ -33,7 +33,7 @@
 #include "sxe-log.h"
 #include "sxe-mmap.h"
 #include "sxe-spinlock.h"
-#include "sxe-test.h"
+#include "sxe-test-get-temp-file-name.h"
 #include "sxe-time.h"
 #include "sxe-util.h"
 #include "tap.h"

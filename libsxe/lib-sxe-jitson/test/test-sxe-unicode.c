@@ -1,15 +1,18 @@
 #include <string.h>
 #include <tap.h>
 
+#include "sxe-test-memory.h"
 #include "sxe-unicode.h"
 
 int
 main(void)
 {
-    char utf8[8];
+    size_t memory;
+    char   utf8[8];
 
-    plan_tests(9);
+    plan_tests(10);
     memset(utf8, 0, sizeof(utf8));
+    memory = test_memory();
 
     is(sxe_unicode_to_utf8('A', utf8),        1,                  "'A' is encoded in one byte");
     is_eq(utf8,                               "A",                "'A' is encoded as 'A'");
@@ -21,5 +24,6 @@ main(void)
     is_eq(utf8,                               "\xF0\x90\x8D\x88", "'\U00010348' is encoded as 0xF0 0x90 0x8D 0x88");
     is(sxe_unicode_to_utf8(0xFFFFFFFF, utf8), 0,                  "0xFFFFFFFF is an invalid code point");
 
+    is(test_memory(),                         memory,             "No memory was leaked");                                   
     return exit_status();
 }

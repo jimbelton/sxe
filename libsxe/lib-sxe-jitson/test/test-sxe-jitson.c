@@ -6,7 +6,7 @@
 
 #include "mockfail.h"
 #include "sxe-jitson.h"
-#include "sxe-test.h"
+#include "sxe-test-memory.h"
 
 int
 main(void)
@@ -356,7 +356,7 @@ main(void)
         sxe_jitson_free(jitson);
     }
 
-    sxe_jitson_stack_free_thread();    // Currently, just for coverage
+    sxe_jitson_stack_free_thread();
 
     if (test_memory() != start_memory)
         diag("Memory in use is %zu, not %zu as it was at the start of the test program", test_memory(), start_memory);

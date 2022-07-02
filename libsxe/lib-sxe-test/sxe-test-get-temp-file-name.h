@@ -19,7 +19,11 @@
  * THE SOFTWARE.
  */
 
+/* This file contains includable code and should only be used in test programs.
+ */
+
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -28,7 +32,6 @@
 #include <limits.h>     /* for PATH_MAX not on WIN32 */
 
 #include "sxe-log.h"
-#include "sxe-test.h"
 
 /**
  * Why go to the trouble of creating an especially unique file
@@ -39,7 +42,7 @@
  * http://www.virtualbox.org/ticket/819
  **/
 
-void
+static __attribute__ ((unused)) void
 sxe_test_get_temp_file_name(
     const char * file_stem                       , /* e.g. test-sxe-mmap-pool */
     char       * unique_path_and_file_buffer     , /* e.g. outputs win32: C:\DOCUME~1\SIMONH~1.GRE\LOCALS~1\Temp\<file_stem>-pid-<pid>.bin */

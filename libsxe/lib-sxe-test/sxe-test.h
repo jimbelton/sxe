@@ -19,16 +19,18 @@
  * THE SOFTWARE.
  */
 
+/* This file is provided for backward compatibility. You should probably just include the sxe-test-*.h files your test needs.
+ */
+
 #ifndef __SXE_TEST_H__
 #define __SXE_TEST_H__
 
 #include <unistd.h>
 
-#include "ev.h"
 #include "tap.h"
-
-extern unsigned (*test_tap_ev_queue_shift_wait_get_deferred_count)(void);
-
-#include "lib-sxe-test-proto.h"
+#include "sxe-test-catch-abort.h"
+#include "sxe-test-ev.h"
+#include "sxe-test-get-temp-file-name.h"
+#include "sxe-test-waitpid-for-seconds.h"
 
 #endif

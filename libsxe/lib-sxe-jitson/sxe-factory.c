@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include "mockfail.h"
+#include "sxe-alloc.h"
 #include "sxe-factory.h"
 
 /**
@@ -51,6 +52,7 @@ sxe_factory_alloc_make(struct sxe_factory *factory, size_t minsize, size_t maxin
 char *
 sxe_factory_reserve(struct sxe_factory *factory, size_t len)
 {
+    char  *newdata;
     size_t needed = factory->len + len + 1;
 
     if (needed > factory->size || factory->data == NULL) {
@@ -59,9 +61,10 @@ sxe_factory_reserve(struct sxe_factory *factory, size_t len)
         while (newsize < needed)
             newsize = newsize >= factory->maxincr ? newsize + factory->maxincr : newsize << 1;
 
-        if ((factory->data = MOCKFAIL(sxe_factory_reserve, NULL, realloc(factory->data, newsize))) == NULL)
+        if ((newdata = MOCKFAIL(sxe_factory_reserve, NULL, sxe_realloc(factory->data, newsize))) == NULL)
             return NULL;
 
+        factory->data = newdata;
         factory->size = newsize;
     }
 
@@ -132,7 +135,7 @@ sxe_factory_remove(struct sxe_factory *factory, size_t *len_out)
     char * data = sxe_factory_look(factory, len_out);
 
     if (factory->len + 1 < factory->size)
-        data = realloc(factory->data, factory->len + 1);
+        data = sxe_realloc(factory->data, factory->len + 1);
 
     factory->data = NULL;
     factory->len  = 0;

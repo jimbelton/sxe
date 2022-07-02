@@ -22,6 +22,12 @@
 #ifndef __SXE_MOCK_H__
 #define __SXE_MOCK_H__
 
+#ifdef __SXE_TEST_MEMORY_H__
+#   ifndef SXE_MOCK_NO_CALLOC
+#       error "sxe-test-memory.h is incompatible with mock.h; define SXE_MOCK_NO_CALLOC before to mix them"
+#   endif
+#endif
+
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -104,7 +110,9 @@ extern void         (             * mock_syslog)      (int priority, const char 
 
 #define accept(fd, addr, len)                    (*mock_accept)      ((fd), (addr), (len))
 #define bind(fd, addr, len)                      (*mock_bind)        ((fd), (addr), (len))
-#define calloc(num, size)                        (*mock_calloc)      ((num), (size))
+#ifndef SXE_MOCK_NO_CALLOC
+#   define calloc(num, size)                     (*mock_calloc)      ((num), (size))
+#endif
 #define close(fd)                                (*mock_close)       (fd)
 #define connect(fd, addr, len)                   (*mock_connect)     ((fd), (addr), (len))
 #define fopen(file, mode)                        (*mock_fopen)       ((file), (mode))

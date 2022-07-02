@@ -263,10 +263,12 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #define SXE_IF_LEVEL_GE(line_level) if ((line_level) <= sxe_log_control.level)
 #endif
 
-/* Common blocks of stuff that we pass to functions
- */
 #ifndef SXE_FILE
-#   define SXE_FILE __FILE__    /* Normally, the make system defines this as <component>/<package>/<file>.c */
+#   ifdef MAK_FILE
+#       define SXE_FILE MAK_FILE     // Normally, the mak system defines this as <component>/<package>/<file>.c
+#   else
+#       define SXE_FILE __FILE__
+#   endif 
 #endif
 
 #define SXE_LOG_FRAME_CREATE(entry_level) SXE_LOG_FRAME frame; frame.level=(entry_level); frame.file=SXE_FILE; \

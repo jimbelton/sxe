@@ -29,6 +29,7 @@
 #include <string.h>
 
 #include "mockfail.h"
+#include "sxe-alloc.h"
 #include "sxe-hash.h"
 #include "sxe-jitson.h"
 #include "sxe-log.h"
@@ -48,11 +49,11 @@ sxe_jitson_stack_new(unsigned init_size)
 
     SXEA1(SXE_JITSON_TOKEN_SIZE == 16, "Expected token size 16, got %zu", SXE_JITSON_TOKEN_SIZE);
 
-    if (!(stack = MOCKFAIL(MOCK_FAIL_STACK_NEW_OBJECT, NULL, calloc(1, sizeof(*stack)))))
+    if (!(stack = MOCKFAIL(MOCK_FAIL_STACK_NEW_OBJECT, NULL, sxe_calloc(1, sizeof(*stack)))))
         return NULL;
 
-    if (!(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_NEW_JITSONS, NULL, malloc((size_t)init_size * sizeof(*stack->jitsons))))) {
-        free(stack);
+    if (!(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_NEW_JITSONS, NULL, sxe_malloc((size_t)init_size * sizeof(*stack->jitsons))))) {
+        sxe_free(stack);
         return NULL;
     }
 
@@ -75,7 +76,7 @@ sxe_jitson_stack_get_jitson(struct sxe_jitson_stack *stack)
     SXEE6("(stack=%p)", stack);
 
     if (stack->maximum > stack->count)
-        ret = realloc(ret, stack->count * sizeof(*stack->jitsons)) ?: stack->jitsons;
+        ret = sxe_realloc(ret, stack->count * sizeof(*stack->jitsons)) ?: stack->jitsons;
 
     stack->jitsons = NULL;
     stack->count   = 0;
@@ -106,8 +107,8 @@ sxe_jitson_stack_get_thread(void)
 void
 sxe_jitson_stack_free(struct sxe_jitson_stack *stack)
 {
-    free(stack->jitsons);
-    free(stack);
+    sxe_free(stack->jitsons);
+    sxe_free(stack);
 }
 
 void

@@ -60,7 +60,7 @@ test_event_log_line(SXE_LOG_LEVEL level, const char * line)
 }
 
 static void
-test_event_timeout(SXE_POOL_TCP * pool, void * info)
+test_pool_event_timeout(SXE_POOL_TCP * pool, void * info)
 {
     SXEE6("%s(pool=%s, info=%p)", __func__, SXE_POOL_TCP_GET_NAME(pool), info);
     SXE_UNUSED_PARAMETER(pool);
@@ -129,7 +129,7 @@ test_case_no_initialization(void)
     tap_ev         event;
 
     pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "echopool", "perl", TEST_COMMAND, NULL, test_event_ready_to_write, NULL,
-                                  test_event_read, NULL, NO_TIMEOUT, RESPONSE_SECONDS, test_event_timeout, caller_info);
+                                  test_event_read, NULL, NO_TIMEOUT, RESPONSE_SECONDS, test_pool_event_timeout, caller_info);
     ok(pool != NULL,                                                                     "echopool was initialized");
     test_process_all_libev_events();
 
@@ -172,8 +172,8 @@ test_case_no_initialization(void)
     MOCK_SET_HOOK(gettimeofday, test_mock_gettimeofday);
     sxe_pool_check_timeouts();
     MOCK_SET_HOOK(gettimeofday, gettimeofday);
-    is_eq(tap_ev_identifier(tap_ev_shift()),                "test_event_timeout",        "Got 7th event: timeout");
-    is_eq(tap_ev_identifier(tap_ev_shift()),                "test_event_timeout",        "Got 8th event: timeout");
+    is_eq(tap_ev_identifier(tap_ev_shift()),                "test_pool_event_timeout",        "Got 7th event: timeout");
+    is_eq(tap_ev_identifier(tap_ev_shift()),                "test_pool_event_timeout",        "Got 8th event: timeout");
     is(tap_ev_length(),                                     0,                           "No more events");
 }
 
@@ -184,7 +184,7 @@ test_case_initialization_hangs(void)
 
     pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "deadpool", "perl", TEST_COMMAND, NULL, test_event_ready_to_write,
                                   test_event_connected, test_event_read, NULL, INITIALIZATION_SECONDS,
-                                  RESPONSE_SECONDS, test_event_timeout, caller_info);
+                                  RESPONSE_SECONDS, test_pool_event_timeout, caller_info);
     ok(pool != NULL,                                                            "deadpool was initialized");
     test_process_all_libev_events();
 
@@ -200,8 +200,8 @@ test_case_initialization_hangs(void)
     MOCK_SET_HOOK(gettimeofday, test_mock_gettimeofday);
     sxe_pool_check_timeouts();
     MOCK_SET_HOOK(gettimeofday, gettimeofday);
-    is_eq(tap_ev_identifier(tap_ev_shift()),             "test_event_timeout",  "1st initialization timeout");
-    is_eq(tap_ev_identifier(tap_ev_shift()),             "test_event_timeout",  "2nd initialization timeout");
+    is_eq(tap_ev_identifier(tap_ev_shift()),             "test_pool_event_timeout",  "1st initialization timeout");
+    is_eq(tap_ev_identifier(tap_ev_shift()),             "test_pool_event_timeout",  "2nd initialization timeout");
     is(tap_ev_length(),                                  0,                     "No events other than initialization timeout");
     sxe_pool_tcp_delete(NULL, pool);    /* Prevent further events on this pool */
 }
@@ -215,7 +215,7 @@ test_case_initialization_succeeds(void)
 
     pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "suckpool", "perl", TEST_COMMAND, "-n", test_event_ready_to_write,
                                   NULL, test_event_read, NULL, INITIALIZATION_SECONDS,
-                                  RESPONSE_SECONDS, test_event_timeout, caller_info);
+                                  RESPONSE_SECONDS, test_pool_event_timeout, caller_info);
     ok(pool != NULL,                                                                 "suckpool was initialized");
     test_process_all_libev_events();
 
@@ -257,7 +257,7 @@ test_case_retries(void)
 
     SXEE6("%s()", __func__);
     pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "retrypool", "sh", "-c", "perl -e 'sleep 0.1; exit 1;'", test_event_ready_to_write,
-                                  NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_event_timeout, NULL);
+                                  NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(pool != NULL,                                                                 "retrypool was initialized");
 
     /* Ask whether we're allowed to write */
@@ -294,7 +294,7 @@ test_case_single_command_bounces(void)
     sxe_log_hook_line_out(test_event_log_line);    /* hook log output */
 
     pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "bouncepool", "perl", TEST_COMMAND, "-L", test_event_ready_to_write,
-                                  NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_event_timeout, NULL);
+                                  NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(pool != NULL,                                                                 "bouncepool was initialized");
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_close",          "Bouncing Betty closed once");
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_close",          "Bouncing Betty closed twice");
@@ -331,7 +331,7 @@ test_case_out_of_sxes(void)
     SXEE6("%s()", __func__);
     SXEA1((hog_one = sxe_new_udp(NULL, "127.0.0.1", 0, test_event_read)) != NULL, "Failed to allocate a SXE to hog");
     pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "failpool", "perl", TEST_COMMAND, NULL, test_event_ready_to_write,
-                                  NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_event_timeout, NULL);
+                                  NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(pool != NULL,                                                                 "failpool was initialized");
     is(test_tap_ev_length_nowait(),                     0,                           "No events");
     SXER6("return");

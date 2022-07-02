@@ -45,12 +45,12 @@ static inline tap_ev test_next_client_event(void) { return test_tap_ev_shift_wai
 static inline tap_ev test_next_server_event(void) { return test_tap_ev_queue_shift_wait(server_queue, WAIT); }
 
 static void
-test_event_timeout(SXE_POOL_TCP * pool, void * info)
+test_pool_event_timeout(SXE_POOL_TCP * pool, void * info)
 {
     SXEE6("%s(pool=%s, info=%p)", __func__, SXE_POOL_TCP_GET_NAME(pool), info);
     SXE_UNUSED_PARAMETER(pool);
     SXE_UNUSED_PARAMETER(info);
-    SXEA1(0, "test_event_timeout should never be called in this test");
+    SXEA1(0, "test_pool_event_timeout should never be called in this test");
     SXER6("return");
 }
 
@@ -199,7 +199,7 @@ test_case_happy_path(void)
 
     pool = sxe_pool_tcp_new_connect(2, "happy_pool", "127.0.0.1", test_port, test_event_client_write,
                                     test_event_client_connect, test_event_client_read, test_event_client_close, NO_TIMEOUT,
-                                    NO_TIMEOUT, test_event_timeout, NULL);
+                                    NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(pool != NULL, "happy_pool was initialized");
     is_eq(tap_ev_identifier(test_next_client_event()), "test_event_client_connect", "1st client connect");
     is_eq(tap_ev_identifier(test_next_client_event()), "test_event_client_connect", "2nd client connect");
@@ -265,7 +265,7 @@ test_case_connection_closed_and_reopened(void)
 
     pool = sxe_pool_tcp_new_connect(2, "recon_pool", "127.0.0.1", test_port, test_event_client_write,
                                     test_event_client_connect, test_event_client_read, test_event_client_close, NO_TIMEOUT,
-                                    NO_TIMEOUT, test_event_timeout, NULL);
+                                    NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(pool != NULL, "recon_pool was initialized");
     is_eq(tap_ev_identifier(test_next_client_event()),      "test_event_client_connect", "1st client connect");
     is_eq(tap_ev_identifier(test_next_client_event()),      "test_event_client_connect", "2nd client connect");
@@ -336,7 +336,7 @@ test_case_pool_too_big_to_service(void)
 
     big_pool = sxe_pool_tcp_new_connect(20, "bigpool", "127.0.0.1", test_port, test_event_client_write,
                                         test_event_client_connect, test_event_client_read, test_event_client_close,
-                                        NO_TIMEOUT, NO_TIMEOUT, test_event_timeout, NULL);
+                                        NO_TIMEOUT, NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(big_pool                                          != NULL,                        "Created big pool of 20 connections");
     is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_connect", "1st client connected");
     is_eq(tap_ev_identifier(ev = test_next_client_event()), "test_event_client_connect", "2nd client connected");
@@ -374,7 +374,7 @@ test_case_max_capacity(void)
 
     pool = sxe_pool_tcp_new_connect(2, "max_capacity_pool", "127.0.0.1", test_port, test_event_client_write,
                                     test_event_client_connect, test_event_client_read, test_event_client_close, NO_TIMEOUT,
-                                    NO_TIMEOUT, test_event_timeout, NULL);
+                                    NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(pool                                              != NULL,                        "max_capacity_pool was initialized");
     is_eq(tap_ev_identifier(test_next_client_event()),      "test_event_client_connect", "1st client connected");
     is_eq(tap_ev_identifier(test_next_client_event()),      "test_event_client_connect", "2nd client connected");

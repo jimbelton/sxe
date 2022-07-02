@@ -65,7 +65,6 @@
 #include "sxe-pool.h"
 #include "sxe-socket.h"
 #include "sxe-util.h"
-#include "sxe-test.h"         /* for test_tap_ev_queue_shift_wait_get_deferred_count */
 
 #ifndef _WIN32
 #define PIPE_PATH_MAX sizeof(((struct sockaddr_un *)NULL)->sun_path)    /* Maximum size of a UNIX pipe path  */
@@ -112,8 +111,10 @@ static int              sxe_listen_backlog    = SOMAXCONN;
 
 static inline bool sxe_is_free(SXE * this) {return sxe_pool_index_to_state(sxe_array, this->id) == SXE_STATE_FREE;}
 
-static unsigned
-get_deferred_count(void)
+/* Global so that test programs can use it.
+ */
+unsigned
+sxe_get_deferred_count(void)
 {
     return sxe_pool_get_number_in_state(sxe_array, SXE_STATE_DEFERRED);
 }
@@ -139,7 +140,7 @@ deferred_generic_invoke(EV_P)
         (*event)(this);
     }
 
-    SXER6("return // %u elements still deferred", get_deferred_count());
+    SXER6("return // %u elements still deferred", sxe_get_deferred_count());
 }
 
 static void
@@ -313,8 +314,6 @@ sxe_init(void)
     SXEA1(!sxe_has_been_inited, "sxe_init: SXE is already initialized");
     SXEA1(sxe_array_total > 0,  "sxe_init: Error: sxe_register() must be called before sxe_init()");
     sxe_socket_init();
-
-    test_tap_ev_queue_shift_wait_get_deferred_count = &get_deferred_count;
 
     /* TODO: Check that sxe_array_total is smaller than system ulimit -n */
 

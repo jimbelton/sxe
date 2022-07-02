@@ -32,7 +32,7 @@
 #include "sxe-mmap.h"
 #include "sxe-spinlock.h"
 #include "sxe-pool.h"
-#include "sxe-test.h"
+#include "sxe-test-get-temp-file-name.h"
 #include "tap.h"
 
 #define TEST_WAIT             4.0
