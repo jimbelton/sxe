@@ -48,6 +48,10 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 
+#ifdef __FreeBSD__
+#include <sys/thr.h>
+#endif
+
 /* The following inline function is based on ReactOS; the license in the source file is MIT
  * See: http://www.google.com/codesearch/p?hl=en#S3vzerue4i0/trunk/reactos/include/crt/mingw32/intrin_x86.h
  */
@@ -68,7 +72,21 @@ InterlockedExchangeAdd(long volatile * Addend, long Value)
     return __sync_add_and_fetch(Addend, Value);
 }
 
+#ifdef __APPLE__
+#define SXE_GETTID() syscall(SYS_thread_selfid)
+#elif defined(__FreeBSD__)
+static inline long
+sxe_gettid(void)
+{
+    long tid;
+    thr_self(&tid);
+    return tid;
+}
+#define SXE_GETTID() sxe_gettid()
+#else
 #define SXE_GETTID() syscall(SYS_gettid)
+#endif
+
 #define SXE_YIELD()  sched_yield()
 
 #else
@@ -109,11 +127,11 @@ sxe_spinlock_take(SXE_SPINLOCK * spinlock)
     long     our_tid = SXE_GETTID();
     long     old_tid;
 
-    /* SXEL73("SXE_SPINLOCK_TAKE(spinlock.lock=%u, new=%u, old=%u)", spinlock.lock, new, old); */
+    /* SXEL7("SXE_SPINLOCK_TAKE(spinlock.lock=%u, new=%u, old=%u)", spinlock.lock, new, old); */
 
     while ((count < sxe_spinlock_count_max) && ((old_tid = InterlockedCompareExchange(&spinlock->lock, our_tid, 0)) != 0)) {
         if (old_tid == our_tid) {
-            SXEL52("sxe_spinlock_take: Spinlock %p already held by our tid %ld", &spinlock->lock, our_tid);
+            SXEL5("sxe_spinlock_take: Spinlock %p already held by our tid %ld", &spinlock->lock, our_tid);
             return SXE_SPINLOCK_STATUS_ALREADY_TAKEN;
         }
 
@@ -121,10 +139,10 @@ sxe_spinlock_take(SXE_SPINLOCK * spinlock)
         SXE_YIELD();
     }
 
-    /* SXEL71("SXE_SPINLOCK_TAKE // done; count=%u", count); */
+    /* SXEL7("SXE_SPINLOCK_TAKE // done; count=%u", count); */
 
     if (count >= sxe_spinlock_count_max) {
-        SXEL21("sxe_spinlock_take failed: reached sxe_spinlock_count_max (%u)", sxe_spinlock_count_max);
+        SXEL3("sxe_spinlock_take failed: reached sxe_spinlock_count_max (%u)", sxe_spinlock_count_max);
         return SXE_SPINLOCK_STATUS_NOT_TAKEN;
     }
 
@@ -137,7 +155,7 @@ sxe_spinlock_give(SXE_SPINLOCK * spinlock)
     long our_tid = SXE_GETTID();
     long old_tid;
 
-    SXEA13((old_tid = InterlockedCompareExchange(&spinlock->lock, 0, our_tid)) == our_tid,
+    SXEA1((old_tid = InterlockedCompareExchange(&spinlock->lock, 0, our_tid)) == our_tid,
            "sxe_spinlock_give: Lock %p is held by thread %ld, not our tid %ld", &spinlock->lock, old_tid, our_tid);
 }
 

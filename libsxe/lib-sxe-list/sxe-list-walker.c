@@ -32,11 +32,11 @@
 void
 sxe_list_walker_construct(SXE_LIST_WALKER * walker, SXE_LIST * list)
 {
-    SXEE82("sxe_list_walker_construct(walker=%p,list=%p)", walker, list);
+    SXEE6("sxe_list_walker_construct(walker=%p,list=%p)", walker, list);
     walker->list = list;
     walker->back = &list->sentinel;
     walker->node = &list->sentinel;
-    SXER80("return");
+    SXER6("return");
 }
 
 /**
@@ -51,7 +51,7 @@ sxe_list_walker_back(SXE_LIST_WALKER * walker)
 {
     void * result = NULL;
 
-    SXEE81("sxe_list_walker_back(walker=%p)", walker);
+    SXEE6("sxe_list_walker_back(walker=%p)", walker);
 
     if (walker->back != &walker->list->sentinel) {
         walker->node = walker->back;
@@ -59,7 +59,7 @@ sxe_list_walker_back(SXE_LIST_WALKER * walker)
         result = (char *)walker->node - walker->list->offset;
     }
 
-    SXER81("return %p", result);
+    SXER6("return %p", result);
     return result;
 }
 /**
@@ -74,13 +74,13 @@ sxe_list_walker_find(SXE_LIST_WALKER * walker)
 {
     void * result = NULL;
 
-    SXEE81("sxe_list_walker_find(walker=%p)", walker);
+    SXEE6("sxe_list_walker_find(walker=%p)", walker);
 
     if (walker->node != &walker->list->sentinel) {
         result = (char *)walker->node - walker->list->offset;
     }
 
-    SXER81("return %p", result);
+    SXER6("return %p", result);
     return result;
 }
 
@@ -96,7 +96,7 @@ sxe_list_walker_step(SXE_LIST_WALKER * walker)
 {
     void * result = NULL;
 
-    SXEE81("sxe_list_walker_step(walker=%p)", walker);
+    SXEE6("sxe_list_walker_step(walker=%p)", walker);
     walker->back = walker->node;
     walker->node = SXE_PTR_FIX(walker->list, SXE_LIST_NODE *, walker->node->next);
 
@@ -104,6 +104,6 @@ sxe_list_walker_step(SXE_LIST_WALKER * walker)
         result = (char *)walker->node - walker->list->offset;
     }
 
-    SXER81("return %p", result);
+    SXER6("return %p", result);
     return result;
 }

@@ -1,5 +1,4 @@
 #include <string.h>
-#include <xxhash.h>
 
 #include "lookup3.h"
 #include "sxe-hash.h"
@@ -10,7 +9,7 @@ static unsigned
 sxe_hash_def(const void *key, unsigned length)
 {
     if (length == 0)
-        length = strlen(key);    /* COVERAGE EXCLUSION - Need a test */
+        length = strlen(key);
 
 #if HASH_LITTLE_ENDIAN
     return hashlittle(key, length, 0);
@@ -36,8 +35,11 @@ unsigned (*sxe_hash_sum)(const void *key, unsigned length) = sxe_hash_def;
  *
  * @note If the function is passed 0 as the length, it should use strlen to compute the length of the key
  */
-void
+SXE_HASH_FUNC
 sxe_hash_override_sum(unsigned (*new_hash_sum)(const void *key, unsigned length))
 {
+    SXE_HASH_FUNC old_hash_sum = sxe_hash_sum;
+
     sxe_hash_sum = new_hash_sum;
+    return old_hash_sum;
 }

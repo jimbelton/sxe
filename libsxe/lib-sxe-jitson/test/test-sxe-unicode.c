@@ -24,6 +24,6 @@ main(void)
     is_eq(utf8,                               "\xF0\x90\x8D\x88", "'\U00010348' is encoded as 0xF0 0x90 0x8D 0x88");
     is(sxe_unicode_to_utf8(0xFFFFFFFF, utf8), 0,                  "0xFFFFFFFF is an invalid code point");
 
-    is(test_memory(),                         memory,             "No memory was leaked");                                   
+    is(test_memory(),                         memory,             "No memory was leaked");
     return exit_status();
 }

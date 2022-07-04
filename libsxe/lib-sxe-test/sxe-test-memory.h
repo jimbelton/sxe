@@ -1,4 +1,4 @@
-/* Copyright (c) 2010 Sophos Group.
+/* Copyright (c) 2021 Jim Belton
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -18,46 +18,39 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-#include "sxe-socket.h"
-#include "tap.h"
-
-/* What does success look like?
+ 
+/* This file contains includable code and should only be used in test programs.
  */
-#ifdef WINDOWS_NT
-static char success[] = "The operation completed successfully.";
-#elif defined(__APPLE__)
-static char success[] = "Unknown error: 0";
-#else
-static char success[] = "Success";
-#endif
+#ifndef __SXE_TEST_MEMORY__
+#define __SXE_TEST_MEMORY__ 1
 
-int
-main(int argc, char ** argv)
+#ifdef __SXE_MOCK_H__
+#   ifndef SXE_MOCK_NO_CALLOC
+#       error "sxe-test-memory.h is incompatible with mock.h; define SXE_MOCK_NO_CALLOC to mix them"
+#   endif
+#endif
+ 
+#include <assert.h>
+#include <malloc.h>
+#include <stdbool.h>
+#include <time.h>
+
+#pragma GCC diagnostic ignored "-Waggregate-return"    // Shut gcc up about mallinfo returning a struct
+
+static bool test_memory_initialized = false;
+
+static __attribute__ ((unused)) size_t
+test_memory(void)
 {
-    SXE_SOCKET sock;
+    time_t time0 = 0;
+    
+    if (!test_memory_initialized) {
+        localtime(&time0);                 // Preallocate memory allocated for timezone
+        test_memory_initialized = true;
+    }
 
-    (void)argc;
-    (void)argv;
-    plan_tests(3);
-
-    sxe_socket_init();
-
-    /* Previous system calls may set errno to non-zero */
-    errno = 0;
-
-    ok   ((sock = socket(AF_INET,  SOCK_STREAM, 0)) != SXE_SOCKET_INVALID       , "Allocated a socket"             );
-
-#ifdef __FreeBSD__
-    (void)success;
-    skip(1, "On FreeBSD, errno is set to seemingly random values on successful calls");
-#else
-    is_eq(sxe_socket_get_last_error_as_str()        ,  success                  , "Last error is '%s' (%d)", success, sxe_socket_get_last_error());
-#endif
-
-    ok   (sxe_socket_set_nonblock(sock, 1)          != SXE_SOCKET_ERROR_OCCURRED, "Set socket to non blocking mode");
-
-    sxe_socket_set_last_error(-1);
-
-    return exit_status();
+    struct mallinfo info = mallinfo();
+    return info.uordblks;
 }
+
+#endif

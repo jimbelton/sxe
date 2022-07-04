@@ -30,7 +30,7 @@
 
 bool     sxe_alloc_diagnostics      = false;
 bool     sxe_alloc_assert_on_enomem = false;    // By default, return NULL on failure to allocate memory
-uint64_t sxe_allocations            = 0;        // Number of open allocations in debug builds only (must be atomically updated) 
+uint64_t sxe_allocations            = 0;        // Number of open allocations in debug builds only (must be atomically updated)
 
 #define SXE_ALLOC_LOG(...) do { if (sxe_alloc_diagnostics) SXEL5(__VA_ARGS__); } while (0)
 
@@ -72,12 +72,12 @@ sxe_memalign_default(size_t align, size_t size, const char *file, int line)
 #if SXE_DEBUG
     sxe_atomic_add64(&sxe_allocations, 1);
 #endif
-    
+
     char *result = memalign(align, size);
 
     if (result == NULL)
         SXEA1(!sxe_alloc_assert_on_enomem, ": failed to allocate %zu bytes of %zu aligned memory", size, align);    /* COVERAGE EXCLUSION: Out of memory condition */
-    
+
     SXE_ALLOC_LOG("%s: %d: %p = sxe_memalign(%zu,%zu)", file, line, result, align, size);
     return result;
 }

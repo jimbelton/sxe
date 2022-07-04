@@ -1,0 +1,15 @@
+*.d
+*.la
+*.lo
+*.o
+.deps
+.done
+.has-*
+.libs
+.makedefs
+\#*\#
+build-*-??-*/
+build-packages/
+package/
+packages/
+cscope.*

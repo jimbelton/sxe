@@ -1,4 +1,4 @@
-/* Copyright (c) 2010 Sophos Group.
+/* Copyright (c) 2022 Jim Belton
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,31 +19,28 @@
  * THE SOFTWARE.
  */
 
-/* Simulate ANSI C99 for Visual C++ (another fine MS product) */
+#include <stdint.h>
 
-#ifndef __SXE_STDINT_H
-#define __SXE_STDINT_H
+#include "sxe-util.h"
 
-#ifdef MAKE_MINGW
-#   include <_mingw.h>
-#   include <io.h> // for intptr_t (but not uintptr_t)
-#   ifdef _WIN64
-    typedef unsigned __int64 uintptr_t;
-#   else
-    typedef unsigned   int   uintptr_t; /* how mingw defines this elsewhere! */
-#   endif
-#else
-#   include <stddef.h>    /* For [u]intptr_t */
-#endif
+/**
+ * Base 2 logarithm of a uint64_t as an unsinged int
+ *
+ * @note This implementation is non-portable. See sxe-unsigned for a portable version for unsigned ints
+ */
+unsigned
+sxe_uint64_log2(uint64_t value)
+{
+    return 63 - __builtin_clzll(value);
+}
 
-typedef          __int8  int8_t       ;
-typedef          __int16 int16_t      ;
-typedef            int   int32_t      ; /* no __int32 because MS defines it as a long whereas linux uses int */
-typedef          __int64 int64_t      ;
-typedef            int   int_least16_t;
-typedef unsigned __int8  uint8_t      ;
-typedef unsigned __int16 uint16_t     ;
-typedef unsigned         uint32_t     ; /* no __int32 because MS defines it as a long whereas linux uses int */
-typedef unsigned __int64 uint64_t     ;
+uint64_t
+sxe_uint64_align(uint64_t value, uint64_t multiple)
+{
+    uint64_t mod;
+     
+    if (multiple & (multiple - 1))
+        return (mod = value % multiple) ? value - mod + multiple : value;
 
-#endif
+    return (mod = value & (multiple - 1)) ? value - mod + multiple : value;
+}

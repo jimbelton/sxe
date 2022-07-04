@@ -268,7 +268,7 @@ static volatile SXE_LOG_CONTROL sxe_log_control = {SXE_LOG_LEVEL_OVER_MAXIMUM, N
 #       define SXE_FILE MAK_FILE     // Normally, the mak system defines this as <component>/<package>/<file>.c
 #   else
 #       define SXE_FILE __FILE__
-#   endif 
+#   endif
 #endif
 
 #define SXE_LOG_FRAME_CREATE(entry_level) SXE_LOG_FRAME frame; frame.level=(entry_level); frame.file=SXE_FILE; \

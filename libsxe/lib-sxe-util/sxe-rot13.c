@@ -74,13 +74,13 @@ sxe_strn_rot13_in_place(char * string, unsigned length)
 {
     unsigned i;
 
-    SXEE83("sxe_strn_rot13(string='%.*s', length=%u)", length, string, length);
+    SXEE6("sxe_strn_rot13(string='%.*s', length=%u)", length, string, length);
 
     for (i = 0 ; (i < length) && (string[i] != '\0'); i++) {
         string[i] = SXE_ROT13_CHAR(string[i]);
     }
 
-    SXER82("return string='%.*s'", length, string);
+    SXER6("return string='%.*s'", length, string);
     return string;
 }
 
@@ -107,11 +107,11 @@ sxe_rot13_hex_to_unsigned(const char * text, unsigned text_length)
     unsigned result = 0;
     unsigned i;
 
-    SXEE83("sxe_rot13_hex_to_unsigned(text='%.*s', test_length=%u)", text_length, text, text_length);
+    SXEE6("sxe_rot13_hex_to_unsigned(text='%.*s', test_length=%u)", text_length, text, text_length);
 
     for (i = 0; (i < text_length) && (text[i] != '\0'); i++) {
         if (sxe_rot13_hex_to_nibble[(unsigned)(text[i])] == 0xff) {
-            SXEL81("Encountered unexpected rot13 hex character '%c'", text[i]);
+            SXEL6("Encountered unexpected rot13 hex character '%c'", text[i]);
             result = SXE_UNSIGNED_MAXIMUM;
             goto SXE_EARLY_OUT;
         }
@@ -120,7 +120,7 @@ sxe_rot13_hex_to_unsigned(const char * text, unsigned text_length)
     }
 
 SXE_EARLY_OUT:
-    SXER81("return result=0x%x", result);
+    SXER6("return result=0x%x", result);
     return result;
 }
 

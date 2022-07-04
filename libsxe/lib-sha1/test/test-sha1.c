@@ -51,9 +51,9 @@ is_sha1(void * expected, void * got, const char * str)
     }
 
     diag("Expected SHA1:");
-    SXED10(expected, sizeof(SOPHOS_SHA1));
+    SXED1(expected, sizeof(SOPHOS_SHA1));
     diag("Got      SHA1:");
-    SXED10(got,      sizeof(SOPHOS_SHA1));
+    SXED1(got,      sizeof(SOPHOS_SHA1));
     fail("%s", str);
 }
 

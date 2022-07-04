@@ -3,7 +3,7 @@
 
 #if !SXE_DEBUG && !SXE_COVERAGE    // In the release build, remove all mock scaffolding
 
-#define MOCKFAIL(addr, ret, expr)     expr
+#define MOCKFAIL(addr, ret, expr)     (expr)
 #define MOCKFAIL_START_TESTS(n, addr) skip_start(1, n, "MOCKFAIL: Skipping %d test%s for release build", n, (n) == 1 ? "" : "s")
 #define MOCKFAIL_SET_FREQ(n)
 #define MOCKFAIL_END_TESTS()          skip_end

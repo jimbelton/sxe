@@ -229,39 +229,39 @@ int main(int argc, char *argv[])
     if (exit_status() != 3)
         failmsg("Expected exit status 3, not %i", exit_status());
 
-        is(one_int(), 1, "one_int() returns 1");
-        expect(p[0], "ok 11 - one_int() returns 1\n");
-        is(one_int(), 2, "one_int() returns 2");
-        expect(p[0], "not ok 12 - one_int() returns 2\n"
-               "#     Failed test (*tap/test/run.c:main() at line 234)\n"
-               "#          got: 1\n"
-               "#     expected: 2\n");
+    is(one_int(), 1, "one_int() returns 1");
+    expect(p[0], "ok 11 - one_int() returns 1\n");
+    is(one_int(), 2, "one_int() returns 2");
+    expect(p[0], "not ok 12 - one_int() returns 2\n"
+           "#     Failed test (*tap/test/run.c:main() at line 234)\n"
+           "#          got: 1\n"
+           "#     expected: 2\n");
 
-        is_eq(one_str(), "one", "one_str() returns 'one'");
-        expect(p[0], "ok 13 - one_str() returns 'one'\n");
-        is_eq(one_str(), "two", "one_str() returns 'two'");
-        expect(p[0], "not ok 14 - one_str() returns 'two'\n"
-               "#     Failed test (*tap/test/run.c:main() at line 242)\n"
-               "#          got: \"one\"\n"
-               "#     expected: \"two\"\n");
+    is_eq(one_str(), "one", "one_str() returns 'one'");
+    expect(p[0], "ok 13 - one_str() returns 'one'\n");
+    is_eq(one_str(), "two", "one_str() returns 'two'");
+    expect(p[0], "not ok 14 - one_str() returns 'two'\n"
+           "#     Failed test (*tap/test/run.c:main() at line 242)\n"
+           "#          got: \"one\"\n"
+           "#     expected: \"two\"\n");
 
-        exp.id = 1;
-        is_cmp(one_obj(), &exp, obj_cmp, obj_to_str, "one_obj() has id 1");
-        expect(p[0], "ok 15 - one_obj() has id 1\n");
-        exp.id = 2;
-        is_cmp(one_obj(), &exp, obj_cmp, obj_to_str, "one_obj() has id 2");
-        expect(p[0], "not ok 16 - one_obj() has id 2\n"
-               "#     Failed test (*tap/test/run.c:main() at line 252)\n"
-               "#          got: {id=1}\n"
-               "#     expected: {id=2}\n");
+    exp.id = 1;
+    is_cmp(one_obj(), &exp, obj_cmp, obj_to_str, "one_obj() has id 1");
+    expect(p[0], "ok 15 - one_obj() has id 1\n");
+    exp.id = 2;
+    is_cmp(one_obj(), &exp, obj_cmp, obj_to_str, "one_obj() has id 2");
+    expect(p[0], "not ok 16 - one_obj() has id 2\n"
+           "#     Failed test (*tap/test/run.c:main() at line 252)\n"
+           "#          got: {id=1}\n"
+           "#     expected: {id=2}\n");
 
-        is_strstr(one_str(), "n", "one_str() contains 'n'");
-        expect(p[0], "ok 17 - one_str() contains 'n'\n");
-        is_strstr(one_str(), "w", "one_str() contains 'w'");
-        expect(p[0], "not ok 18 - one_str() contains 'w'\n"
-               "#     Failed test (*tap/test/run.c:main() at line 260)\n"
-               "#                     got: \"one\"\n"
-               "#     expected to contain: \"w\"\n");
+    is_strstr(one_str(), "n", "one_str() contains 'n'");
+    expect(p[0], "ok 17 - one_str() contains 'n'\n");
+    is_strstr(one_str(), "w", "one_str() contains 'w'");
+    expect(p[0], "not ok 18 - one_str() contains 'w'\n"
+           "#     Failed test (*tap/test/run.c:main() at line 260)\n"
+           "#                     got: \"one\"\n"
+           "#     expected to contain: \"w\"\n");
 #if 0
     /* Manually run the atexit command. */
     _cleanup();

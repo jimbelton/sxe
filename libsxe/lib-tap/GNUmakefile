@@ -8,7 +8,7 @@ include ../dependencies.mak
 
 release debug coverage:	$(DST.dir)/tap.h
 
-$(DST.dir)/tap.h:					tap/tap.h
+$(DST.dir)/tap.h:				tap/tap.h
 	@$(MAKE_PERL_ECHO) "make[$(MAKELEVEL)]: building: $@"
 	$(MAKE_RUN) $(COPY) $(call OSPATH,$^) $(call OSPATH,$@)
 

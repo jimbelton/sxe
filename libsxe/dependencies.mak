@@ -24,23 +24,33 @@
 COM.dir := $(patsubst %/,%,$(dir $(word $(words $(MAKEFILE_LIST)), $(MAKEFILE_LIST))))
 TOP.dir = $(COM.dir)/..
 
+# Defined if internal tap if to be used. Use lazy binding to allow SXE_EXTERNAL_TAP to be defined later
+TAP     = $(if $(SXE_EXTERNAL_TAP),,tap)
+LIB_TAP = $(if $(SXE_EXTERNAL_TAP),,lib-tap)
+
 # List of the libraries in linker order.
 # This is used by both the package GNUmakefiles and the top level GNUmakefile
+# This can be overridden by parent GNUmakefiles if desired
 #
 remove_to = $(if $(filter $(1),$(2)),$(call remove_to,$(1),$(wordlist 2,$(words $(2)),$(2))),$(2))
-ALL_LIBRARIES    = sxe-expose sxe-dirwatch sxe-ring-buffer sxe-httpd sxe-http sxe-sync-ev sxe-pool-tcp sxe-jitson  \
-                   sxe-hash lookup3 sha1 sxe-spawn sxe sxe-pool sxe-thread sxe-mmap sxe-buffer sxe-list sxe-socket \
-                   ev sxe-cstr sxe-util sxe-log sxe-test mock port tap
+ALL_LIBRARIES ?= sxe-dirwatch sxe-ring-buffer sxe-httpd sxe-http sxe-sync-ev sxe-pool-tcp sxe-jitson sxe-cdb sxe-hash lookup3 \
+                 murmurhash3 sha1 sxe-spawn sxe sxe-pool sxe-thread sxe-mmap sxe-buffer sxe-list sxe-socket \
+                 ev sxe-cstr sxe-util sxe-log sxe-test mock port $(TAP)
 LIB_DEPENDENCIES = $(call remove_to,$(LIBRARIES),$(ALL_LIBRARIES))
 
 # Convention opt-out list
-CONVENTION_OPTOUT_LIST = lib-lookup3 lib-mock lib-port lib-sxe-log lib-sxe-test
-MAKE_ALLOW_SPACE_AFTER_ASTERISK = 1    # lib-sxe puts all declarations on separate lines, so it doesn't cuddle asterisks
+CONVENTION_OPTOUT_LIST = lib-lookup3 lib-mock lib-port
+MAKE_ALLOW_SPACE_AFTER_ASTERISK  = 1    # Much of lib-sxe puts all declarations on separate lines, so it doesn't cuddle asterisks
+MAKE_ALLOW_LOWERCASE_HASH_DEFINE = 1    # Allow lower case defines for sxe-alloc.h wrappers
 
 # Coverage opt-out list
-COVERAGE_OPTOUT_LIST   = lib-lookup3 lib-mock lib-port lib-sha1 lib-tap
+COVERAGE_OPTOUT_LIST   = lib-lookup3 lib-murmurhash3 lib-mock lib-port lib-sha1 $(LIB_TAP)
 
 include $(TOP.dir)/mak/mak-common.mak
+
+ifneq ($(MAK_VERSION),1)    # Versions of mak > 1 use an external tap libary
+    SXE_EXTERNAL_TAP = 1
+endif
 
 IFLAGS += $(if $(findstring port,$(LIB_DEPENDENCIES)),$(CC_INC)$(COM.dir)/lib-port/$(OS_class),)
 
@@ -50,7 +60,9 @@ ifdef MAKE_MINGW
 else
     LINK_FLAGS += /DEFAULTLIB:Winmm.lib
 endif
+else
+    LINK_FLAGS += -lrt    # Add -lcrypto if SXE_DISABLE_OPENSSL is not set
 endif
 
-# Add -DSXE_DISABLE_XXH32=1 to remove dependency on xxhash
+# Add -DSXE_DISABLE_XXHASH=1 to remove dependency on xxhash
 CFLAGS += -DSXE_DISABLE_OPENSSL=1

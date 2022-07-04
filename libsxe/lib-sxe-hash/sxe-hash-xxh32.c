@@ -1,6 +1,8 @@
 /* Module that overrides lookup3 with XXH32 hash function. Calling these functions will require the libxxhash DLL.
  */
 
+#ifndef SXE_DISABLE_XXHASH
+
 #include <string.h>
 #include <xxhash.h>
 
@@ -35,3 +37,5 @@ sxe_hash_use_xxh32(void)
 {
     sxe_hash_override_sum(sxe_hash_xxh32);
 }
+
+#endif

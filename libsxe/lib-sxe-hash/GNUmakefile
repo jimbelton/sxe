@@ -1,4 +1,6 @@
 LIBRARIES        = sxe-hash
 include ../dependencies.mak
 
-LINK_FLAGS += -lxxhash
+ifndef SXE_DISABLE_XXHASH
+   LINK_FLAGS += -lxxhash
+endif

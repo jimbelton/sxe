@@ -34,7 +34,7 @@
 #       define SXE_FILE MAK_FILE     // Normally, the mak system defines this as <component>/<package>/<file>.c
 #   else
 #       define SXE_FILE __FILE__
-#   endif 
+#   endif
 #endif
 
 /* Options/counters supported by the default implementation
@@ -68,7 +68,7 @@ sxe_calloc(size_t num, size_t size, const char *file, int line)
         errno = EOVERFLOW;
         return NULL;
     }
-    
+
     char *result = (*sxe_malloc)(total, file, line);
 
     if (result)

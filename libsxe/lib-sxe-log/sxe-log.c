@@ -518,9 +518,9 @@ sxe_log_control_learn_level(volatile SXE_LOG_CONTROL * control)
         do {
             control_head = sxe_log_control_list;
         } while (__sync_val_compare_and_swap(&sxe_log_control_list, control_head, control) != control_head);
-        
+
         control->next = control_head == NULL ? control : control_head;
-        \
+
 #ifdef _WIN32
         /* This is a great place to do a one-time disabling of the crash message-box on Windows
          */
@@ -724,7 +724,7 @@ sxe_log_entry(SXE_LOG_FRAME * frame, volatile SXE_LOG_CONTROL * control, unsigne
     va_start(ap, format);
 
     if (sxe_log_safe_append(log_buffer, &i, snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s+ ",
-                                                     2 * sxe_log_get_indent(control, id, frame->line) - 2, ""))
+                                                      2 * sxe_log_get_indent(control, id, frame->line) - 2, ""))
      && (format[0] != '(' || sxe_log_safe_append(log_buffer, &i, sxe_strlcpy(&log_buffer[i], frame->function, SXE_LOG_BUFFER_SIZE - i)))
      && sxe_log_safe_append(log_buffer, &i, vsnprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, format, ap)))
     {
@@ -755,7 +755,8 @@ sxe_log_return(volatile SXE_LOG_CONTROL * control, SXE_LOG_FRAME * frame, SXE_LO
     id = frame->id == SXE_LOG_NO_ID ? sxe_log_transaction_id : frame->id;   // If no id specified, use the per thread value
     i  = (*sxe_log_buffer_prefix)(log_buffer, id, level);
     sxe_log_safe_append(log_buffer, &i, snprintf(&log_buffer[i], SXE_LOG_BUFFER_SIZE - i, "%*s} // %s:%d\n",
-                        2 * sxe_log_get_indent(control, id, frame->line) + 2, "", frame->file, frame->line));
+                        2 * sxe_log_get_indent(control, id, frame->line) + 2, "", frame->file,
+                        frame->line));
     sxe_log_line_out_escaped(level, log_buffer);
 }
 

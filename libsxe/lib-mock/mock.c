@@ -19,6 +19,7 @@
  * THE SOFTWARE.
  */
 
+#define _GNU_SOURCE
 #include "mock.h"
 
 #ifdef WINDOWS_NT
@@ -32,14 +33,16 @@
  *       Return Type   CRT/OS   Function     Parameter Types
  */
 MOCK_DEF(MOCK_SOCKET,  STDCALL, accept,      (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *));
+MOCK_DEF(MOCK_SOCKET,  STDCALL, accept4,     (MOCK_SOCKET, struct sockaddr *, MOCK_SOCKLEN_T *, int));
 MOCK_DEF(int,          STDCALL, bind,        (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T));
+MOCK_DEF(int,          STDCALL, getaddrinfo, (const char *, const char *, const struct addrinfo *, struct addrinfo **));
 MOCK_DEF(void *,       CDECL,   calloc,      (size_t, size_t));
 MOCK_DEF(int,          CDECL,   close,       (int));
 MOCK_DEF(int,          STDCALL, connect,     (MOCK_SOCKET, const struct sockaddr *, MOCK_SOCKLEN_T));
 MOCK_DEF(FILE *,       CDECL,   fopen,       (const char * file, const char * mode));
 MOCK_DEF(int,          CDECL,   fputs,       (const char * string, FILE * file));
 MOCK_DEF(int,          STDCALL, getsockopt,  (MOCK_SOCKET, int, int, MOCK_SOCKET_VOID *, MOCK_SOCKLEN_T * __restrict));
-MOCK_DEF(int,          CDECL,   gettimeofday,(struct timeval * __restrict, void * __restrict));
+MOCK_DEF(int,          CDECL,   gettimeofday,(struct timeval * __restrict tm, __timezone_ptr_t __restrict tz));
 MOCK_DEF(off_t,        CDECL,   lseek,       (int fd, off_t offset, int whence));
 MOCK_DEF(int,          STDCALL, listen,      (MOCK_SOCKET, int));
 MOCK_DEF(void *,       CDECL,   malloc,      (size_t));
@@ -47,13 +50,23 @@ MOCK_DEF(MOCK_SSIZE_T, STDCALL, recvfrom,    (MOCK_SOCKET, MOCK_SOCKET_VOID *, M
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, send,        (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int));
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, sendto,      (MOCK_SOCKET, const MOCK_SOCKET_VOID *, MOCK_SOCKET_SSIZE_T, int, const struct sockaddr *, MOCK_SOCKLEN_T));
 MOCK_DEF(MOCK_SOCKET,  STDCALL, socket,      (int, int, int));
+MOCK_DEF(MOCK_SSIZE_T, CDECL,   recv,        (int, void *, MOCK_SIZE_T, int));
 MOCK_DEF(MOCK_SSIZE_T, CDECL,   write,       (int, const void *, MOCK_SIZE_T));
+MOCK_DEF(MOCK_SSIZE_T, CDECL,   readv,       (int, const struct iovec *, int));
+MOCK_DEF(MOCK_SSIZE_T, CDECL,   writev,      (int, const struct iovec *, int));
+MOCK_DEF(int,          CDECL,  clock_gettime,(clockid_t clk_id, struct timespec *tp));
 
 #ifdef WINDOWS_NT
 MOCK_DEF(DWORD,        STDCALL, timeGetTime, (void));
 MOCK_DEF(int,          CDECL,   mkdir,       (const char * pathname));
 #else
+# if defined(__APPLE__)
+MOCK_DEF(int         , STDCALL, sendfile,    (int, int, off_t, off_t *, struct sf_hdtr *, int));
+# elif defined(__FreeBSD__)
+MOCK_DEF(int         , STDCALL, sendfile,    (int, int, off_t, size_t, struct sf_hdtr *, off_t *, int));
+# else
 MOCK_DEF(MOCK_SSIZE_T, STDCALL, sendfile,    (int, int, off_t *, size_t));
+# endif
 MOCK_DEF(int,          CDECL,   mkdir,       (const char * pathname, mode_t mode));
 MOCK_DEF(void,         CDECL,   openlog,     (const char * ident, int option, int facility));
 MOCK_DEF(void,         CDECL,   syslog,      (int priority, const char * format, ...));

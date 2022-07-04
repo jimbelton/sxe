@@ -34,6 +34,11 @@
     #endif
 #endif
 
+#if defined(__APPLE__)
+#    define __LITTLE_ENDIAN LITTLE_ENDIAN
+#    define __BYTE_ORDER    BYTE_ORDER
+#endif
+
 /*
  * My best guess at if you are big-endian or little-endian.  This may need adjustment.
  */

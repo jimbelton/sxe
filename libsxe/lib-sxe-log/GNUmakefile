@@ -1,4 +1,4 @@
-LIBRARIES        = sxe-log
+LIBRARIES = sxe-log
 
 include ../dependencies.mak
 

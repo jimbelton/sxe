@@ -27,9 +27,9 @@
 static void
 test_event(void * sync_point, void * user_data)
 {
-    SXEE82("test_event(sync_point=%p, user_data=%p)", sync_point, user_data);
+    SXEE6("test_event(sync_point=%p, user_data=%p)", sync_point, user_data);
     tap_ev_push("test_event", 2, "sync_point", sync_point, "user_data", user_data);
-    SXER80("return");
+    SXER6("return");
 }
 
 int

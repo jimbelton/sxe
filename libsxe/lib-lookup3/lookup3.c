@@ -34,12 +34,6 @@ on 1 byte), but shoehorning those bytes into integers efficiently is messy.
 -------------------------------------------------------------------------------
 */
 
-/* Sophos change: Tests moved to test/test-lookup3.c */
-
-#include <stdio.h>      /* defines printf for tests */
-#include <time.h>       /* defines time_t for timings in the test */
-#include <stdint.h>     /* defines uint32_t etc */
-
 #include "lookup3.h"
 
 #define hashsize(n) ((uint32_t)1<<(n))
@@ -173,10 +167,10 @@ uint32_t        initval)         /* the previous hash, or an arbitrary value */
   /*------------------------------------------- handle the last 3 uint32_t's */
   switch(length)                     /* all the case statements fall through */
   {
-  case 3 : c+=k[2];    /* FALLTHRU */
-  case 2 : b+=k[1];    /* FALLTHRU */
-  case 1 : a+=k[0];    /* FALLTHRU */
-    final(a,b,c);
+  case 3 : c+=k[2]; /* FALLTHRU */
+  case 2 : b+=k[1]; /* FALLTHRU */
+  case 1 : a+=k[0];
+    final(a,b,c);   /* FALLTHRU */
   case 0:     /* case 0: nothing left to add */
     break;
   }
@@ -219,10 +213,10 @@ uint32_t       *pb)               /* IN: more seed OUT: secondary hash value */
   /*------------------------------------------- handle the last 3 uint32_t's */
   switch(length)                     /* all the case statements fall through */
   {
-  case 3 : c+=k[2];    /* FALLTHRU */
-  case 2 : b+=k[1];    /* FALLTHRU */
-  case 1 : a+=k[0];    /* FALLTHRU */
-    final(a,b,c);
+  case 3 : c+=k[2]; /* FALLTHRU */
+  case 2 : b+=k[1]; /* FALLTHRU */
+  case 1 : a+=k[0];
+    final(a,b,c);   /* FALLTHRU */
   case 0:     /* case 0: nothing left to add */
     break;
   }
@@ -319,16 +313,16 @@ uint32_t hashlittle( const void *key, size_t length, uint32_t initval)
     switch(length)
     {
     case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
-    case 11: c+=((uint32_t)k8[10])<<16;  /* fall through */
-    case 10: c+=((uint32_t)k8[9])<<8;    /* fall through */
-    case 9 : c+=k8[8];                   /* fall through */
+    case 11: c+=((uint32_t)k8[10])<<16;  /* FALLTHRU */
+    case 10: c+=((uint32_t)k8[9])<<8;    /* FALLTHRU */
+    case 9 : c+=k8[8];                   /* FALLTHRU */
     case 8 : b+=k[1]; a+=k[0]; break;
-    case 7 : b+=((uint32_t)k8[6])<<16;   /* fall through */
-    case 6 : b+=((uint32_t)k8[5])<<8;    /* fall through */
-    case 5 : b+=k8[4];                   /* fall through */
+    case 7 : b+=((uint32_t)k8[6])<<16;   /* FALLTHRU */
+    case 6 : b+=((uint32_t)k8[5])<<8;    /* FALLTHRU */
+    case 5 : b+=k8[4];                   /* FALLTHRU */
     case 4 : a+=k[0]; break;
-    case 3 : a+=((uint32_t)k8[2])<<16;   /* fall through */
-    case 2 : a+=((uint32_t)k8[1])<<8;    /* fall through */
+    case 3 : a+=((uint32_t)k8[2])<<16;   /* FALLTHRU */
+    case 2 : a+=((uint32_t)k8[1])<<8;    /* FALLTHRU */
     case 1 : a+=k8[0]; break;
     case 0 : return c;
     }
@@ -358,23 +352,23 @@ uint32_t hashlittle( const void *key, size_t length, uint32_t initval)
              b+=k[2]+(((uint32_t)k[3])<<16);
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 11: c+=((uint32_t)k8[10])<<16;     /* fall through */
+    case 11: c+=((uint32_t)k8[10])<<16;     /* FALLTHRU */
     case 10: c+=k[4];
              b+=k[2]+(((uint32_t)k[3])<<16);
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 9 : c+=k8[8];                      /* fall through */
+    case 9 : c+=k8[8];                      /* FALLTHRU */
     case 8 : b+=k[2]+(((uint32_t)k[3])<<16);
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 7 : b+=((uint32_t)k8[6])<<16;      /* fall through */
+    case 7 : b+=((uint32_t)k8[6])<<16;      /* FALLTHRU */
     case 6 : b+=k[2];
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 5 : b+=k8[4];                      /* fall through */
+    case 5 : b+=k8[4];                      /* FALLTHRU */
     case 4 : a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 3 : a+=((uint32_t)k8[2])<<16;      /* fall through */
+    case 3 : a+=((uint32_t)k8[2])<<16;      /* FALLTHRU */
     case 2 : a+=k[0];
              break;
     case 1 : a+=k8[0];
@@ -408,17 +402,17 @@ uint32_t hashlittle( const void *key, size_t length, uint32_t initval)
     /*-------------------------------- last block: affect all 32 bits of (c) */
     switch(length)                   /* all the case statements fall through */
     {
-    case 12: c+=((uint32_t)k[11])<<24;    /* FALLTHRU */
-    case 11: c+=((uint32_t)k[10])<<16;    /* FALLTHRU */
-    case 10: c+=((uint32_t)k[9])<<8;      /* FALLTHRU */
-    case 9 : c+=k[8];                     /* FALLTHRU */
-    case 8 : b+=((uint32_t)k[7])<<24;     /* FALLTHRU */
-    case 7 : b+=((uint32_t)k[6])<<16;     /* FALLTHRU */
-    case 6 : b+=((uint32_t)k[5])<<8;      /* FALLTHRU */
-    case 5 : b+=k[4];                     /* FALLTHRU */
-    case 4 : a+=((uint32_t)k[3])<<24;     /* FALLTHRU */
-    case 3 : a+=((uint32_t)k[2])<<16;     /* FALLTHRU */
-    case 2 : a+=((uint32_t)k[1])<<8;      /* FALLTHRU */
+    case 12: c+=((uint32_t)k[11])<<24; /* FALLTHRU */
+    case 11: c+=((uint32_t)k[10])<<16; /* FALLTHRU */
+    case 10: c+=((uint32_t)k[9])<<8;   /* FALLTHRU */
+    case 9 : c+=k[8];                  /* FALLTHRU */
+    case 8 : b+=((uint32_t)k[7])<<24;  /* FALLTHRU */
+    case 7 : b+=((uint32_t)k[6])<<16;  /* FALLTHRU */
+    case 6 : b+=((uint32_t)k[5])<<8;   /* FALLTHRU */
+    case 5 : b+=k[4];                  /* FALLTHRU */
+    case 4 : a+=((uint32_t)k[3])<<24;  /* FALLTHRU */
+    case 3 : a+=((uint32_t)k[2])<<16;  /* FALLTHRU */
+    case 2 : a+=((uint32_t)k[1])<<8;   /* FALLTHRU */
     case 1 : a+=k[0];
              break;
     case 0 : return c;
@@ -506,16 +500,16 @@ void hashlittle2(
     switch(length)
     {
     case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
-    case 11: c+=((uint32_t)k8[10])<<16;  /* fall through */
-    case 10: c+=((uint32_t)k8[9])<<8;    /* fall through */
-    case 9 : c+=k8[8];                   /* fall through */
+    case 11: c+=((uint32_t)k8[10])<<16;  /* FALLTHRU */
+    case 10: c+=((uint32_t)k8[9])<<8;    /* FALLTHRU */
+    case 9 : c+=k8[8];                   /* FALLTHRU */
     case 8 : b+=k[1]; a+=k[0]; break;
-    case 7 : b+=((uint32_t)k8[6])<<16;   /* fall through */
-    case 6 : b+=((uint32_t)k8[5])<<8;    /* fall through */
-    case 5 : b+=k8[4];                   /* fall through */
+    case 7 : b+=((uint32_t)k8[6])<<16;   /* FALLTHRU */
+    case 6 : b+=((uint32_t)k8[5])<<8;    /* FALLTHRU */
+    case 5 : b+=k8[4];                   /* FALLTHRU */
     case 4 : a+=k[0]; break;
-    case 3 : a+=((uint32_t)k8[2])<<16;   /* fall through */
-    case 2 : a+=((uint32_t)k8[1])<<8;    /* fall through */
+    case 3 : a+=((uint32_t)k8[2])<<16;   /* FALLTHRU */
+    case 2 : a+=((uint32_t)k8[1])<<8;    /* FALLTHRU */
     case 1 : a+=k8[0]; break;
     case 0 : *pc=c; *pb=b; return;  /* zero length strings require no mixing */
     }
@@ -545,23 +539,23 @@ void hashlittle2(
              b+=k[2]+(((uint32_t)k[3])<<16);
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 11: c+=((uint32_t)k8[10])<<16;     /* fall through */
+    case 11: c+=((uint32_t)k8[10])<<16;     /* FALLTHRU */
     case 10: c+=k[4];
              b+=k[2]+(((uint32_t)k[3])<<16);
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 9 : c+=k8[8];                      /* fall through */
+    case 9 : c+=k8[8];                      /* FALLTHRU */
     case 8 : b+=k[2]+(((uint32_t)k[3])<<16);
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 7 : b+=((uint32_t)k8[6])<<16;      /* fall through */
+    case 7 : b+=((uint32_t)k8[6])<<16;      /* FALLTHRU */
     case 6 : b+=k[2];
              a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 5 : b+=k8[4];                      /* fall through */
+    case 5 : b+=k8[4];                      /* FALLTHRU */
     case 4 : a+=k[0]+(((uint32_t)k[1])<<16);
              break;
-    case 3 : a+=((uint32_t)k8[2])<<16;      /* fall through */
+    case 3 : a+=((uint32_t)k8[2])<<16;      /* FALLTHRU */
     case 2 : a+=k[0];
              break;
     case 1 : a+=k8[0];
@@ -595,17 +589,17 @@ void hashlittle2(
     /*-------------------------------- last block: affect all 32 bits of (c) */
     switch(length)                   /* all the case statements fall through */
     {
-    case 12: c+=((uint32_t)k[11])<<24;    /* FALLTHRU */
-    case 11: c+=((uint32_t)k[10])<<16;    /* FALLTHRU */
-    case 10: c+=((uint32_t)k[9])<<8;      /* FALLTHRU */
-    case 9 : c+=k[8];                     /* FALLTHRU */
-    case 8 : b+=((uint32_t)k[7])<<24;     /* FALLTHRU */
-    case 7 : b+=((uint32_t)k[6])<<16;     /* FALLTHRU */
-    case 6 : b+=((uint32_t)k[5])<<8;      /* FALLTHRU */
-    case 5 : b+=k[4];                     /* FALLTHRU */
-    case 4 : a+=((uint32_t)k[3])<<24;     /* FALLTHRU */
-    case 3 : a+=((uint32_t)k[2])<<16;     /* FALLTHRU */
-    case 2 : a+=((uint32_t)k[1])<<8;      /* FALLTHRU */
+    case 12: c+=((uint32_t)k[11])<<24; /* FALLTHRU */
+    case 11: c+=((uint32_t)k[10])<<16; /* FALLTHRU */
+    case 10: c+=((uint32_t)k[9])<<8;   /* FALLTHRU */
+    case 9 : c+=k[8];                  /* FALLTHRU */
+    case 8 : b+=((uint32_t)k[7])<<24;  /* FALLTHRU */
+    case 7 : b+=((uint32_t)k[6])<<16;  /* FALLTHRU */
+    case 6 : b+=((uint32_t)k[5])<<8;   /* FALLTHRU */
+    case 5 : b+=k[4];                  /* FALLTHRU */
+    case 4 : a+=((uint32_t)k[3])<<24;  /* FALLTHRU */
+    case 3 : a+=((uint32_t)k[2])<<16;  /* FALLTHRU */
+    case 2 : a+=((uint32_t)k[1])<<8;   /* FALLTHRU */
     case 1 : a+=k[0];
              break;
     case 0 : *pc=c; *pb=b; return;  /* zero length strings require no mixing */
@@ -683,16 +677,16 @@ uint32_t hashbig( const void *key, size_t length, uint32_t initval)
     switch(length)                   /* all the case statements fall through */
     {
     case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
-    case 11: c+=((uint32_t)k8[10])<<8;  /* fall through */
-    case 10: c+=((uint32_t)k8[9])<<16;  /* fall through */
-    case 9 : c+=((uint32_t)k8[8])<<24;  /* fall through */
+    case 11: c+=((uint32_t)k8[10])<<8;  /* FALLTHRU */
+    case 10: c+=((uint32_t)k8[9])<<16;  /* FALLTHRU */
+    case 9 : c+=((uint32_t)k8[8])<<24;  /* FALLTHRU */
     case 8 : b+=k[1]; a+=k[0]; break;
-    case 7 : b+=((uint32_t)k8[6])<<8;   /* fall through */
-    case 6 : b+=((uint32_t)k8[5])<<16;  /* fall through */
-    case 5 : b+=((uint32_t)k8[4])<<24;  /* fall through */
+    case 7 : b+=((uint32_t)k8[6])<<8;   /* FALLTHRU */
+    case 6 : b+=((uint32_t)k8[5])<<16;  /* FALLTHRU */
+    case 5 : b+=((uint32_t)k8[4])<<24;  /* FALLTHRU */
     case 4 : a+=k[0]; break;
-    case 3 : a+=((uint32_t)k8[2])<<8;   /* fall through */
-    case 2 : a+=((uint32_t)k8[1])<<16;  /* fall through */
+    case 3 : a+=((uint32_t)k8[2])<<8;   /* FALLTHRU */
+    case 2 : a+=((uint32_t)k8[1])<<16;  /* FALLTHRU */
     case 1 : a+=((uint32_t)k8[0])<<24; break;
     case 0 : return c;
     }
@@ -725,17 +719,17 @@ uint32_t hashbig( const void *key, size_t length, uint32_t initval)
     /*-------------------------------- last block: affect all 32 bits of (c) */
     switch(length)                   /* all the case statements fall through */
     {
-    case 12: c+=k[11];                   /* FALLTHRU */
-    case 11: c+=((uint32_t)k[10])<<8;    /* FALLTHRU */
-    case 10: c+=((uint32_t)k[9])<<16;    /* FALLTHRU */
-    case 9 : c+=((uint32_t)k[8])<<24;    /* FALLTHRU */
-    case 8 : b+=k[7];                    /* FALLTHRU */
-    case 7 : b+=((uint32_t)k[6])<<8;     /* FALLTHRU */
-    case 6 : b+=((uint32_t)k[5])<<16;    /* FALLTHRU */
-    case 5 : b+=((uint32_t)k[4])<<24;    /* FALLTHRU */
-    case 4 : a+=k[3];                    /* FALLTHRU */
-    case 3 : a+=((uint32_t)k[2])<<8;     /* FALLTHRU */
-    case 2 : a+=((uint32_t)k[1])<<16;    /* FALLTHRU */
+    case 12: c+=k[11];                /* FALLTHRU */
+    case 11: c+=((uint32_t)k[10])<<8; /* FALLTHRU */
+    case 10: c+=((uint32_t)k[9])<<16; /* FALLTHRU */
+    case 9 : c+=((uint32_t)k[8])<<24; /* FALLTHRU */
+    case 8 : b+=k[7];                 /* FALLTHRU */
+    case 7 : b+=((uint32_t)k[6])<<8;  /* FALLTHRU */
+    case 6 : b+=((uint32_t)k[5])<<16; /* FALLTHRU */
+    case 5 : b+=((uint32_t)k[4])<<24; /* FALLTHRU */
+    case 4 : a+=k[3];                 /* FALLTHRU */
+    case 3 : a+=((uint32_t)k[2])<<8;  /* FALLTHRU */
+    case 2 : a+=((uint32_t)k[1])<<16; /* FALLTHRU */
     case 1 : a+=((uint32_t)k[0])<<24;
              break;
     case 0 : return c;
@@ -758,8 +752,8 @@ unsigned
 lookup3_hash(const void *key, unsigned length)
 {
 #if HASH_LITTLE_ENDIAN
-    return hashlittle(key, length, 0);
+    return hashlittle(key, (size_t)length, 0);
 #else
-    return hashbig(key, length, 0);
+    return hashbig(key, (size_t)length, 0);
 #endif
 }

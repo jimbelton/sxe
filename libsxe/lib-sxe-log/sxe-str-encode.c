@@ -32,7 +32,7 @@ sxe_strn_encode(char * buffer, unsigned size, const char * string, unsigned leng
     unsigned i;
     unsigned j;
 
-    SXEE85("sxe_strn_encode(buffer=%p,size=%u,string='%.*s',length=%u)", buffer, size, length, string, length);
+    SXEE6("sxe_strn_encode(buffer=%p,size=%u,string='%.*s',length=%u)", buffer, size, length, string, length);
 
     for (i = 0, j = 0; (j < length) && (string[j] != '\0'); j++) {
         if (string[j] == ' ') {
@@ -62,6 +62,6 @@ sxe_strn_encode(char * buffer, unsigned size, const char * string, unsigned leng
         buffer = NULL;
     }
 
-    SXER81("return buffer=%s", buffer);
+    SXER6("return buffer=%s", buffer);
     return buffer;
 }

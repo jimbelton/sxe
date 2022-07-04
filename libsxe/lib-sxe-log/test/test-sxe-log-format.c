@@ -36,7 +36,7 @@ test_token(char **line, const char *token, const char *message)
 
     if ((end = strchr(*line, ' '))) {
         *end = '\0';
-        is_eq(*line, token, message);
+        is_eq(*line, token, "%s", message);
         *line = end + 1;
     }
     else

@@ -29,8 +29,9 @@
  */
 #define SXE_TIMESTAMP_LENGTH(fractional_digits) (16 + (fractional_digits))
 #define SXE_TIME_BITS_IN_FRACTION               (sizeof(SXE_TIME_FRACTION) * 8)
+#define SXE_TIME_1_SEC                          ((SXE_TIME)(1ULL << SXE_TIME_BITS_IN_FRACTION))
 #define SXE_TIME_FROM_TIMEVAL(tv)               (((SXE_TIME)(tv)->tv_sec  << SXE_TIME_BITS_IN_FRACTION) \
-                                                + ((SXE_TIME)(tv)->tv_usec * (1ULL << 32) / 1000000))
+                                                + ((SXE_TIME)(tv)->tv_usec * SXE_TIME_1_SEC / 1000000))
 
 #define SXE_TIME_FROM_MSEC(msec)                (  ((SXE_TIME)(msec / 1000) << SXE_TIME_BITS_IN_FRACTION) \
                                                 + (((SXE_TIME)(msec % 1000) << SXE_TIME_BITS_IN_FRACTION) / 1000))
@@ -38,17 +39,17 @@
 #define SXE_TIME_TO_TIMEVAL(sxe_time, tv)       do { \
                                                     uint64_t sxe_time_lo32 = (unsigned)sxe_time; \
                                                     (tv)->tv_sec  = (unsigned)((sxe_time) >> SXE_TIME_BITS_IN_FRACTION); \
-                                                    (tv)->tv_usec = (unsigned)(sxe_time_lo32 * 1000000 / (1ULL << 32) ); \
+                                                    (tv)->tv_usec = (unsigned)(sxe_time_lo32 * 1000000 / SXE_TIME_1_SEC); \
                                                 } while (0)
 
 #define SXE_TIME_FROM_DOUBLE_SECONDS(seconds)   ((uint64_t)( \
        ((uint64_t)(((uint64_t)( seconds                               )) << (SXE_TIME_BITS_IN_FRACTION))) \
-     + ((uint64_t)((  (double)((seconds) - (double)(uint64_t)(seconds))) *  ((double)(1ULL << 32)     ))) \
+     + ((uint64_t)((  (double)((seconds) - (double)(uint64_t)(seconds))) *  ((double)SXE_TIME_1_SEC   ))) \
     ))
 
 #define SXE_TIME_TO_DOUBLE_SECONDS(sxe_time)    ((double)  ( \
        (  (double)((          (uint64_t)(sxe_time)                     ) >> (SXE_TIME_BITS_IN_FRACTION))) \
-     + (  (double)((  (double)(uint32_t)(sxe_time)                     ) /  ((double)(1ULL << 32)     ))) \
+     + (  (double)((  (double)(uint32_t)(sxe_time)                     ) /  ((double)SXE_TIME_1_SEC   ))) \
     ))
 
 typedef uint64_t SXE_TIME;

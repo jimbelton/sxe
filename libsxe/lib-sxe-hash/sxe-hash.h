@@ -45,7 +45,7 @@
  */
 typedef struct SXE_HASH_KEY_VALUE_PAIR {
     SOPHOS_SHA1 sha1;
-    int         value;
+    unsigned    value;
 } SXE_HASH_KEY_VALUE_PAIR;
 
 typedef struct SXE_HASH {
@@ -57,6 +57,8 @@ typedef struct SXE_HASH {
     unsigned    options;
     unsigned (* hash_key)(const void * key, unsigned size);
 } SXE_HASH;
+
+typedef unsigned (*SXE_HASH_FUNC)(const void *, unsigned);    // Type signature for a hash function
 
 extern uint32_t (*sxe_hash_sum)(const void *key, unsigned length);
 

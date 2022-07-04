@@ -90,6 +90,8 @@ sxe_factory_commit(struct sxe_factory *factory, size_t len)
  * @param factory The factory
  * @param data    Data to be added
  * @param len     The amount of data to add
+ *
+ * @return Amount of data added or -1 on out of memory
  */
 ssize_t
 sxe_factory_add(struct sxe_factory *factory, const char *data, size_t len)
@@ -132,7 +134,7 @@ sxe_factory_look(struct sxe_factory *factory, size_t *len_out)
 void *
 sxe_factory_remove(struct sxe_factory *factory, size_t *len_out)
 {
-    char * data = sxe_factory_look(factory, len_out);
+    char *data = sxe_factory_look(factory, len_out);
 
     if (factory->len + 1 < factory->size)
         data = sxe_realloc(factory->data, factory->len + 1);
