@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "sxe-alloc.h"
 #include "sxe-list.h"
 #include "sxe-log.h"
 #include "tap.h"
@@ -43,12 +44,15 @@ main(void)
     struct blob     * blob_ptr;
     SXE_LIST_WALKER   walker;
     struct list_obj * last_obj_ptr = NULL;    /* STFU gcc */
+    uint64_t          start_allocations;
 
     for (i = 0; i < 4; i++) {
         blob.list_obj[i].id = i;
     }
 
-    plan_tests(46);
+    plan_tests(47);
+    start_allocations     = sxe_allocations;
+    sxe_alloc_diagnostics = true;
 
     SXE_LIST_CONSTRUCT(&blob.list, 1, struct list_obj, node);
     is(SXE_LIST_GET_LENGTH(&blob.list), 0,                               "List has 0 elements");
@@ -67,7 +71,7 @@ main(void)
     sxe_list_push(&blob.list,    &blob.list_obj[2]);
     sxe_list_unshift(&blob.list, &blob.list_obj[3]);                     /* List now contains: 3, 1, 0, 2 */
 
-    SXEA1((blob_copy = malloc(sizeof(blob))) != NULL, "Couldn't allocate memory for the list and all the objects");
+    SXEA1((blob_copy = sxe_malloc(sizeof(blob))) != NULL, "Couldn't allocate memory for the list and all the objects");
     memcpy(blob_copy, &blob, sizeof(blob));
 
     for (blob_ptr = &blob; blob_ptr != NULL; blob_ptr = (blob_ptr == &blob ? blob_copy : NULL)) {
@@ -139,5 +143,7 @@ main(void)
         memset(blob_ptr, 0xBE, sizeof(blob));
     }
 
+    sxe_free(blob_copy);
+    is(sxe_allocations, start_allocations, "No memory was leaked");
     return exit_status();
 }

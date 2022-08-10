@@ -25,6 +25,7 @@
 #include <time.h>
 
 #include "mock.h"
+#include "sxe-alloc.h"
 #include "sxe-log.h"
 #include "sxe-pool.h"
 #include "sxe-socket.h"
@@ -144,15 +145,17 @@ main(void)
     unsigned        oldest_index;
 
     time(&time_0);
-    plan_tests(121);
+    plan_tests(122);
+    uint64_t start_allocations = sxe_allocations;
+    sxe_alloc_diagnostics      = true;
 
     /* Initialization causes expected state
      */
     ok((size = sxe_pool_size(4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES)) >= 4 * sizeof(*pool),
        "Expect pool size %u to be at least the size of the array %u", (unsigned)size, 4 * (unsigned)sizeof(*pool));
-    SXEA1((base[0] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 1st copy of pool");
+    SXEA1((base[0] = sxe_malloc(size)) != NULL,                               "Couldn't allocate memory for 1st copy of pool");
     pool = sxe_pool_construct(base[0], "cesspool", 4, sizeof(*pool), TEST_STATE_NUMBER_OF_STATES, SXE_POOL_OPTION_TIMED);
-    SXEA1((base[1] = malloc(size)) != NULL,                                  "Couldn't allocate memory for 2nd copy of pool");
+    SXEA1((base[1] = sxe_malloc(size)) != NULL,                               "Couldn't allocate memory for 2nd copy of pool");
     memcpy(base[1], base[0], size);
 
 #if defined(_WIN64) || defined(_LP64)
@@ -295,43 +298,52 @@ main(void)
         is((oldest = sxe_pool_get_oldest_element_index(pool, TEST_STATE_USED)),   0,         "Object 0 is in used state");
     }
 
-    #define TEST_TIMEOUT "Test timeout: "
+    sxe_free(base[0]);
+    sxe_free(base[1]);
 
-    SXEA1(gettimeofday(&test_mock_gettimeofday_timeval, NULL) == 0, "Failed to get time of day: %s", strerror(errno));
-    MOCK_SET_HOOK(gettimeofday, test_mock_gettimeofday);    /* Hook gettimeofday to mock it */
+    diag("Test sxe pools with timeouts");
+    {
+#       define TEST_TIMEOUT "Test timeout: "
 
-    pool_1_timeout = sxe_pool_new_with_timeouts("pool_1_timeout", 4, sizeof(*pool_1_timeout), TEST_STATE_NUMBER_OF_STATES,
-                     pool_1_timeouts, test_pool_1_timeout, NULL);
-    pool_2_timeout = sxe_pool_new_with_timeouts("pool_2_timeout", 4, sizeof(*pool_2_timeout), TEST_STATE_NUMBER_OF_STATES,
-                     pool_2_timeouts, test_pool_2_timeout, NULL);
-    test_mock_gettimeofday_timeval.tv_sec += 100;
-    sxe_pool_check_timeouts();
-    is(test_pool_1_timeout_call_count, 0, TEST_TIMEOUT "test_pool_1_timeout() not called; after 100 seconds: all elements still in TEST_STATE_FREE with infinite timeout");
-    is(test_pool_2_timeout_call_count, 0, TEST_TIMEOUT "test_pool_2_timeout() not called; after 100 seconds: all elements still in TEST_STATE_FREE with infinite timeout");
-    sxe_pool_set_oldest_element_state(pool_1_timeout, TEST_STATE_FREE, TEST_STATE_USED  );
-    sxe_pool_set_oldest_element_state(pool_1_timeout, TEST_STATE_FREE, TEST_STATE_ABUSED);
-    sxe_pool_set_oldest_element_state(pool_2_timeout, TEST_STATE_FREE, TEST_STATE_USED  );
-    sxe_pool_set_oldest_element_state(pool_2_timeout, TEST_STATE_FREE, TEST_STATE_ABUSED);
-    test_mock_gettimeofday_timeval.tv_sec += 1;
-    sxe_pool_check_timeouts();
-    is(test_pool_1_timeout_call_count, 0, TEST_TIMEOUT "test_pool_1_timeout() not called; after 1 second(s): elements with TEST_STATE_USED/TEST_STATE_ABUSED have rest time 3/2 seconds");
-    is(test_pool_2_timeout_call_count, 1, TEST_TIMEOUT "test_pool_2_timeout()     called; after 1 second(s): elements with TEST_STATE_USED/TEST_STATE_ABUSED have rest time 0/1 seconds");
-    test_mock_gettimeofday_timeval.tv_sec += 2;
-    sxe_pool_check_timeouts();
-    is(test_pool_1_timeout_call_count, 1, TEST_TIMEOUT "test_pool_1_timeout()     called; after 2 second(s): elements with TEST_STATE_USED/TEST_STATE_ABUSED have rest time 1/0 seconds");
-    is(test_pool_2_timeout_call_count, 2, TEST_TIMEOUT "test_pool_2_timeout()     called; after 2 second(s): elements with ---------------/TEST_STATE_ABUSED have rest time -/-1 seconds");
-    test_mock_gettimeofday_timeval.tv_sec += 1;
-    sxe_pool_check_timeouts();
-    is(test_pool_1_timeout_call_count, 2, TEST_TIMEOUT "test_pool_1_timeout()     called; after 1 second(s): elements with TEST_STATE_USED/----------------- have rest time 0/- seconds");
-    is(test_pool_2_timeout_call_count, 3, TEST_TIMEOUT "test_pool_2_timeout()     called; after 1 second(s): elements with TEST_STATE_USED/----------------- have rest time 0/- seconds");
+        SXEA1(gettimeofday(&test_mock_gettimeofday_timeval, NULL) == 0, "Failed to get time of day: %s", strerror(errno));
+        MOCK_SET_HOOK(gettimeofday, test_mock_gettimeofday);    /* Hook gettimeofday to mock it */
 
-    sxe_pool_delete(pool_1_timeout);   /* For coverage */
+        pool_1_timeout = sxe_pool_new_with_timeouts("pool_1_timeout", 4, sizeof(*pool_1_timeout), TEST_STATE_NUMBER_OF_STATES,
+                        pool_1_timeouts, test_pool_1_timeout, NULL);
+        pool_2_timeout = sxe_pool_new_with_timeouts("pool_2_timeout", 4, sizeof(*pool_2_timeout), TEST_STATE_NUMBER_OF_STATES,
+                        pool_2_timeouts, test_pool_2_timeout, NULL);
+        test_mock_gettimeofday_timeval.tv_sec += 100;
+        sxe_pool_check_timeouts();
+        is(test_pool_1_timeout_call_count, 0, TEST_TIMEOUT "test_pool_1_timeout() not called; after 100 seconds: all elements still in TEST_STATE_FREE with infinite timeout");
+        is(test_pool_2_timeout_call_count, 0, TEST_TIMEOUT "test_pool_2_timeout() not called; after 100 seconds: all elements still in TEST_STATE_FREE with infinite timeout");
+        sxe_pool_set_oldest_element_state(pool_1_timeout, TEST_STATE_FREE, TEST_STATE_USED  );
+        sxe_pool_set_oldest_element_state(pool_1_timeout, TEST_STATE_FREE, TEST_STATE_ABUSED);
+        sxe_pool_set_oldest_element_state(pool_2_timeout, TEST_STATE_FREE, TEST_STATE_USED  );
+        sxe_pool_set_oldest_element_state(pool_2_timeout, TEST_STATE_FREE, TEST_STATE_ABUSED);
+        test_mock_gettimeofday_timeval.tv_sec += 1;
+        sxe_pool_check_timeouts();
+        is(test_pool_1_timeout_call_count, 0, TEST_TIMEOUT "test_pool_1_timeout() not called; after 1 second(s): elements with TEST_STATE_USED/TEST_STATE_ABUSED have rest time 3/2 seconds");
+        is(test_pool_2_timeout_call_count, 1, TEST_TIMEOUT "test_pool_2_timeout()     called; after 1 second(s): elements with TEST_STATE_USED/TEST_STATE_ABUSED have rest time 0/1 seconds");
+        test_mock_gettimeofday_timeval.tv_sec += 2;
+        sxe_pool_check_timeouts();
+        is(test_pool_1_timeout_call_count, 1, TEST_TIMEOUT "test_pool_1_timeout()     called; after 2 second(s): elements with TEST_STATE_USED/TEST_STATE_ABUSED have rest time 1/0 seconds");
+        is(test_pool_2_timeout_call_count, 2, TEST_TIMEOUT "test_pool_2_timeout()     called; after 2 second(s): elements with ---------------/TEST_STATE_ABUSED have rest time -/-1 seconds");
+        test_mock_gettimeofday_timeval.tv_sec += 1;
+        sxe_pool_check_timeouts();
+        is(test_pool_1_timeout_call_count, 2, TEST_TIMEOUT "test_pool_1_timeout()     called; after 1 second(s): elements with TEST_STATE_USED/----------------- have rest time 0/- seconds");
+        is(test_pool_2_timeout_call_count, 3, TEST_TIMEOUT "test_pool_2_timeout()     called; after 1 second(s): elements with TEST_STATE_USED/----------------- have rest time 0/- seconds");
 
-    /* timeout with a pool of 1 objects */
-    pool_3_timeout = sxe_pool_new_with_timeouts("pool_3_timeout", 1, sizeof(*pool_3_timeout), 2, pool_3_timeouts,
-                                                test_pool_3_timeout, NULL);
-    test_mock_gettimeofday_timeval.tv_sec += 2;
-    sxe_pool_check_timeouts();
+        sxe_pool_delete(pool_1_timeout);
+        sxe_pool_delete(pool_2_timeout);
 
+        /* timeout with a pool of 1 objects */
+        pool_3_timeout = sxe_pool_new_with_timeouts("pool_3_timeout", 1, sizeof(*pool_3_timeout), 2, pool_3_timeouts,
+                                                    test_pool_3_timeout, NULL);
+        test_mock_gettimeofday_timeval.tv_sec += 2;
+        sxe_pool_check_timeouts();
+        sxe_pool_delete(pool_3_timeout);
+    }
+
+    is(sxe_allocations, start_allocations, "No memory was leaked");
     return exit_status();
 }

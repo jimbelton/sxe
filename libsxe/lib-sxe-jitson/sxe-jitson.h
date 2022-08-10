@@ -59,7 +59,10 @@
  * om first access.
  */
 struct sxe_jitson {
-    uint32_t type;                 // See definitions above
+    union {
+        uint32_t type;             // See definitions above
+        uint16_t shortype;         // The bottom 16 bits just for readable gdbing
+    };
     union {
         uint32_t len;              // Length of string (if <= 4294967295) or number of elements/members in array/object
         uint32_t link;             // In an indexed object member name, this is the offset of the next member name in the bucket

@@ -346,7 +346,8 @@ sxe_jitson_array_clone(const struct sxe_jitson *jitson, struct sxe_jitson *clone
         return true;
 
     if (jitson->type & SXE_JITSON_TYPE_INDEXED) {
-        if (!(clone->index = MOCKFAIL(MOCK_FAIL_ARRAY_CLONE, NULL, malloc((size = (len + 1) * sizeof(jitson->index[0])))))) {
+        if (!(clone->index = MOCKFAIL(MOCK_FAIL_ARRAY_CLONE, NULL, sxe_malloc((size = (len + 1) * sizeof(jitson->index[0]))))))
+        {
             SXEL2("Failed to allocate %zu bytes to clone an array", (len + 1) * sizeof(jitson->index[0]));
             return false;
         }
@@ -429,11 +430,12 @@ sxe_jitson_object_clone(const struct sxe_jitson *jitson, struct sxe_jitson *clon
     if (!(jitson->type & SXE_JITSON_TYPE_INDEXED))    // Force indexing. Would it be better to walk the unindexed object?
         sxe_jitson_object_get_member(jitson, "", 0);
 
-    if (!(clone->index = MOCKFAIL(MOCK_FAIL_OBJECT_CLONE, NULL, malloc((size = (len + 1) * sizeof(jitson->index[0])))))) {
+    if (!(clone->index = MOCKFAIL(MOCK_FAIL_OBJECT_CLONE, NULL, sxe_malloc((size = (len + 1) * sizeof(jitson->index[0])))))) {
         SXEL2("Failed to allocate %zu bytes to clone an object", (len + 1) * sizeof(jitson->index[0]));
         return false;
     }
 
+    clone->type |= SXE_JITSON_TYPE_INDEXED;
     memcpy(clone->index, jitson->index, size);
 
     for (i = 0; i < len; i++)                                                   // For each bucket
@@ -550,6 +552,17 @@ sxe_jitson_type_init(uint32_t mintypes, uint32_t flags)
     SXEA1(sxe_jitson_type_register_object()    == SXE_JITSON_TYPE_OBJECT,               "Type 6 is 'object'");
     SXEA1(sxe_jitson_type_register_reference() == SXE_JITSON_TYPE_REFERENCE,            "Type 7 is 'reference'");
     sxe_jitson_flags = flags;
+}
+
+/**
+ * Finalize memory used for type and clear the types variables
+ */
+void
+sxe_jitson_type_fini(void)
+{
+    sxe_free(sxe_factory_remove(type_factory, NULL));
+    types      = NULL;
+    type_count = 0;
 }
 
 bool

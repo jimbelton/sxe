@@ -22,6 +22,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+
+#include "sxe-alloc.h"
 #include "sxe-ring-buffer-private.h"
 #include "sxe-ring-buffer.h"
 #include "sxe-log.h"
@@ -33,7 +35,7 @@ sxe_ring_buffer_new(unsigned size)
     void * base;
 
     SXEE81("sxe_ring_buffer_new(size=%u)", size);
-    SXEA10((base = malloc(size + SXE_RING_BUFFER_SIZE_OF_INTERNALS)) != NULL, "Error allocating sxe-ring-buffer");
+    SXEA10((base = sxe_malloc(size + SXE_RING_BUFFER_SIZE_OF_INTERNALS)) != NULL, "Error allocating sxe-ring-buffer");
 
     SXE_RING_BUFFER_SIZE       = size;
     SXE_RING_BUFFER_ITERATION  = 0;
@@ -45,7 +47,9 @@ sxe_ring_buffer_new(unsigned size)
     return base;
 }
 
-void sxe_ring_buffer_delete(void * base) { free(base); }
+void sxe_ring_buffer_delete(void * base) {
+    sxe_free(base);
+}
 
 void
 sxe_ring_buffer_add(void * base, const char * buf, unsigned len)

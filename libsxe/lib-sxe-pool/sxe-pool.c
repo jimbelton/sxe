@@ -24,6 +24,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "sxe-alloc.h"
 #include "sxe-list.h"
 #include "sxe-log.h"
 #include "sxe-spinlock.h"
@@ -145,7 +146,8 @@ sxe_pool_construct(void * base, const char * name, unsigned number, size_t size,
     pool->size            = size;
     pool->states          = states;
     pool->options         = options;
-    pool->state_to_string = &sxe_pool_state_to_string;    /* Default to just printing the number */
+    pool->state_to_string = &sxe_pool_state_to_string;    // Default to just printing the number
+    pool->state_timeouts  = NULL;                         // If set, this pointer will be freed by the delete
 
     if (options & SXE_POOL_OPTION_LOCKED) {
         sxe_spinlock_construct(&pool->spinlock);
@@ -244,7 +246,7 @@ sxe_pool_new(const char * name, unsigned number, size_t size, unsigned states, u
 
     SXEE6("sxe_pool_new(name=%s,number=%u,size=%"PRIiPTR",states=%u,options=%sSXE_POOL_OPTION_LOCKED|%sSXE_POOL_OPTION_TIMED)",
           name, number, size, states, options & SXE_POOL_OPTION_LOCKED ? "" : "!", options & SXE_POOL_OPTION_TIMED ? "" : "!");
-    SXEA1((base = malloc(sxe_pool_size(number, size, states))) != NULL, "Error allocating SXE pool %s", name);
+    SXEA1((base = sxe_malloc(sxe_pool_size(number, size, states))) != NULL, "Error allocating SXE pool %s", name);
 
     array = sxe_pool_construct(base, name, number, size, states, options);
 
@@ -287,7 +289,7 @@ sxe_pool_new_with_timeouts(
     pool                 = SXE_POOL_ARRAY_TO_IMPL(array);
     pool->event_timeout  = callback;
     pool->caller_info    = caller_info;
-    pool->state_timeouts = malloc(states * sizeof(SXE_TIME));
+    pool->state_timeouts = sxe_malloc(states * sizeof(SXE_TIME));
 
     SXEA1(pool->state_timeouts != NULL, "Error allocating SXE pool %s; state timeout array", name);
     SXEL6("allocated %zu bytes to hold %u state timeouts", states * sizeof(*timeouts), states);
@@ -714,7 +716,10 @@ sxe_pool_delete(void * array)
         SXEA1(sxe_list_remove(&sxe_pool_timeout_list, pool) == pool, "Remove always returns the object removed");
     }
 
-    free(pool);
+    if (pool->state_timeouts)
+        sxe_free(pool->state_timeouts);
+
+    sxe_free(pool);
     SXER6("return");
 }
 

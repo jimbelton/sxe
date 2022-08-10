@@ -151,7 +151,7 @@ sxe_jitson_stack_expand(struct sxe_jitson_stack *stack, unsigned more)
         stack->jitsons = new_jitsons;    // If the array moved, point current into the new one.
     }
     else if (!stack->jitsons && !(stack->jitsons = MOCKFAIL(MOCK_FAIL_STACK_EXPAND_AFTER_GET, NULL,
-                                                            malloc(((size_t)stack->maximum * sizeof(*stack->jitsons))))))
+                                                            sxe_malloc(((size_t)stack->maximum * sizeof(*stack->jitsons))))))
         return SXE_JITSON_STACK_ERROR;
 
     stack->count = expanded;

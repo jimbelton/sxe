@@ -25,6 +25,7 @@
 
 #include "mock.h"
 #include "sxe.h"
+#include "sxe-alloc.h"
 #include "sxe-log.h"
 #include "sxe-pool.h"
 #include "sxe-pool-tcp.h"
@@ -424,7 +425,9 @@ main(void)
     diag("TODO: sxe-pool-tcp test cases are disabled on Windows (probable lib-ev on Windows bug)\n");
     return 0;
 #else
-    plan_tests(85);
+    plan_tests(86);
+    uint64_t start_allocations = sxe_allocations;
+    sxe_alloc_diagnostics      = true;
 
     server_queue = tap_ev_queue_new();
 
@@ -432,6 +435,8 @@ main(void)
     test_case_connection_closed_and_reopened();
     test_case_pool_too_big_to_service();
     test_case_max_capacity();
+
+    is(sxe_allocations, start_allocations, "No memory was leaked");
     return exit_status();
 #endif
 }

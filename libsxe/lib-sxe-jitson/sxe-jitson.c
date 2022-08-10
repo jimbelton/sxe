@@ -210,7 +210,7 @@ sxe_jitson_object_get_member(const struct sxe_jitson *jitson, const char *name, 
         if (!(jitson->type & SXE_JITSON_TYPE_INDEXED)) {    // Recheck under the lock in case of a race
             /* Allocate an array of len buckets + 1 to store the size in jitsons
             */
-            if (!(index = MOCKFAIL(MOCK_FAIL_OBJECT_GET_MEMBER, NULL, calloc(1, (jitson->len + 1) * sizeof(uint32_t))))) {
+            if (!(index = MOCKFAIL(MOCK_FAIL_OBJECT_GET_MEMBER, NULL, sxe_calloc(1, (jitson->len + 1) * sizeof(uint32_t))))) {
                 pthread_mutex_unlock(&type_indexing);
                 return NULL;
             }
@@ -366,13 +366,13 @@ sxe_jitson_dup(const struct sxe_jitson *jitson)
     jitson = sxe_jitson_is_reference(jitson) ? jitson->jitref : jitson;    // OK because refs to refs are not allowed
     size   = sxe_jitson_size(jitson) * sizeof(*jitson);
 
-    if (!(dup = MOCKFAIL(MOCK_FAIL_DUP, NULL, malloc(size))))
+    if (!(dup = MOCKFAIL(MOCK_FAIL_DUP, NULL, sxe_malloc(size))))
         return NULL;
 
     memcpy(dup, jitson, size);
 
     if (!sxe_jitson_clone(jitson, dup)) {    // If the type requires a deep clone, do it
-        free(dup);
+        sxe_free(dup);
         return NULL;
     }
 
@@ -384,7 +384,11 @@ char *
 sxe_jitson_to_json(const struct sxe_jitson *jitson, size_t *len_out)
 {
     struct sxe_factory factory[1];
+    char              *json;
 
+    SXEE7("(jitson=%p,len_out=%p)", jitson, len_out);
     sxe_factory_alloc_make(factory, 0, 0);
-    return sxe_jitson_build_json(jitson, factory) ? sxe_factory_remove(factory, len_out) : NULL;
+    json = sxe_jitson_build_json(jitson, factory) ? sxe_factory_remove(factory, len_out) : NULL;
+    SXER7("return json=%p", json);
+    return json;
 }

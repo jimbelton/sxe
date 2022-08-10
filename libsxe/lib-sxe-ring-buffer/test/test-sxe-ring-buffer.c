@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include "sxe-alloc.h"
 #include "sxe-ring-buffer.h"
 #include "sxe-ring-buffer-private.h"
 #include "sxe-log.h"
@@ -195,6 +196,7 @@ test_ring_buffer_next_and_consumed_fails(void)
 
     ok(sxe_ring_buffer_next_block(ring_buf,        &context)         == SXE_RETURN_OK, "Read was unsuccessful");
     validate_ring_buffer_read    (&context,              "",         __LINE__);
+    sxe_ring_buffer_delete(ring_buf);
 }
 
 static void
@@ -263,8 +265,8 @@ test_ring_buffer_join_replay_half(void)
     ok(sxe_ring_buffer_consumed  (ring_buf,    &context,  2)  == SXE_RETURN_OK, "Consumed was successful");
     ok(sxe_ring_buffer_next_block(ring_buf,    &context)      == SXE_RETURN_OK, "Read was successful");
     validate_ring_buffer_read    (&context,          "",                        __LINE__);
+    sxe_ring_buffer_delete(ring_buf);
 }
-
 
 static void
 validate_ring_buffer_next_writable(SXE_RING_BUFFER_CONTEXT * context, unsigned len, unsigned line_no)
@@ -350,20 +352,23 @@ test_ring_buffer_next_writable_and_force_wrap(void)
 
     ok(sxe_ring_buffer_next_block           (ring_buf,    &context)        == SXE_RETURN_OK, "Read was successful");
     validate_ring_buffer_read               (&context,          "",        __LINE__);
+    sxe_ring_buffer_delete(ring_buf);
 }
-
-
-
 
 int
 main(void)
 {
-    plan_tests(156);
+    plan_tests(157);
+    uint64_t start_allocations = sxe_allocations;
+    sxe_alloc_diagnostics      = true;
+
     test_ring_buffer_add_itterations();
     test_ring_buffer_join_and_read();
     test_ring_buffer_next_and_consumed_fails();
     test_ring_buffer_join_replay_half();
     test_ring_buffer_next_writable_and_force_wrap();
+
+    is(sxe_allocations, start_allocations, "No memory was leaked");
     return exit_status();
 }
 

@@ -1,6 +1,5 @@
 #include <errno.h>
 #include <inttypes.h>
-#include <malloc.h>
 #include <math.h>
 #include <string.h>
 #include <tap.h>
@@ -18,9 +17,11 @@ main(void)
     const struct sxe_jitson *element, *member;    // Accessed jitson values are returned as const
     char                    *json_out;
     size_t                   len;
-    size_t                   start_memory = test_memory();
+    uint64_t                 start_allocations;
 
-    plan_tests(258);
+    plan_tests(259);
+    start_allocations     = sxe_allocations;
+    sxe_alloc_diagnostics = true;
 
     ok(!sxe_jitson_is_init(), "Not yet initialized");
     sxe_jitson_type_init(0, 0);    // Initialize the JSON types, and don't enable hexadecimal
@@ -150,14 +151,14 @@ main(void)
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "\"\\u0022\\u005c/\\u0008\\u000c\\u000a\\u000d\\u0009\"",
               "Control characters are correctly encoded");
         sxe_jitson_free(jitson);
-        free(json_out);
+        sxe_free(json_out);
 
         ok(jitson = sxe_jitson_new("\"\\u20aC\""),                          "Parsed '\"\\u20aC\"' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),             SXE_JITSON_TYPE_STRING, "'\"\\u20aC\"' is a string");
         is_eq(sxe_jitson_get_string(jitson, NULL),  "\xE2\x82\xAC",         "Correct UTF-8 value");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "\"\xE2\x82\xAC\"", "Valid UTC code points are not escaped");
         sxe_jitson_free(jitson);
-        free(json_out);
+        sxe_free(json_out);
 
         ok(jitson = sxe_jitson_new(" {\t} "),                   "Parsed ' {\\t} ' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson), SXE_JITSON_TYPE_OBJECT, "' {\\t} ' is an object" );
@@ -165,7 +166,8 @@ main(void)
         is(sxe_jitson_size(jitson),     1,                      "Correct size");                       // Test DPT-1404b
         ok(!sxe_jitson_test(jitson),                            "Empty objects test false");
         is(sxe_jitson_object_get_member(jitson, "x", 1), NULL,  "Search for any member will fail");    // Test DPT-1404a
-        is_eq(sxe_jitson_to_json(jitson, NULL), "{}",           "Encoded back to JSON correctly");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "{}", "Encoded back to JSON correctly");
+        sxe_free(json_out);
         sxe_jitson_free(jitson);
 
         ok(jitson = sxe_jitson_new("{\"key\":\"value\"}"),      "Parsed '{\"key\":\"value\"}' (error %s)", strerror(errno));
@@ -215,7 +217,8 @@ main(void)
         ok(jitson = sxe_jitson_new("false"),                          "Parsed 'false' (error %s)", strerror(errno));
         is(sxe_jitson_get_type(jitson),         SXE_JITSON_TYPE_BOOL, "'false' is a boolean" );
         is(sxe_jitson_get_bool(jitson),         false,                "Correct value");
-        is_eq(sxe_jitson_to_json(jitson, NULL), "false",              "Encoded back to JSON correctly");
+        is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "false",   "Encoded back to JSON correctly");
+        sxe_free(json_out);
         sxe_jitson_free(jitson);
 
         ok(jitson = sxe_jitson_new("null"),                   "Parsed 'null' (error %s)", strerror(errno));
@@ -295,6 +298,7 @@ main(void)
         ok(member  = sxe_jitson_object_get_member(clone, "c", 0), "One of the members is 'c'");
         ok(element = sxe_jitson_array_get_element(member, 1),     "Got second element of array member 'c'");
         is(sxe_jitson_get_uint(element), 3,                       "It's the unsinged integer 3");
+        sxe_jitson_free(clone);
 
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL),
               "{\"biglongname\":\"B\",\"a\":1,\"c\":[2,3],\"f\":true,\"d\":{\"e\":4}}",
@@ -302,7 +306,7 @@ main(void)
 
         is(sxe_jitson_size(jitson), 16, "Objects can be sized once indexed");
         sxe_jitson_free(jitson);
-        free(json_out);
+        sxe_free(json_out);
     }
 
     diag("Test array element function and reencoding");
@@ -328,18 +332,20 @@ main(void)
               "Encoder spat out same JSON as we took in");
         is(sxe_jitson_size(jitson), 8, "Arrays can be sized once indexed");
         sxe_jitson_free(jitson);
-        free(json_out);
+        sxe_free(json_out);
     }
 
     diag("Test bug fixes against regressions");
     {
-         ok(jitson = sxe_jitson_new("{\"A.D.\": 1, \"x\": 0}"),       "Parsed problem member name (error %s)", strerror(errno));
-         ok(member = sxe_jitson_object_get_member(jitson, "A.D.", 0), "Object has a member 'A.D.'");
-         is(sxe_jitson_get_type(member), SXE_JITSON_TYPE_NUMBER,      "A.D.'s value is a number");
+        ok(jitson = sxe_jitson_new("{\"A.D.\": 1, \"x\": 0}"),       "Parsed problem member name (error %s)", strerror(errno));
+        ok(member = sxe_jitson_object_get_member(jitson, "A.D.", 0), "Object has a member 'A.D.'");
+        is(sxe_jitson_get_type(member), SXE_JITSON_TYPE_NUMBER,      "A.D.'s value is a number");
+        sxe_jitson_free(jitson);
 
         // Test DPT-1404b (an object that contains an empty object)
         ok(jitson = sxe_jitson_new("{\"catalog\":{\"osversion-current\":{}, \"version\": 1}}"), "Parsed object containing {}");
         ok(!sxe_jitson_object_get_member(jitson, "osversion-current", 0), "Object has no member 'osversion-current'");
+        sxe_jitson_free(jitson);
 
         // Test DPT-1408.1 (sxe_jitson_stack_clear should clear the open collection index)
         ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_OBJECT), "Opened an object on the stack");
@@ -361,7 +367,7 @@ main(void)
         ok(sxe_jitson_stack_close_collection(stack),                        "Close array - can't fail");
         ok(sxe_jitson_stack_close_collection(stack),                        "Close outer object - can't fail");
         ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the object from the stack");
-        free(jitson);
+        sxe_jitson_free(jitson);
 
         // Test DPT-1408.5 (sxe_jitson_object_get_member should allow non-NUL terminated member names)
         ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_OBJECT),       "Opened an object on the stack");
@@ -380,16 +386,16 @@ main(void)
         ok(member  = sxe_jitson_object_get_member(element, "a", 0),               "Got the member 'a' from it");
         is(sxe_jitson_get_number(member), 1,                                      "It's value is correct");
         ok(!(element->type & SXE_JITSON_TYPE_ALLOCED), "Cloned object isn't marked allocated even tho the object cloned was");
-        free(clone);
+        sxe_jitson_free(clone);
 
         // Test DPT-1408.9 (sxe_dup should duplicate referred to jitson values)
         struct sxe_jitson reference[1];
         sxe_jitson_make_reference(reference, jitson);
         clone = sxe_jitson_dup(reference);
         ok(!sxe_jitson_is_reference(clone), "The duped reference is not itself a reference");
-        free(clone);
+        sxe_jitson_free(clone);
 
-        free(jitson);
+        sxe_jitson_free(jitson);
     }
 
     diag("Test simple construction");
@@ -428,7 +434,7 @@ main(void)
         sxe_jitson_stack_close_collection(stack);
         ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the object from the stack");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "{}",            "Look, it's an empty object");
-        free(json_out);
+        sxe_free(json_out);
 
         ok(clone = sxe_jitson_dup(jitson),                         "Cloned an empty array");
         is(sxe_jitson_get_type(clone), SXE_JITSON_TYPE_OBJECT,     "Clone is an '%s' (expected 'object')",
@@ -453,7 +459,7 @@ main(void)
         sxe_jitson_free(clone);
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL),
               "{\"number\":1.14159,\"bool\":true,\"hello.world\":\"hello, world\",\"null\":null}", "Got the expected object");
-        free(json_out);
+        sxe_free(json_out);
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_DUP);
         ok(!sxe_jitson_dup(jitson), "Can't duplicate an object if malloc fails");
@@ -474,7 +480,7 @@ main(void)
         sxe_jitson_stack_close_collection(stack);
         ok(jitson = sxe_jitson_stack_get_jitson(stack),                     "Got the array from the stack");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[]",            "Look, it's an empty array");
-        free(json_out);
+        sxe_free(json_out);
 
         ok(clone = sxe_jitson_dup(jitson),                         "Cloned an empty array");
         is(sxe_jitson_get_type(clone), SXE_JITSON_TYPE_ARRAY,      "Clone is an '%s' (expected 'array')",
@@ -492,17 +498,18 @@ main(void)
         ok(jitson = sxe_jitson_stack_get_jitson(stack), "Got the array from the stack");
         is_eq(json_out = sxe_jitson_to_json(jitson, NULL), "[\"shortly\",\"longerly\",\"longer than 23 characters\"]",
               "Got the expected JSON");
-        free(json_out);
+        sxe_free(json_out);
 
         MOCKFAIL_START_TESTS(1, MOCK_FAIL_ARRAY_CLONE);
         ok(!sxe_jitson_dup(jitson), "Can't clone an array if malloc fails");
         MOCKFAIL_END_TESTS();
 
-        ok(clone = sxe_jitson_dup(jitson),                         "Cloned a non-empty array");
-        is(sxe_jitson_get_type(clone), SXE_JITSON_TYPE_ARRAY,      "Clone is an '%s' (expected 'array')",
-           sxe_jitson_get_type_as_str(clone));
-        is(sxe_jitson_len(clone), 3,                               "Clone has expected length");
+        ok(clone = sxe_jitson_dup(jitson),                    "Cloned a non-empty array");
         sxe_jitson_free(jitson);
+        is(sxe_jitson_get_type(clone), SXE_JITSON_TYPE_ARRAY, "Clone is an '%s' (expected 'array')",
+           sxe_jitson_get_type_as_str(clone));
+        is(sxe_jitson_len(clone), 3,                          "Clone has expected length");
+        sxe_jitson_free(clone);
     }
 
     diag("Test references and cloning a string that's an owned reference");
@@ -510,10 +517,10 @@ main(void)
         struct sxe_jitson  reference[1];
         struct sxe_jitson *array;
 
-        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_ARRAY),              "Opened an array on the stack");
-        ok(sxe_jitson_stack_add_string(stack, "one",   SXE_JITSON_TYPE_IS_COPY),        "Added a copy of a string");
-        ok(sxe_jitson_stack_add_string(stack, "two",   SXE_JITSON_TYPE_IS_REF),         "Added a weak reference to a string");
-        ok(sxe_jitson_stack_add_string(stack, strdup("three"), SXE_JITSON_TYPE_IS_OWN), "Strong (ownership) ref to a string");
+        ok(sxe_jitson_stack_open_collection(stack, SXE_JITSON_TYPE_ARRAY),                  "Opened an array on the stack");
+        ok(sxe_jitson_stack_add_string(stack, "one",   SXE_JITSON_TYPE_IS_COPY),            "Added a copy of a string");
+        ok(sxe_jitson_stack_add_string(stack, "two",   SXE_JITSON_TYPE_IS_REF),             "Added a weak reference to a string");
+        ok(sxe_jitson_stack_add_string(stack, sxe_strdup("three"), SXE_JITSON_TYPE_IS_OWN), "Strong (ownership) ref to a string");
         sxe_jitson_stack_close_collection(stack);
         ok(jitson = sxe_jitson_stack_get_jitson(stack), "Got the array from the stack");
         is(sxe_jitson_size(jitson), 4,                  "Array of 3 short strings is 4 jitsons");
@@ -523,7 +530,9 @@ main(void)
         ok(sxe_jitson_test(reference),                            "A reference to a non-empty array tests true");
         is(sxe_jitson_size(reference), 1,                         "A reference to a non-empty array requires only 1 jitson");
         is(sxe_jitson_len(reference), 3,                          "A reference to an array has len of the array");
-        is_eq(sxe_jitson_to_json(reference, NULL), "[\"one\",\"two\",\"three\"]", "A reference to an array's json the array's");
+        json_out = sxe_jitson_to_json(reference, NULL);
+        is_eq(json_out, "[\"one\",\"two\",\"three\"]",            "A reference to an array's json the array's");
+        sxe_free(json_out);
         ok(member = sxe_jitson_array_get_element(reference, 2),   "Can get a element of an array from a reference");
         is_eq(sxe_jitson_get_string(member, NULL), "three",       "Got the correct element");
 
@@ -551,10 +560,9 @@ main(void)
         sxe_jitson_free(jitson);
     }
 
-    sxe_jitson_stack_free_thread();    // Currently, just for coverage
-
-    if (test_memory() != start_memory)
-        diag("Memory in use is %zu, not %zu as it was at the start of the test program", test_memory(), start_memory);
+    sxe_jitson_stack_free_thread();
+    sxe_jitson_type_fini();
+    is(sxe_allocations, start_allocations, "No memory was leaked");
 
     return exit_status();
 }

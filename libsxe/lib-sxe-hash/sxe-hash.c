@@ -21,6 +21,7 @@
 
 #include <string.h>
 
+#include "sxe-alloc.h"
 #include "sxe-hash-private.h"
 
 #define SXE_HASH_UNUSED_BUCKET    0
@@ -67,7 +68,7 @@ sxe_hash_new_plus(const char * name, unsigned element_count, unsigned element_si
     SXEE6("sxe_hash_new_plus(name=%s,element_count=%u,element_size=%u,key_offset=%u,key_size=%u,options=%u)", name, element_count,
            element_size, key_offset, key_size, options);
     size = sizeof(SXE_HASH) + sxe_pool_size(element_count, element_size, element_count + SXE_HASH_BUCKETS_RESERVED);
-    SXEA1((hash = malloc(size)) != NULL, "Unable to allocate %u bytes of memory for hash %s", size, name);
+    SXEA1((hash = sxe_malloc(size)) != NULL, "Unable to allocate %u bytes of memory for hash %s", size, name);
     SXEL6("Base address of hash %s = %p", name, hash);
 
     /* Note: hash + 1 == pool base */
@@ -104,7 +105,7 @@ sxe_hash_delete(void * array)
 {
     SXE_HASH * hash = SXE_HASH_ARRAY_TO_IMPL(array);
     SXEE6("sxe_hash_delete(hash=%s)", sxe_pool_get_name(array));
-    free(hash);
+    sxe_free(hash);
     SXER6("return");
 }
 

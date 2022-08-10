@@ -1,7 +1,7 @@
 #! /usr/bin/perl
 #
-# This script analyzes sxe log output, looking for allocations not being freed. The messages can be enabled by calling
-# sxe_alloc_set_log(true).
+# This script analyzes sxe log output looking for allocations not being freed.
+# These messages can be enabled setting the global variable sxe_alloc_diagnostics to true.
 #
 # Usage:
 # -n   Prepend line numbers for unmatched allocs/frees

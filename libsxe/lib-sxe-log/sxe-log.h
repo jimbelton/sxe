@@ -415,12 +415,12 @@ sxe_log_get_stack(const char * file, unsigned id, int line)
 
 #ifdef __APPLE__
     if (!sxe_log_stack_key) {
-        pthread_key_create(&sxe_log_stack_key, free);
+        pthread_key_create(&sxe_log_stack_key, free);    // CONVENTION EXCLUSION: Allow libc free function here
     }
 
     stack = pthread_getspecific(sxe_log_stack_key);
     if (stack == NULL) {
-        if ((stack = calloc(1, sizeof(SXE_LOG_STACK))) == NULL) {
+        if ((stack = calloc(1, sizeof(SXE_LOG_STACK))) == NULL) {    // CONVENTION EXCLUSION: Allow libc free function here
             sxe_log_assert(NULL, file, id, line, "calloc(1, sizeof(SXE_LOG_STACK) != NULL", "Failed to allocate thread's log stack");
         }
 

@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include "sxe-alloc.h"
 #include "sxe-hash.h"
 #include "sxe-hash-private.h"
 #include "sxe-log.h"
@@ -242,7 +243,10 @@ test_hash_xxh32(void)
 int
 main(void)
 {
-    plan_tests(57);
+    plan_tests(58);
+
+    uint64_t start_allocations = sxe_allocations;
+    sxe_alloc_diagnostics      = true;
 
     test_hash_sha1();
     test_hash_sha1_variable_data();
@@ -255,5 +259,6 @@ main(void)
     skip(1, "Building without XXH32 support");
 #endif
 
+    is(sxe_allocations, start_allocations, "No memory was leaked");
     return exit_status();
 }

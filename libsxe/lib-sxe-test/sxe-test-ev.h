@@ -21,8 +21,9 @@
 
 /* This file contains includable code and should only be used in test programs.
  */
- 
+
 #include "ev.h"
+#include "sxe-alloc.h"
 #include "sxe-log.h"
 #include "sxe-test-tap-ev.h"
 #include "sxe-util.h"
@@ -79,14 +80,14 @@ test_process_all_libev_events(void)
 static __attribute__ ((unused)) int
 test_ev_consume_events(const char * expected, int expected_events)
 {
-    tap_ev event = NULL;
-    int result = 0;
-    const char ** event_list = NULL;
+    tap_ev   event = NULL;
+    int      result = 0;
+    char **  event_list = NULL;
     unsigned i;
     unsigned item;
     unsigned event_count = 1;
     unsigned found_event = 0;
-    char * expected_event_names = strdup(expected);
+    char *   expected_event_names = sxe_strdup(expected);
 
     SXEE6("%s(expected=%s, expected_events=%d)", __func__, expected, expected_events);
 
@@ -100,8 +101,9 @@ test_ev_consume_events(const char * expected, int expected_events)
     SXEL7("%d events", event_count);
 
     /* Construct an array of pointers for our events */
-    event_list = malloc(event_count * sizeof(char *));
+    event_list = sxe_malloc(event_count * sizeof(char *));
     i = 0;
+
     for (item = 0 ; item < event_count ; ++item) {
         event_list[item] = &expected_event_names[i];
         SXEL7("event %d = '%s'", item, event_list[item]);
@@ -140,8 +142,9 @@ SXE_ERROR_OUT:
     if (event != NULL) {
         tap_ev_free(event);
     }
-    free(SXE_CAST_NOCONST(void *, event_list));
-    free(expected_event_names);
+
+    sxe_free(event_list);
+    sxe_free(expected_event_names);
     SXER6("return %d", result);
     return result;
 }

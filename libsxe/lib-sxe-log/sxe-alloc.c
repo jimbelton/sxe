@@ -22,7 +22,7 @@
 /* sxe-alloc allows caller defined memory functions to be injected into libsxe or any other library that uses sxe-alloc.
  */
 
-#include <malloc.h>
+#include <malloc.h>    // CONVENTION EXCLUSION: glibc allocation calls are allowed, since this is the interface to them
 
 #include "sxe-alloc.h"
 #include "sxe-atomic.h"
@@ -49,7 +49,7 @@ sxe_free_default(void *ptr, const char *file, int line)
         SXEL6("%s: %d: sxe_free((nil))", file, line);
 #endif
 
-    free(ptr);
+    free(ptr);    // CONVENTION EXCLUSION: glibc allocation calls are allowed, since this is the interface to them
 }
 
 __attribute__((malloc)) void *
@@ -59,7 +59,7 @@ sxe_malloc_default(size_t size, const char *file, int line)
     sxe_atomic_add64(&sxe_allocations, 1);
 #endif
 
-    void *result = malloc(size);
+    void *result = malloc(size);    // CONVENTION EXCLUSION: glibc allocation calls are allowed, since this is the interface to them
 
     SXEA1(!sxe_alloc_assert_on_enomem || result, ": failed to allocate %zu bytes of memory", size);
     SXE_ALLOC_LOG("%s: %d: %p = sxe_malloc(%zu)", file, line, result, size);
@@ -73,7 +73,7 @@ sxe_memalign_default(size_t align, size_t size, const char *file, int line)
     sxe_atomic_add64(&sxe_allocations, 1);
 #endif
 
-    char *result = memalign(align, size);
+    char *result = memalign(align, size);    // CONVENTION EXCLUSION: glibc allocation calls are allowed, since this is the interface to them
 
     if (result == NULL)
         SXEA1(!sxe_alloc_assert_on_enomem, ": failed to allocate %zu bytes of %zu aligned memory", size, align);    /* COVERAGE EXCLUSION: Out of memory condition */
@@ -95,7 +95,7 @@ sxe_realloc_default(void *memory, size_t size, const char *file, int line)
         sxe_atomic_sub64(&sxe_allocations, 1);
 #endif
 
-    void *result = realloc(memory, size);
+    void *result = realloc(memory, size);    // CONVENTION EXCLUSION: glibc allocation calls are allowed, since this is the interface to them
 
     if (result == NULL && (size || memory == NULL))
         SXEA1(!sxe_alloc_assert_on_enomem, ": failed to reallocate object to %zu bytes", size);    /* COVERAGE EXCLUSION: Out of memory condition */
@@ -106,7 +106,7 @@ sxe_realloc_default(void *memory, size_t size, const char *file, int line)
 
 /* Default to the implementations in this file
  */
-void  (*sxe_free)(    void *,         const char *, int) = sxe_free_default;
+void (*sxe_free)(    void *,         const char *, int) = sxe_free_default;
 void *(*sxe_malloc)(  size_t,         const char *, int) = sxe_malloc_default;
 void *(*sxe_realloc)( void *, size_t, const char *, int) = sxe_realloc_default;
 void *(*sxe_memalign)(size_t, size_t, const char *, int) = sxe_memalign_default;

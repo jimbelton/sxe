@@ -27,6 +27,7 @@
 
 #include "ev.h"
 #include "sxe.h"
+#include "sxe-alloc.h"
 #include "sxe-log.h"
 #include "sxe-pool.h"
 #include "sxe-pool-tcp.h"
@@ -450,14 +451,14 @@ sxe_pool_tcp_new_internal(unsigned int           concurrency           ,
     void *         nodes;
     unsigned       i;
 
-    SXEE6("sxe_pool_tcp_new_internal(concurrency=%d, pool_name=%s, event_ready_to_write=%p, event_connected=%p, event_read=%p, event_close=%p)",
-                                      concurrency,    pool_name,    event_ready_to_write,    event_connected,    event_read,    event_close);
-    SXEL6("sxe_pool_tcp_new_internal: initialization_timeout=%.2f, response_timeout=%.2f, event_timeout=%p, caller_info=%p",
-                                       initialization_timeout,      response_timeout,      event_timeout,    caller_info);
+    SXEE6("(concurrency=%d, pool_name=%s, event_ready_to_write=%p, event_connected=%p, event_read=%p, event_close=%p)",
+            concurrency,    pool_name,    event_ready_to_write,    event_connected,    event_read,    event_close);
+    SXEL6(": initialization_timeout=%.2f, response_timeout=%.2f, event_timeout=%p, caller_info=%p",
+             initialization_timeout,      response_timeout,      event_timeout,    caller_info);
 
     SXEA1((sizeof(state_timeouts) / sizeof(*state_timeouts)) == SXE_POOL_TCP_STATE_NUMBER_OF_STATES, "Internal: number of states and state timeouts do not match (should never happen)");
     SXEA1(event_read           != NULL, "event_read must not be NULL");
-    pool_tcp = malloc(sizeof(SXE_POOL_TCP));
+    pool_tcp = sxe_malloc(sizeof(SXE_POOL_TCP));
     SXEA1(pool_tcp != NULL, "Unable to allocate TCP pool '%s'", pool_name);
 
     nodes = sxe_pool_new_with_timeouts(pool_name, concurrency, sizeof(SXE_POOL_TCP_NODE), SXE_POOL_TCP_STATE_NUMBER_OF_STATES,
@@ -574,7 +575,7 @@ sxe_pool_tcp_delete(SXE * this, SXE_POOL_TCP * pool)
     }
 
     sxe_pool_delete(pool->nodes);
-    free(pool);
+    sxe_free(pool);
     SXER6I("return");
 }
 

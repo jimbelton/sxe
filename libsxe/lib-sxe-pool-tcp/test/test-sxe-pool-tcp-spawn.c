@@ -21,6 +21,7 @@
 
 #include <string.h>
 #include "mock.h"
+#include "sxe-alloc.h"
 #include "sxe-pool-tcp.h"
 #include "sxe-spawn.h"
 #include "sxe-test.h"
@@ -52,7 +53,7 @@ test_event_log_line(SXE_LOG_LEVEL level, const char * line)
     /* Catch "TCP pool %s: Connection %u has failed %u times: giving up" messages in the log and send them to the test program.
      */
     if ((sxe_strnstr(&line[38], "TCP pool", length) != NULL) && (sxe_strnstr(&line[38], "times: giving up", length) != NULL)) {
-        tap_ev_push(__func__, 1, "line", strdup(&line[39]));
+        tap_ev_push(__func__, 1, "line", strdup(&line[39]));    // CONVENTION EXCLUSION: OK to use strdup in a test
         return;
     }
 
@@ -175,6 +176,8 @@ test_case_no_initialization(void)
     is_eq(tap_ev_identifier(tap_ev_shift()),                "test_pool_event_timeout",        "Got 7th event: timeout");
     is_eq(tap_ev_identifier(tap_ev_shift()),                "test_pool_event_timeout",        "Got 8th event: timeout");
     is(tap_ev_length(),                                     0,                           "No more events");
+
+    sxe_pool_tcp_delete(NULL, pool);
 }
 
 static void
@@ -246,7 +249,9 @@ test_case_initialization_succeeds(void)
     MOCK_SET_HOOK(gettimeofday, test_mock_gettimeofday);
     sxe_pool_check_timeouts();
     MOCK_SET_HOOK(gettimeofday, gettimeofday);
-    is(tap_ev_length(),                                 0,                           "No other events");
+    is(tap_ev_length(), 0, "No other events");
+
+    sxe_pool_tcp_delete(NULL, pool);
 }
 
 static void
@@ -255,10 +260,10 @@ test_case_retries(void)
     SXE_POOL_TCP * pool;
     unsigned       i;
 
-    SXEE6("%s()", __func__);
-    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "retrypool", "sh", "-c", "perl -e 'sleep 0.1; exit 1;'", test_event_ready_to_write,
-                                  NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_pool_event_timeout, NULL);
-    ok(pool != NULL,                                                                 "retrypool was initialized");
+    pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "retrypool", "sh", "-c", "perl -e 'sleep 0.1; exit 1;'",
+                                  test_event_ready_to_write, NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT,
+                                  test_pool_event_timeout, NULL);
+    ok(pool != NULL, "retrypool was initialized");
 
     /* Ask whether we're allowed to write */
     sxe_pool_tcp_queue_ready_to_write_event(pool);
@@ -280,7 +285,8 @@ test_case_retries(void)
      */
     sxe_pool_tcp_queue_ready_to_write_event(pool);
     is(test_tap_ev_length_nowait(),                     0,                           "No more events");
-    SXER6("return");
+
+    sxe_pool_tcp_delete(NULL, pool);
 }
 
 static void
@@ -289,7 +295,6 @@ test_case_single_command_bounces(void)
     SXE_POOL_TCP * pool;
     tap_ev         event;
 
-    SXEE6("%s()", __func__);
     unlink("command-lock");
     sxe_log_hook_line_out(test_event_log_line);    /* hook log output */
 
@@ -319,7 +324,8 @@ test_case_single_command_bounces(void)
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_close",          "Got 2nd close event");
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_log_line",       "Log line from TCP pool");
     is_eq(tap_ev_identifier(test_tap_ev_shift_wait(5)), "test_event_close",          "Got 3rd close event");
-    SXER6("return");
+
+    sxe_pool_tcp_delete(NULL, pool);
 }
 
 static void
@@ -328,13 +334,13 @@ test_case_out_of_sxes(void)
     SXE *          hog_one;
     SXE_POOL_TCP * pool;
 
-    SXEE6("%s()", __func__);
     SXEA1((hog_one = sxe_new_udp(NULL, "127.0.0.1", 0, test_event_read)) != NULL, "Failed to allocate a SXE to hog");
     pool = sxe_pool_tcp_new_spawn(TEST_POOL_SIZE, "failpool", "perl", TEST_COMMAND, NULL, test_event_ready_to_write,
                                   NULL, test_event_read, test_event_close, NO_TIMEOUT, NO_TIMEOUT, test_pool_event_timeout, NULL);
     ok(pool != NULL,                                                                 "failpool was initialized");
     is(test_tap_ev_length_nowait(),                     0,                           "No events");
-    SXER6("return");
+
+    sxe_pool_tcp_delete(NULL, pool);
 }
 
 static void
@@ -343,7 +349,8 @@ test_write_command_pl_file(void)
     FILE * command_pl_file;
 
     command_pl_file = fopen(TEST_COMMAND, "w+");
-    SXEA1(command_pl_file != NULL, "ERROR - failed to open command.pl to create it in the build directory: %s", sxe_socket_get_last_error_as_str());
+    SXEA1(command_pl_file != NULL, "ERROR - failed to open command.pl to create it in the build directory: %s",
+          sxe_socket_get_last_error_as_str());
 
     fprintf(command_pl_file, "%s",
         "#!/usr/bin/perl                                                                                    \n"
@@ -401,10 +408,13 @@ main(void)
     ok(1, "TODO: Disable spawn tests on Windows because this has yet to be implemented");
 #else
 
-    plan_tests(49);
+    plan_tests(50);
+    uint64_t start_allocations = sxe_allocations;
+    sxe_alloc_diagnostics      = true;
+
     sxe_pool_tcp_register(3 * TEST_POOL_SIZE);
-    SXEA1(sxe_init()                == SXE_RETURN_OK, "failed to initialize sxe");
-    SXEA1(sxe_spawn_init()          == SXE_RETURN_OK, "failed to initialize sxe-spawn");
+    SXEA1(sxe_init()       == SXE_RETURN_OK, "failed to initialize sxe");
+    SXEA1(sxe_spawn_init() == SXE_RETURN_OK, "failed to initialize sxe-spawn");
     test_write_command_pl_file();
 
     test_case_no_initialization();
@@ -414,6 +424,8 @@ main(void)
     test_case_single_command_bounces();
     test_case_out_of_sxes();
 
+    sxe_fini();
+    is(sxe_allocations, start_allocations, "No memory was leaked");
 #endif
     return exit_status();
 }

@@ -18,7 +18,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
- 
+
 /* This file contains includable code and should only be used in test programs.
  */
 #ifndef __SXE_TEST_MEMORY__
@@ -29,9 +29,9 @@
 #       error "sxe-test-memory.h is incompatible with mock.h; define SXE_MOCK_NO_CALLOC to mix them"
 #   endif
 #endif
- 
+
 #include <assert.h>
-#include <malloc.h>
+#include <malloc.h>     // CONVENTION EXCLUSION: Need to include glibc malloc.h for malloc_info
 #include <stdbool.h>
 #include <time.h>
 
@@ -43,7 +43,7 @@ static __attribute__ ((unused)) size_t
 test_memory(void)
 {
     time_t time0 = 0;
-    
+
     if (!test_memory_initialized) {
         localtime(&time0);                 // Preallocate memory allocated for timezone
         test_memory_initialized = true;

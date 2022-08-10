@@ -25,6 +25,7 @@
 #include <limits.h>
 
 #include "mock.h"
+#include "sxe-alloc.h"
 #include "sxe.h"
 #include "sxe-log.h"
 #include "sxe-socket.h"
@@ -157,7 +158,10 @@ main(void)
     off_t       offset;
 
     sxe_log_set_level(SXE_LOG_LEVEL_TRACE);
-    plan_tests(22);
+    plan_tests(23);
+    uint64_t start_allocations = sxe_allocations;
+    sxe_alloc_diagnostics      = true;
+
     sxe_register(3, 0);
 
     is(sxe_init(), SXE_RETURN_OK, "SXE initialized");
@@ -192,7 +196,7 @@ main(void)
     }
 
     SXEA1(stat(tempfile, &in_stat) >= 0,                                "Failed to stat '%s'", tempfile);
-    SXEA1((test_buf = malloc(test_buf_size = in_stat.st_size)) != NULL, "Failed to allocate %u byte buffer", test_buf_size);
+    SXEA1((test_buf = sxe_malloc(test_buf_size = in_stat.st_size)) != NULL, "Failed to allocate %u byte buffer", test_buf_size);
     SXEL1("Created a tempfile %ld bytes (send buffer %u)", SXE_CAST(long, in_stat.st_size), tcp_send_buffer_size);
 
     /* Test a small send */
@@ -253,7 +257,10 @@ main(void)
     is(sxe_sendfile(client, in_fd, &offset, test_buf_size, test_event_sendfile_complete), SXE_RETURN_ERROR_WRITE_FAILED,
        "sxe_sendfile() returns ERROR_WRITE_FAILED when sendfile fails");
 
+    sxe_free(test_buf);
     unlink(tempfile);
+    sxe_fini();
+    is(sxe_allocations, start_allocations, "No memory was leaked");
 #endif
 
     return exit_status();

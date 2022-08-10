@@ -15,7 +15,7 @@ main(void)
     char *             data;
 
     plan_tests(9);
-    
+
     start_allocations     = sxe_allocations;
     sxe_alloc_diagnostics = true;
     sxe_factory_alloc_make(factory, 0, 0);
@@ -33,6 +33,6 @@ main(void)
     sxe_free(data);
     is(sxe_factory_look(factory, NULL), NULL,                        "Saw no data left in the factory");
 
-    is(start_allocations, sxe_allocations,                           "No memory was leaked");
+    is(sxe_allocations, start_allocations,                           "No memory was leaked");
     return exit_status();
 }
