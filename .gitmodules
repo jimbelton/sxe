@@ -1,3 +1,6 @@
 [submodule "mak"]
 	path = mak
 	url = git@github.com:jimbelton/mak.git
+[submodule "libsxe"]
+	path = libsxe
+	url = git@github.com:jimbelton/libsxe.git
